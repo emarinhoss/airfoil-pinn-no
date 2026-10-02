@@ -28,6 +28,7 @@ def main():
     out = {"max_cp_error": err, "cl": cl, "cd": cd, "cm": cm, "passed": passed,
            "wall_s": rec["wall_s"], "cpu_s": rec["cpu_s"], "final_losses": rec["final"]}
     Path("results/s3").mkdir(parents=True, exist_ok=True)
+    Path("runs").mkdir(parents=True, exist_ok=True)
     Path("results/s3/warmup.json").write_text(json.dumps(out, indent=2))
     np.save("runs/warmup_q.npy", q)
     print(json.dumps(out, indent=2))

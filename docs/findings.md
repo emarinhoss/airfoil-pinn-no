@@ -194,3 +194,57 @@ resident memory was measured at about 100 MB per 256x97 process (controller ruli
 cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
 `CONVERGENCE = {"residual_drop": 5.0, "window": 500, "force_tol": 1e-6}` (unchanged),
 `WORKERS = 8`, `FROZEN = True`; `consistency_errors()` is empty and `check_frozen()` passes.
+
+## 2026-10-02 — S3 execution: the PINN's Adam phase on the Apple GPU, and sharded runs
+
+- **Decision (controller, spec 1 and 7.5 unchanged).** Adam runs in float32 on
+  `PinnConfig.device` (`"auto"`: MPS when `torch.backends.mps.is_available()`, else CPU); L-BFGS
+  and `evaluate_on_grid` run on the CPU in float64, because MPS has no float64. Collocation points
+  are drawn from the CPU generator and then moved, so a seed gives the same points on either device.
+  Before this change the PINN could not run on MPS at all: the Kutta point in `losses` was created
+  on the default device ("Tensor for argument input is on cpu but expected on mps").
+- **The controller's probe** (a throwaway script, 20,000 points, float32, one Adam step = `losses`
+  + backward + `Adam.step`), measured while the S1 SU2 campaign occupied 8 CPU cores:
+
+  | step | CPU, idle machine (fix wave) | CPU, under S1 load | MPS (GPU idle) |
+  |---|---|---|---|
+  | Euler Adam step | 0.31 s | 2.4 s | 0.18 s |
+  | viscous (nu=1e-3) Adam step | 2.12 s | 11 s | 0.65-0.73 s |
+
+- **Re-measured with the code's own `time_steps`** on test_in-0000 at the spec sizes (20,000
+  points, 7x96 tanh), `n_adam=2`, `n_closure=1`, wall seconds per Adam step on the stated device and
+  per float64 L-BFGS closure on the CPU, with the projected hours per run from `projected_s`.
+  **Every CPU figure, including every L-BFGS closure, was taken while the S1 SU2 campaign occupied
+  8 cores (load average about 30), so they are upper bounds;** the MPS Adam figures are not
+  inflated by that load.
+
+  | Adam device | variant | Adam step | closure (CPU) | projected per run |
+  |---|---|---|---|---|
+  | mps | Euler | 0.169 s | 3.36 s | 6.1 h |
+  | mps | visc1e-3 | 0.631 s | 16.3 s | 27.9 h |
+  | cpu | Euler | 2.19 s | 3.37 s | 23.0 h |
+  | cpu | visc1e-3 | 8.01 s | 16.5 s | 89.7 h |
+
+  Command:
+  `python -c "from apno.data.sampling import case_specs; from apno.geometry.ogrid import TRAIN, Section; from apno.models.pinn import PinnCase; from apno.models.train_pinn import *; s=case_specs('test_in',TRAIN)[0]; c=PinnCase(s.mach,s.alpha_deg,Section(s.t,s.m)); print(s.case_id); [print(d, nu, r, projected_s(cfg,r)/3600, flush=True) for d in ('mps','cpu') for nu in (0.0,1e-3) for cfg in [PinnConfig(viscosity=nu, device=d)] for r in [time_steps(c,cfg,2,1)]]"`.
+  Output:
+
+  ```
+  test_in-0000
+  mps 0.0 {'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.16867806250229478, 'closure_s': 3.362479874980636} 6.075761458325562
+  mps 0.001 {'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.6313174165115925, 'closure_s': 16.27935420902213} 27.87119265012734
+  cpu 0.0 {'adam_device': 'cpu', 'lbfgs_device': 'cpu', 'adam_s': 2.1937446249939967, 'closure_s': 3.3733409580017906} 22.966400983285794
+  cpu 0.001 {'adam_device': 'cpu', 'lbfgs_device': 'cpu', 'adam_s': 8.008924750014558, 'closure_s': 16.50974183299695} 89.6712365737282
+  ```
+
+  The MPS Adam steps reproduce the probe (0.17 against 0.18 s Euler, 0.63 against 0.65-0.73 s
+  viscous). Under this load the CPU L-BFGS phase now dominates an MPS run: 5,000 closures are
+  16,800 s of the Euler run's 21,900 s and 81,400 s of the viscous run's 100,300 s. Combining the
+  MPS Adam steps with the fix wave's idle-machine closures (0.76 s Euler, 7.26 s viscous) is
+  arithmetic, not a measurement: 2.5 h and 15.3 h per run. The preflight measures the load present
+  when it runs, so S3's projection should be taken after S1 finishes.
+- **Sharding.** `scripts/s3_pinn.py --shard K/N` runs the plan entries whose index in `plan()`
+  order is K mod N (the order is unchanged); each shard budgets only its own unfinished runs and
+  writes `results/s3/pinn_runs_shard{K}of{N}.json` and `preflight_shard{K}of{N}.json` (`0/1`, the
+  default, keeps the unsharded names). The preflight and the run record name the device of each
+  phase; prediction files carry `train_device`, `adam_device` and `lbfgs_device`.

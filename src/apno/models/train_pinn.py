@@ -1,5 +1,9 @@
 """PINN training (spec 7.5): Adam with exponential decay, then L-BFGS in float64.
 
+Adam runs in float32 on `PinnConfig.device` ("auto": the Apple GPU when MPS is available); L-BFGS
+and grid evaluation run on the CPU in float64, which MPS does not have. Points are drawn from a CPU
+generator and moved, so a seed gives the same points on every device.
+
 Points are uniform in (xi, eta), which the map turns into clustering near the wall. The Kutta
 condition is a penalty on the velocity at the trailing-edge wall point (xi, eta) = (0, 0); the
 cylinder warm-up replaces it with zero circulation, since a cylinder has no sharp edge to fix it.
@@ -46,14 +50,25 @@ class PinnConfig:
     balance_every: int = 100
     balance_alpha: float = 0.9
     seed: int = 0
+    device: str = "auto"  # the Adam phase's; L-BFGS and evaluation are always CPU float64
 
 
-def _points(cfg, gen, dtype):
+def resolve_device(name):
+    """'auto' is the Apple GPU when PyTorch's MPS backend is available, else the CPU."""
+    if name == "auto":
+        return "mps" if torch.backends.mps.is_available() else "cpu"
+    return name
+
+
+def _points(cfg, gen, dtype, device="cpu"):
+    """Drawn from the CPU generator `gen` and then moved, so a seed gives the same points on
+    every device."""
     xi = torch.rand(cfg.n_interior, generator=gen, dtype=dtype)
     eta = 1.0 - torch.rand(cfg.n_interior, generator=gen, dtype=dtype)  # (0, 1]
     xo = torch.rand(cfg.n_outer, generator=gen, dtype=dtype)
     xw = torch.arange(cfg.n_wall, dtype=dtype) / cfg.n_wall
-    return {"xi": xi, "eta": eta, "xi_outer": xo, "xi_wall": xw}
+    return {k: v.to(device) for k, v in
+            {"xi": xi, "eta": eta, "xi_outer": xo, "xi_wall": xw}.items()}
 
 
 def losses(pinn, pts, cfg, ratio, weights=None):
@@ -66,7 +81,7 @@ def losses(pinn, pts, cfg, ratio, weights=None):
     xo = pts["xi_outer"]
     rho, u, v, _ = pinn.state(xo, torch.ones_like(xo))
     out["outer"] = ((rho - 1) ** 2 + (u - pinn.ca) ** 2 + (v - pinn.sa) ** 2).mean()
-    zero = torch.zeros(1, dtype=xo.dtype)
+    zero = torch.zeros(1, dtype=xo.dtype, device=xo.device)  # the Kutta point, on xo's device
     if cfg.kutta:
         _, uk, vk, _ = pinn.state(zero, zero)
         out["kutta"] = (uk * uk + vk * vk).sum()
@@ -112,11 +127,26 @@ def _snapshot(L):
     return {k: float(v.detach()) for k, v in L.items()}
 
 
+def _sync(device):
+    if device == "mps":
+        torch.mps.synchronize()
+
+
+def _to_cpu64(pinn, pts):
+    """The L-BFGS phase: network and points on the CPU in float64 (MPS has no float64)."""
+    pinn.net.to("cpu").double()  # device first: MPS cannot cast to float64 in place
+    return {k: v.to("cpu").double() for k, v in pts.items()}
+
+
 def train(case, cfg, log=print):
+    """Adam in float32 on cfg.device ('auto': the Apple GPU if available), then L-BFGS in float64
+    on the CPU. Points come from one CPU generator, so a seed draws the same points on any device.
+    """
+    device = resolve_device(cfg.device)
     torch.manual_seed(cfg.seed)
     gen = torch.Generator().manual_seed(cfg.seed)
     ratio = stretch_ratio(case.radius)
-    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float())
+    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float().to(device))
     opt = torch.optim.Adam(pinn.parameters(), lr=cfg.lr0)
     sched = torch.optim.lr_scheduler.ExponentialLR(opt, (cfg.lr1 / cfg.lr0) ** (1 / cfg.adam_steps))
     history = []
@@ -125,7 +155,7 @@ def train(case, cfg, log=print):
     pts = None
     for step in range(cfg.adam_steps):
         if step % cfg.resample_every == 0:
-            pts = _points(cfg, gen, torch.float32)
+            pts = _points(cfg, gen, torch.float32, device)
         opt.zero_grad()
         L = losses(pinn, pts, cfg, ratio, weights)
         if cfg.grad_balance and step % cfg.balance_every == 0:
@@ -138,8 +168,9 @@ def train(case, cfg, log=print):
             history.append({"step": step, **_snapshot(L), "w_outer": weights["outer"],
                             "w_kutta": weights["kutta"]})
             log(f"adam {step}: {history[-1]}")
-    pinn.double()
-    pts = {k: v.double() for k, v in pts.items()}
+    _sync(device)
+    adam_wall_s = time.perf_counter() - t0
+    pts = _to_cpu64(pinn, pts)
     lbfgs = torch.optim.LBFGS(pinn.parameters(), lr=1.0, max_iter=cfg.lbfgs_iters,
                               history_size=50, line_search_fn="strong_wolfe",
                               tolerance_grad=1e-12, tolerance_change=1e-15)
@@ -155,28 +186,33 @@ def train(case, cfg, log=print):
     history.append({"step": "lbfgs", **final})
     log(f"final: {final}")
     rec = {"wall_s": time.perf_counter() - t0, "cpu_s": time.process_time() - c0,
+           "adam_wall_s": adam_wall_s, "adam_device": device, "lbfgs_device": "cpu",
            "history": history, "final": final, "weights": weights}
     return pinn, rec
 
 
 def time_steps(case, cfg, n_adam=5, n_closure=2):
-    """Wall seconds per Adam step (float32) and per L-BFGS closure (float64) for this config on this
-    case, from a fresh network at the configured point counts; the first of each is a warm-up and
-    not counted. With grad_balance, also seconds per balancing update.
+    """Wall seconds per Adam step (float32, on cfg.device) and per L-BFGS closure (float64, on the
+    CPU) for this config on this case, from a fresh network at the configured point counts; the
+    first of each is a warm-up and not counted. With grad_balance, also seconds per balancing
+    update (on the Adam device). The devices are recorded beside the times.
     """
+    device = resolve_device(cfg.device)
     torch.manual_seed(cfg.seed)
     gen = torch.Generator().manual_seed(cfg.seed)
     ratio = stretch_ratio(case.radius)
-    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float())
+    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float().to(device))
     opt = torch.optim.Adam(pinn.parameters(), lr=cfg.lr0)
     weights = {"outer": cfg.w_outer, "kutta": cfg.w_kutta}
-    pts = _points(cfg, gen, torch.float32)
+    pts = _points(cfg, gen, torch.float32, device)
 
-    def timed(fn, n):
+    def timed(fn, n, on=device):
         out = []
         for _ in range(n + 1):
+            _sync(on)
             t0 = time.perf_counter()
             fn()
+            _sync(on)
             out.append(time.perf_counter() - t0)
         return float(np.median(out[1:]))
 
@@ -185,20 +221,19 @@ def time_steps(case, cfg, n_adam=5, n_closure=2):
         losses(pinn, pts, cfg, ratio, weights)["total"].backward()
         opt.step()
 
-    rec = {"adam_s": timed(adam, n_adam)}
+    rec = {"adam_device": device, "lbfgs_device": "cpu", "adam_s": timed(adam, n_adam)}
     if cfg.grad_balance:
         rec["balance_s"] = timed(lambda: balance_weights(losses(pinn, pts, cfg, ratio, weights),
                                                          pinn.parameters(), weights,
                                                          cfg.balance_alpha), 1)
-    pinn.double()
-    pts = {k: v.double() for k, v in pts.items()}
+    pts = _to_cpu64(pinn, pts)
 
     def closure():
         for p in pinn.parameters():
             p.grad = None
         losses(pinn, pts, cfg, ratio, weights)["total"].backward()
 
-    rec["closure_s"] = timed(closure, n_closure)
+    rec["closure_s"] = timed(closure, n_closure, on="cpu")
     return rec
 
 
@@ -213,10 +248,11 @@ def projected_s(cfg, rec):
 
 
 def evaluate_on_grid(pinn, shape):
+    """The network on the dataset grid, on the CPU in float64 (whatever device trained it)."""
     ni, nj = shape
     xi = (torch.arange(ni, dtype=torch.float64) / ni)[:, None].expand(ni, nj).reshape(-1)
     eta = (torch.arange(nj, dtype=torch.float64) / (nj - 1))[None, :].expand(ni, nj).reshape(-1)
-    pinn.double()
+    pinn.net.to("cpu").double()
     with torch.no_grad():
         rho, u, v, p = pinn.state(xi, eta)
         q = to_dataset_q(rho, u, v, p, pinn.case.mach)

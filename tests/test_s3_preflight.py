@@ -57,3 +57,36 @@ def test_s3_refuses_to_start_past_its_budget(s3):
 def test_s3_preflight_only_within_budget(s3):
     assert s3.main(["--budget-hours", "1000", "--preflight-only"]) == 0
     assert json.loads(Path("results/s3/preflight.json").read_text())["within_budget"]
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_shards_partition_the_plan_in_its_order(s3, n):
+    runs = [(v, c) for v, c, _ in s3.plan()]
+    shards = [[(v, c) for v, c, _ in s3.shard(s3.plan(), k, n)] for k in range(n)]
+    assert sorted(sum(shards, [])) == sorted(runs) and sum(map(len, shards)) == len(runs)
+    for k, part in enumerate(shards):
+        assert part == [r for i, r in enumerate(runs) if i % n == k]
+
+
+def test_preflight_records_the_device_of_each_phase(s3):
+    from apno.models.train_pinn import resolve_device
+
+    assert s3.main(["--budget-hours", "1000", "--preflight-only"]) == 0
+    timing = json.loads(Path("results/s3/preflight.json").read_text())["timing_s"]
+    for t in timing.values():
+        assert t["adam_device"] == resolve_device("auto") and t["lbfgs_device"] == "cpu"
+
+
+def test_a_shard_writes_only_its_own_files_and_budgets_only_its_own_runs(s3):
+    assert s3.main(["--budget-hours", "1000", "--preflight-only", "--shard", "1/2"]) == 0
+    assert sorted(p.name for p in Path("results/s3").iterdir()) == ["preflight_shard1of2.json"]
+    pre = json.loads(Path("results/s3/preflight_shard1of2.json").read_text())
+    want = [(v, c) for i, (v, c, _) in enumerate(s3.plan()) if i % 2 == 1]
+    assert [(r["variant"], r["case_id"]) for r in pre["runs"]] == want
+    assert pre["shard"] == "1/2"
+
+
+@pytest.mark.parametrize("bad", ["2/2", "-1/2", "0/0", "1", "a/b"])
+def test_a_bad_shard_is_refused(s3, bad):
+    with pytest.raises(SystemExit):
+        s3.main(["--preflight-only", "--shard", bad])

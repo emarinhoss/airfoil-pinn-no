@@ -91,3 +91,11 @@ def test_write_su2_refuses_folded_grid(tmp_path):
     Y[:, 1], Y[:, 2] = Y[:, 2].copy(), Y[:, 1].copy()
     with pytest.raises(ValueError, match="non-positive"):
         write_su2(tmp_path / "bad.su2", X, Y)
+
+
+def test_write_su2_refuses_nan_grid(tmp_path):
+    X, Y = grid(Section(0.12, 0.0), COARSE)
+    X[3, 2] = np.nan
+    with pytest.raises(ValueError, match="non-positive"):
+        write_su2(tmp_path / "nan.su2", X, Y)
+    assert not (tmp_path / "nan.su2").exists()

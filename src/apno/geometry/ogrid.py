@@ -95,8 +95,8 @@ def cell_areas(X, Y):
 
 def write_su2(path, X, Y):
     """Write the grid in SU2 native format. Node id = j*NI + i; markers 'airfoil', 'farfield'."""
-    if cell_areas(X, Y).min() <= 0:
-        raise ValueError("grid has non-positive cells; refusing to write it")
+    if not (np.all(np.isfinite(X)) and np.all(np.isfinite(Y))) or not (cell_areas(X, Y).min() > 0):
+        raise ValueError("grid has non-positive or non-finite cells; refusing to write it")
     ni, nj = X.shape
 
     def nid(i, j):

@@ -1,0 +1,13 @@
+name: airfoil-ml
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pytorch>=2.5
+  - numpy
+  - scipy
+  - h5py
+  - matplotlib
+  - sympy
+  - pytest
+  - ruff
+  - pip

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apno"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]  # pinned: a wider default elsewhere on this machine fires 25 style rules
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "su2: needs real SU2 binaries via SU2_BIN_DIR",
+  "slow: takes more than a minute",
+]

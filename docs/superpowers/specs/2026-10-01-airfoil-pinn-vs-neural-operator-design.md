@@ -104,8 +104,10 @@ NACA 4-digit shape + Mach + angle of attack
 - **The O-grid is a continuous map** (ξ, η) ∈ [0, 1) × [0, 1] → (x, y), with β = 2πξ (trailing edge
   at ξ = 0) and η the outward coordinate (wall at 0, outer boundary at 1):
   x(ξ, η) = x_w(ξ) + s(η) · (x_f(ξ) − x_w(ξ)), where x_w is the wall point, x_f the point on a circle
-  of radius 100 chords about mid-chord at the same angle about mid-chord (the spike's construction),
-  and s(η) a geometric stretching. **The mesh generator samples this map and the PINN uses it
+  of radius 100 chords about mid-chord at polar angle −2πξ, and s(η) a geometric stretching.
+  (Amended 2026-10-01 by the implementation plan: the spike's "same angle about mid-chord"
+  construction folds the mesh — 9,792 inverted cells at t = 0.08, m = 0.04 — and the uniform angle
+  has no inverted cell at any corner of the box.) **The mesh generator samples this map and the PINN uses it
   continuously, so one function defines the geometry for both.**
 - **Nested grids by construction:** the fine grid is 512 × 193 (ξ_i = i/512, η_j = j/192); the
   training grid, 256 × 97, is every second fine node in both directions; the coarse grid, 128 × 49,
@@ -210,7 +212,7 @@ Estimates from the spike's timings; S0 replaces them with measurements.
 | `verdict`, `case_id`, `max_surface_mach`, `split` | N | provenance and labels |
 
 - Training-grid files are float32; the fine-grid truth files are float64, because they feed the
-  scorer's 10⁻⁶ check.
+  scorer's 10⁻⁶ check. Amended by the plan: each file holds one group per split and only converged cases; failures are listed in results/s1/failures_<level>.json.
 - **Derived quantities come from one tested function** in `physics/flow.py` and are never stored
   twice: the pressure coefficient, local Mach number, entropy (s − s∞)/c_v = ln[(p/p∞)/(ρ/ρ∞)^γ], and
   total enthalpy. Entropy earns its place: in shock-free inviscid flow it must stay at its free-stream
@@ -272,7 +274,8 @@ loss. Each output channel is then standardised over the training set.
   airfoil and the lowest 12 radially; multiply by learned complex weights; inverse FFT; add a
   pointwise linear path; GELU activation.
 - Around the airfoil (i) the FFT is exact, because the grid is periodic. Radially (j) the field is
-  zero-padded by 8 rows before the FFT and cropped after.
+  zero-padded by (NJ − 1)/6 rows (8 at 128 × 49) before the FFT and cropped after, so the padded
+  domain spans the same η at every resolution.
 - Truncating the modes smooths jumps, so smeared shocks and overshoot are expected; §8 measures them.
 - Hyperparameters are tuned on the validation set within a budget of at most eight configurations,
   listed before tuning starts.
@@ -388,8 +391,7 @@ loss. Each output channel is then standardised over the training set.
   artificial viscosity (supercritical cases only).
 - **Truth:** SU2 on the fine grid, read at the training grid's nodes, which is exact because the grids
   nest. The PINN is evaluated at those same nodes.
-- **One force integrator** (`score/forces.py`): trapezoidal integration of (p − p∞) over the wall
-  edges, reference length 1, moments about (0.25, 0). **Before it scores anything, it must reproduce
+- **One force integrator** (`score/forces.py`): vertex-lumped integration of (p − p∞) over the wall (each node carries half of each adjacent edge's outward normal; measured to reproduce SU2 on the spike to 5 × 10⁻¹¹, where the edge-midpoint trapezoid misses CMz by 1.6 × 10⁻⁵), reference length 1, moments about (0.25, 0). **Before it scores anything, it must reproduce
   SU2's own reported CL, CD and CM on SU2's own solutions to within 1 × 10⁻⁶ in each.** They should agree
   to round-off if SU2 integrates nodal pressure over the same edges; if they do not, the difference is
   a finding about the scorer, resolved before any scoring and never by loosening the tolerance.

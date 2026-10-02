@@ -1,7 +1,10 @@
 """Stage S0: check SU2's accuracy and cost before the campaign (spec 4.6). Writes results/s0/.
 
-Exits 1 if the force integrator fails to reproduce SU2 on any converged case: if the scorer cannot
-score SU2 against SU2, it cannot score anything. Usage:
+Exits 1 if the force integrator fails to reproduce SU2 on any converged case, or if no case
+converged (scorer check not performed): if the scorer cannot score SU2 against SU2, it cannot score
+anything. Exits 2 if the scorer check passed but any case is NOT CONVERGED (S0 incomplete;
+summary.json is still written). Exit 0 means S0 is complete. Run with `set -o pipefail` (or read
+${PIPESTATUS[0]}) when piping through tee. Usage:
     SU2_BIN_DIR=... python scripts/s0_check.py [--workers 6]
 """
 
@@ -100,19 +103,31 @@ def main():
             summary["multigrid"][name] = {
                 "mg0": {k: a[k] for k in ("wall_s", "cpu_s", "iterations", "converged", "cl")},
                 "mg3": {k: b[k] for k in ("wall_s", "cpu_s", "iterations", "converged", "cl")}}
+    def ok(case_id, level):
+        r = by.get((case_id, level))
+        return r if r and r["converged"] else None
+
     for name in ("sub2", "anchor"):
-        summary["radius"][name] = {
-            R: (by.get((f"{name}-R{R}", "256x97")) or {}).get("cl") for R in ("50", "200")}
-        summary["radius"][name]["100"] = by[(f"{name}-mg0", "256x97")]["cl"]
+        row = {R: (ok(f"{name}-R{R}", "256x97") or {}).get("cl", "not converged")
+               for R in ("50", "200")}
+        row["100"] = (ok(f"{name}-mg0", "256x97") or {}).get("cl", "not converged")
+        summary["radius"][name] = row
     ka = summary["known_answers"]
-    ka["sym_abs_cl_fine"] = abs(by[("sym-mg0", "512x193")]["cl"])
-    ka["subcritical_cd_counts_fine"] = {n: 1e4 * by[(f"{n}-mg0", "512x193")]["cd"]
-                                        for n in ("sym", "sub0", "sub2")}
+    NC = "not converged"
+    r = ok("sym-mg0", "512x193")
+    ka["sym_abs_cl_fine"] = abs(r["cl"]) if r else NC
+    ka["subcritical_cd_counts_fine"] = {
+        n: (1e4 * ok(f"{n}-mg0", "512x193")["cd"] if ok(f"{n}-mg0", "512x193") else NC)
+        for n in ("sym", "sub0", "sub2")}
     M = CASES["sub2"][0]
-    d_cl = by[("sub2-mg0", "512x193")]["cl"] - by[("sub0-mg0", "512x193")]["cl"]
-    slope = d_cl / math.radians(2)
-    ka["lift_slope_ratio_to_prandtl_glauert"] = slope / (2 * math.pi / math.sqrt(1 - M * M))
-    ka["anchor_cl_fine"] = by[("anchor-mg0", "512x193")]["cl"]
+    s0, s2 = ok("sub0-mg0", "512x193"), ok("sub2-mg0", "512x193")
+    if s0 and s2:
+        slope = (s2["cl"] - s0["cl"]) / math.radians(2)
+        ka["lift_slope_ratio_to_prandtl_glauert"] = slope / (2 * math.pi / math.sqrt(1 - M * M))
+    else:
+        ka["lift_slope_ratio_to_prandtl_glauert"] = NC
+    r = ok("anchor-mg0", "512x193")
+    ka["anchor_cl_fine"] = r["cl"] if r else NC
     ka["vassberg_jameson_2010_cl"] = "read from the paper and recorded in docs/findings.md"
     summary["scorer_worst_abs_diff"] = worst
 
@@ -121,12 +136,17 @@ def main():
     print(json.dumps({k: v for k, v in summary.items() if k != "runs"}, indent=2, default=str))
     failed = [f'{r["case_id"]}@{r["level"]}: {r["reason"]}' for r in res if not r["converged"]]
     print("NOT CONVERGED:", failed or "none")
+    if not summary["scorer_check"]:
+        print("SCORER CHECK NOT PERFORMED: no case converged")
+        return 1
     if worst > 1e-6:
         print(f"SCORER CHECK FAILED: worst difference {worst:.3e} > 1e-6")
         return 1
     print(f"scorer check passed: worst difference {worst:.3e}")
+    if failed:
+        print("S0 INCOMPLETE: some cases did not converge")
+        return 2
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

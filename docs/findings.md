@@ -154,7 +154,7 @@ Observed orders (log2 of |coarse − train| / |train − fine|), CL / CD / CM: s
 super −1.68 / −0.84 / −2.80; anchor −0.63 / 0.88 / −1.20. **For CL they are negative or
 non-monotone on every lifting case**: sub2, super and anchor have the 256→512 change larger than
 the 128→256 change, and sub0's CL goes 0.28787 / 0.28538 / 0.28783 (down then up; its 0.02 comes
-from a non-monotone sequence). CD is non-monotone on sym, sub0, super and anchor. **The three grids
+from a non-monotone sequence). CD is non-monotone on super and anchor only (sym and sub0 are monotone decreasing, consistent with their positive orders). **The three grids
 are not in the asymptotic range, and Richardson extrapolation does not apply**; the floor is
 reported as the plain train-minus-fine difference above, not as an extrapolated error.
 

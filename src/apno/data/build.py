@@ -46,7 +46,25 @@ def load_case(root, spec):
             "max_surface_mach": res["max_surface_mach"]}
 
 
+def _settings_of(root, specs):
+    """The distinct stored SU2 settings among the converged cases of one level."""
+    seen = {}
+    for spec in specs:
+        rj = case_dir(root, spec) / "result.json"
+        if rj.exists():
+            res = json.loads(rj.read_text())
+            if res["converged"]:
+                key = json.dumps(res.get("settings"), sort_keys=True)
+                seen.setdefault(key, spec.case_id)
+    return seen
+
+
 def build_level(specs_by_split, root, out_path, dtype):
+    seen = _settings_of(root, [s for specs in specs_by_split.values() for s in specs])
+    if len(seen) > 1:
+        raise ValueError(f"{root}: converged cases of one level were run with {len(seen)} "
+                         f"different SU2 settings (e.g. {dict(zip(seen.values(), seen))}); "
+                         "a dataset must come from one frozen setting")
     failures = {}
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_name(out_path.name + ".tmp")

@@ -255,6 +255,24 @@ def _stop_on_signals():
             signal.signal(s, h)
 
 
+def _check_resumable(specs, root, settings_for):
+    """Before any SU2 starts: every finished case must match its requested settings, else raise.
+
+    Checked up front so a mismatch cannot leave a root holding cases run with two settings.
+    A settings_for error is left for the worker to report.
+    """
+    for spec in specs:
+        d = case_dir(root, spec)
+        if not is_done(d):
+            continue
+        try:
+            settings = settings_for(spec)
+        except Exception:  # noqa: BLE001 -- reported per case by the worker
+            continue
+        X, Y = grid(Section(spec.t, spec.m), spec.shape, spec.radius)
+        _resume(d, root, spec, render_config(spec.mach, spec.alpha_deg, settings), su2_text(X, Y))
+
+
 def _run_one(spec, root, su2_bin, settings_for, judge_kwargs):
     return run_case(spec, root, su2_bin, settings_for(spec), judge_kwargs)
 
@@ -263,12 +281,14 @@ def run_campaign(specs, root, su2_bin, settings_for, workers, judge_kwargs=None)
     """Run every spec; a driver exception is reported, not recorded as a result, so it reruns.
 
     Ctrl-C, SIGTERM and SIGHUP stop the campaign: queued cases are cancelled, live SU2 processes
-    are terminated (their cases leave no result.json), and the exception is re-raised.
+    are terminated (their cases leave no result.json), and the exception is re-raised. A finished
+    case run with other settings raises ResumeMismatch before any SU2 starts.
     """
     root = Path(root)
     results = []
     with _campaign_lock(root), _stop_on_signals():
         _STOP.clear()
+        _check_resumable(specs, root, settings_for)
         pool = ThreadPoolExecutor(max_workers=workers)
         try:
             futures = {pool.submit(_run_one, s, root, su2_bin, settings_for, judge_kwargs): s
@@ -277,6 +297,8 @@ def run_campaign(specs, root, su2_bin, settings_for, workers, judge_kwargs=None)
                 spec = futures[fut]
                 try:
                     res = fut.result()
+                except ResumeMismatch:
+                    raise
                 except Exception as exc:  # noqa: BLE001 -- reported, case left not-done
                     print(f"[{n}/{len(specs)}] {spec.case_id}: DRIVER ERROR {exc!r}", flush=True)
                     continue

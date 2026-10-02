@@ -74,3 +74,16 @@ def test_build_level_all_failed_split_names_split_and_reasons(tmp_path):
     import numpy as np
     with pytest.raises(ValueError, match="no converged cases.*not run"):
         B.build_level({"train": [S()]}, tmp_path, tmp_path / "o.h5", np.float32)
+
+
+def test_build_refuses_a_level_run_with_mixed_settings(tmp_path):
+    specs = {"train": [CaseSpec(f"train-{k:04d}", 0.4 + 0.1 * k, 1.0, 0.12, 0.0, COARSE)
+                       for k in range(2)]}
+    for k, s in enumerate(specs["train"]):
+        _fake_case(tmp_path, s)
+        rj = case_dir(tmp_path, s) / "result.json"
+        res = json.loads(rj.read_text())
+        res["settings"] = {"mglevel": 0, "cauchy_eps": 1e-9 if k else 1e-8}
+        rj.write_text(json.dumps(res))
+    with pytest.raises(ValueError, match="2 different SU2 settings"):
+        build_level(specs, tmp_path, tmp_path / "out.h5", np.float32)

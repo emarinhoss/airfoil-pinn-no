@@ -193,3 +193,12 @@ def test_sigterm_stops_the_campaign_and_its_su2_children(tmp_path, fake_bin, mon
     assert not any(is_done(case_dir(tmp_path / "runs", s)) for s in specs)
     assert not run_mod._LIVE and not run_mod._STOP.is_set()
     assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+
+
+def test_campaign_checks_every_finished_case_before_running_any(tmp_path, fake_bin):
+    specs = [_spec(k) for k in range(3)]
+    run_case(specs[2], tmp_path / "runs", fake_bin, SETTINGS, JUDGE)
+    other = Su2Settings(iter_cap=1000, cauchy_eps=1e-9)
+    with pytest.raises(ResumeMismatch):
+        run_campaign(specs, tmp_path / "runs", fake_bin, lambda s: other, 2, JUDGE)
+    assert not any(case_dir(tmp_path / "runs", s).exists() for s in specs[:2])

@@ -176,7 +176,7 @@ def main():
                 for n in (64, 128, 256, 512, 896)}
     by_tag = {tag: attrs for tag, gname, attrs, _ in contestants[1:] if gname == "256x97"}
     costs = costs_record(by_tag, campaign[896], per_su2, Path("results/s2/tuning.json"))
-    pinn = [a["train_cpu_s"] for _, gname, a, _ in contestants[1:]
+    pinn = [_train_cost(a)[0] for _, gname, a, _ in contestants[1:]
             if gname == "256x97" and a["method"] == "pinn" and a.get("variant") == "euler"]
     if pinn:
         costs["pinn"] = {"fixed": 0.0, "per": float(np.mean(pinn))}

@@ -41,8 +41,13 @@ def _predict_tests(model, std):
 
 def _run_fno(tag, cfg, variant=""):
     d = RUNS / tag
-    res = (json.loads((d / "train.json").read_text()) if (d / "train.json").exists()
-           else train(cfg, H5, d))
+    if (d / "train.json").exists():
+        res = json.loads((d / "train.json").read_text())
+        if res["cfg"] != asdict(cfg):
+            raise ValueError(f"{tag}: cached train.json cfg differs from the requested cfg; "
+                             f"refusing to reuse (remove {d} deliberately to retrain)")
+    else:
+        res = train(cfg, H5, d)
     model, std, _ = load_model(res["checkpoint"])
     ids, q, sec = _predict_tests(model, std)
     write_predictions(PRED / f"{tag}.h5", ids, q, {

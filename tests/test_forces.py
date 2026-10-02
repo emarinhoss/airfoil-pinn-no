@@ -38,7 +38,8 @@ def test_normals_point_outward():
 
 
 def test_reproduces_su2_on_the_spike(spike_dir):
-    rows = list(csv.reader(open(spike_dir / "surface.csv"), skipinitialspace=True))
+    with open(spike_dir / "surface.csv") as f:
+        rows = list(csv.reader(f, skipinitialspace=True))
     head = [h.strip('"') for h in rows[0]]
     d = np.array([[float(v) for v in r] for r in rows[1:] if r])
     d = d[np.argsort(d[:, head.index("PointID")])]

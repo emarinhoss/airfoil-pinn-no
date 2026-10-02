@@ -29,6 +29,10 @@ class Verdict:
 
 
 def read_history(path):
+    """Columns by name, or None if there is no whole data row. A truncated or garbled row ends the
+    history there: SU2 killed partway through a buffered write leaves a ragged last row, and that
+    must become a non-converged verdict with a reason, never an exception in the batch driver.
+    """
     path = Path(path)
     if not path.exists() or path.stat().st_size == 0:
         return None
@@ -37,7 +41,20 @@ def read_history(path):
     if len(rows) < 2:
         return None
     head = [h.strip().strip('"').strip() for h in rows[0]]
-    body = np.array([[float(v) for v in r] for r in rows[1:] if r], dtype=float)
+    body = []
+    for r in rows[1:]:
+        if not r:
+            continue
+        try:
+            vals = [float(v) for v in r]
+        except ValueError:
+            break  # a row cut mid-write (SU2 killed): the history ends at the last whole row
+        if len(vals) != len(head):
+            break
+        body.append(vals)
+    if not body:
+        return None
+    body = np.array(body, dtype=float)
     return {h: body[:, k] for k, h in enumerate(head)}
 
 

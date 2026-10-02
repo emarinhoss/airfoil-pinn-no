@@ -56,3 +56,17 @@ def test_spike_history_converges_narrowly(spike_dir):
     assert v.residual_drop == pytest.approx(6.126, abs=1e-3)
     assert v.cl_range == pytest.approx(8.896e-7, rel=1e-3)
     assert v.iterations == 3999
+
+
+def test_truncated_history_ends_at_the_last_whole_row(tmp_path):
+    head = '"Inner_Iter",    "rms[Rho]"    ,       "CD"       ,       "CL"\n'
+    rows = "".join(f"{it}, {-1.0 - 0.01 * it}, 0.0001, 0.25\n" for it in range(10))
+    tails = ("10, -1.1", "10, -1.1, 0.00", "10, -1.1, 0.0001, 0.2-", "10, -1.1, 0.0001, nan, 7")
+    for tail in tails:
+        p = tmp_path / "history.csv"
+        p.write_text(head + rows + tail)
+        h = read_history(p)
+        assert len(h["CL"]) == 10 and h["Inner_Iter"][-1] == 9
+        assert not judge(h, window=500).converged
+    p.write_text(head + "0, -1.0, 0.00")
+    assert read_history(p) is None and judge(read_history(p)).reason == "no history"

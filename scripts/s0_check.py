@@ -135,6 +135,9 @@ def main():
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2, default=str))
     print(json.dumps({k: v for k, v in summary.items() if k != "runs"}, indent=2, default=str))
     failed = [f'{r["case_id"]}@{r["level"]}: {r["reason"]}' for r in res if not r["converged"]]
+    # a case interrupted by a signal (or any driver error) has no result and is not a pass
+    failed += [f"{s.case_id}@{s.level}: no result (driver error or interrupted; reruns)"
+               for s, _ in pairs if (s.case_id, s.level) not in by]
     print("NOT CONVERGED:", failed or "none")
     if not summary["scorer_check"]:
         print("SCORER CHECK NOT PERFORMED: no case converged")

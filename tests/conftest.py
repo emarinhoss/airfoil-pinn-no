@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,3 +25,20 @@ def spike_dir() -> Path:
     if not (SPIKE_DIR / "restart.dat").exists():
         pytest.skip(f"spike files not present at {SPIKE_DIR}")
     return SPIKE_DIR
+
+
+FAKE_SU2 = Path(__file__).with_name("fake_su2.py")
+
+
+@pytest.fixture
+def fake_bin(tmp_path, monkeypatch):
+    """A directory holding a fake SU2_CFD (tests/fake_su2.py), in mode ok."""
+    b = tmp_path / "bin"
+    b.mkdir()
+    exe = b / "SU2_CFD"
+    exe.write_text(f"#!{sys.executable}\n" + FAKE_SU2.read_text())
+    exe.chmod(0o755)
+    monkeypatch.setenv("FAKE_SU2_MODE", "ok")
+    monkeypatch.delenv("FAKE_SU2_KILL", raising=False)
+    monkeypatch.delenv("FAKE_SU2_FORCES", raising=False)
+    return b

@@ -2,11 +2,9 @@ import fcntl
 import json
 import os
 import signal
-import sys
 import threading
 import time
 from dataclasses import asdict
-from pathlib import Path
 
 import pytest
 
@@ -18,20 +16,8 @@ from apno.su2.run import (
     run_campaign, run_case,
 )
 
-FAKE = Path(__file__).with_name("fake_su2.py")
 SETTINGS = Su2Settings(iter_cap=1000)
 JUDGE = dict(window=200)
-
-
-@pytest.fixture
-def fake_bin(tmp_path, monkeypatch):
-    b = tmp_path / "bin"
-    b.mkdir()
-    exe = b / "SU2_CFD"
-    exe.write_text(f"#!{sys.executable}\n" + FAKE.read_text())
-    exe.chmod(0o755)
-    monkeypatch.setenv("FAKE_SU2_MODE", "ok")
-    return b
 
 
 def _spec(k=0, mach=0.5):

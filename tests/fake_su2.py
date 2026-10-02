@@ -3,7 +3,9 @@
 FAKE_SU2_MODE = ok | crash | nan | sigkill | segv | norestart | exit3 | slow. sigkill writes a
 steady history and kills itself before any restart exists (a converged-looking kill); segv writes
 everything and dies of SIGSEGV; norestart exits 0 without a restart; exit3 writes everything and
-exits 3; slow writes its pid to ./pid and sleeps for a minute.
+exits 3; slow writes its pid to ./pid and sleeps for a minute. FAKE_SU2_KILL=<case directory name>
+puts that one case in sigkill mode. FAKE_SU2_FORCES=zero reports CL = CD = CMz = 0, which is what
+the scorer integrates from the free-stream restart.
 
 It reads the mesh's nodes in file order and writes a free-stream restart in that order, plus a
 history with a 6-order residual drop and constant forces, so the driver's real readers are
@@ -23,6 +25,8 @@ from pathlib import Path
 def main():
     cfg = Path(sys.argv[1]).read_text()
     mode = os.environ.get("FAKE_SU2_MODE", "ok")
+    if os.environ.get("FAKE_SU2_KILL") == Path.cwd().name:
+        mode = "sigkill"
     print('|   \\__ \\ |_| |/ /   Release 8.5.0 "Harrier"   (fake)')
     if mode == "crash":
         return 1
@@ -46,9 +50,11 @@ def main():
     head += b"".join(nm.encode().ljust(33, b"\0") for nm in names)
     body = b"".join(struct.pack("<6d", x, y, rho, mx, my, e) for x, y in pts)
     rows = ['"Inner_Iter",    "rms[Rho]"    ,       "CD"       ,       "CL"       ,      "CMz"']
+    zero = os.environ.get("FAKE_SU2_FORCES") == "zero"
+    cd, cmz = ("0.0", "0.0") if zero else ("0.0001", "0.01")
     for it in range(1001):
-        cl = "nan" if (mode == "nan" and it > 900) else "0.25"
-        rows.append(f"{it}, {-1.0 - 6.0 * it / 1000}, 0.0001, {cl}, 0.01")
+        cl = "nan" if (mode == "nan" and it > 900) else ("0.0" if zero else "0.25")
+        rows.append(f"{it}, {-1.0 - 6.0 * it / 1000}, {cd}, {cl}, {cmz}")
     Path("history.csv").write_text("\n".join(rows) + "\n")
     if mode == "sigkill":
         os.kill(os.getpid(), signal.SIGKILL)

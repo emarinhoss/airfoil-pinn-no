@@ -9,3 +9,9 @@ def test_round_trip(tmp_path):
     got, attrs = read_predictions(tmp_path / "p.h5")
     np.testing.assert_array_equal(got["b"], q[1])
     assert attrs["method"] == "fno" and attrs["seed"] == 1
+
+
+def test_write_predictions_accepts_str_path(tmp_path):
+    p = str(tmp_path / "sub" / "p.h5")
+    write_predictions(p, ["a"], np.zeros((1, 2, 2)), {"seed": 1})
+    assert "a" in read_predictions(p)[0]

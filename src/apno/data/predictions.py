@@ -1,10 +1,13 @@
 """Prediction files: one per (method, configuration, seed), q at 256x97 for the test cases."""
 
+from pathlib import Path
+
 import h5py
 import numpy as np
 
 
 def write_predictions(path, case_ids, q, attrs):
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(path, "w") as f:
         f["q"] = np.asarray(q, dtype=np.float64)

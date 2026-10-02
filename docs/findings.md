@@ -45,3 +45,152 @@ the run that tests them and are never edited afterwards; outcomes are appended b
   runs, or a larger budget) before it launches.
 - **Gradient-norm balancing (spec 7.5's variant)** is implemented as
   `PinnConfig(grad_balance=True)` and S3 plans one such run, on the median-Mach showcase case.
+
+## 2026-10-01 — stage S0: SU2 accuracy and cost, and the frozen campaign settings
+
+Five cases (name: M, alpha deg, t, m) — sym 0.50, 0, 0.12, 0; sub0 0.50, 0, 0.12, 0.02; sub2 0.50,
+2, 0.12, 0.02; super 0.75, 2, 0.12, 0.02; anchor 0.80, 1.25, 0.12, 0 (NACA 0012) — at 128x49,
+256x97 and 512x193 with MGLEVEL 0, plus MGLEVEL 3 at 256x97 and outer radius 50 and 200 chords
+for sub2 and anchor at 256x97: 24 runs per attempt, SU2 8.5.0, 6 workers.
+
+**How each attempt was run.** `scripts/s0_check.py` reads `apno.settings.BASE`, which still held
+the spec's starting `cauchy_eps = 1e-7`. Attempts 2 and 3 therefore ran with a process-local
+override, never committed: `python -c` doing
+`apno.settings.BASE = dataclasses.replace(BASE, cauchy_eps=...)` and then
+`runpy.run_path('scripts/s0_check.py', run_name='__main__')` with `--workers 6`. Attempt 3's
+launcher (`runs/run_s0_attempt3.sh`, not committed; `runs/` is ignored) was:
+
+```bash
+cd /Users/esousa/theLab/airfoil-pinn-no
+export PATH=/Users/esousa/miniforge3/envs/airfoil-ml/bin:$PATH
+export SU2_BIN_DIR=/Users/esousa/theLab/bwb-tanker-scratch/bin
+python -c "
+import dataclasses, runpy, sys
+import apno.settings as st
+st.BASE = dataclasses.replace(st.BASE, cauchy_eps=1e-9)
+print('S0 attempt 3 with', st.BASE, flush=True)
+sys.argv = ['s0_check.py', '--workers', '6']
+runpy.run_path('scripts/s0_check.py', run_name='__main__')
+" > results/s0/s0.log 2>&1
+echo "S0_EXIT=$?" >> results/s0/s0.log
+```
+
+Those overrides are now replaced by the frozen values below, so a plain
+`SU2_BIN_DIR=... python scripts/s0_check.py --workers 6` reproduces attempt 3's settings.
+
+**The three attempts (convergence rule, Step 6).** Our rule (`CONVERGENCE`): residual drop at least
+5 orders, and CL and CD each varying by at most 1e-6 over the last 500 iterations.
+
+- Attempt 1, `cauchy_eps` 1e-7 (`results/s0/attempt1_eps1e-7.log`, `_summary.json`): **0 of 24
+  converged by our rule.** Every run exited 0 on SU2's Cauchy stop, at 736 to 3,735 iterations,
+  with residual drop 5.13 to 11.52 orders (so the residual criterion passed everywhere) but CL
+  varying 1.4e-6 to 2.85e-5 and/or CD 1.0e-6 to 2.1e-6 over the window: the stop fired while the
+  500-iteration window still held the start-up transient. S0_EXIT=1.
+- Attempt 2, `cauchy_eps` 1e-8 (`results/s0/attempt2_eps1e-8_partial.log`): killed by the
+  controller harness's background time limit with 23 of 24 done (anchor-mg0 at 512x193 never
+  finished; no summary was written). **9 of 23 converged**; the 14 failures were just over the
+  line, CL varying 1.01e-6 to 2.84e-6 over 500 iterations.
+- Attempt 3, `cauchy_eps` 1e-9 (`results/s0/attempt3_eps1e-9_first_pass.log`, `_summary.json`):
+  first pass 22 of 24. The two failures, sym-mg0 and sub0-mg0 at 256x97 (886 and 1,029
+  iterations), have `exit_code` -2 in the summary: SIGINT, an external interruption, not a
+  convergence result. The old driver recorded them as failures; the fix wave (f47a776) made a case
+  with no result leave S0 incomplete, and the resume on that driver reran only those two (1,561 and
+  1,565 iterations, both converged). **`results/s0/s0.log` and `results/s0/summary.json` are the
+  final S0 record: 24 of 24 converged, `NOT CONVERGED: none`, scorer check worst difference
+  4.936e-11 (< 1e-6), S0_EXIT=0.** The 22 first-pass `result.json` files predate the driver's
+  `settings` field; the two reruns carry `cauchy_eps: 1e-09`, and `s0.log`'s first line records
+  `Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-09)`.
+
+Why 1e-9 and not 1e-8: SU2's Cauchy stop is relative (the fix wave's finding, now
+`apno.settings.consistency_errors`): at the stop CL may still vary by about
+`cauchy_elems * cauchy_eps * |CL|` over the window. The failures fit it: sub2 (CL 0.570) varied
+2.82e-5 at 1e-7 and 2.84e-6 at 1e-8 against 500 x eps x 0.570 = 2.85e-5 and 2.85e-6. At 1e-9 the
+bound at the design's highest-lift corner is 1e-9 x 500 x CL_BOUND (1.86) = 9.3e-7 < force_tol
+1e-6, so `consistency_errors()` is empty — **with a 7 % margin. Known risk:** a high-lift S1 case
+can still stop on SU2's rule with CL varying a little over 1e-6; it then fails our rule and is
+recorded as a failure in S1's summary, not silently dropped. S1's summary also records the
+measured max |CL| beside CL_BOUND and warns if it exceeds it.
+
+**Iteration caps** unchanged (10,000 / 20,000 at 512x193): S0 never hit a cap; the most was 5,210
+iterations (anchor-mg0 at 512x193).
+
+**Multigrid** (`summary.json` "multigrid", 256x97; wall s / CPU s / iterations, MGLEVEL 0 vs 3):
+
+| case | MG 0 | MG 3 |
+| --- | --- | --- |
+| sym | 95 / 94 / 1,561 | 224 / 179 / 1,113 |
+| sub0 | 94 / 93 / 1,565 | 240 / 204 / 1,270 |
+| sub2 | 133 / 127 / 1,579 | 212 / 205 / 1,254 |
+| super | 209 / 199 / 2,480 | 343 / 283 / 1,829 |
+| anchor | 280 / 238 / 2,910 | 320 / 309 / 2,044 |
+
+MGLEVEL 3 converged every case and agreed with MGLEVEL 0 on CL to 3e-9 (super, anchor) or better,
+and took fewer iterations, but cost more wall and CPU time on all five (median wall 239.8 s
+against 132.6 s). The plan's rule (choose 3 only if it also cuts the median wall time) gives
+**MGLEVEL 0**.
+
+**Outer radius** (`summary.json` "radius", CL at 50 / 100 / 200 chords, 256x97):
+sub2 0.5679008 / 0.5704280 / 0.5717173; anchor 0.3137152 / 0.3173633 / 0.3194246.
+|CL(200) − CL(100)| = **1.29e-3 (sub2) and 2.06e-3 (anchor), both ABOVE the plan's 1e-3
+threshold** (and 50 → 100 moved them 2.53e-3 and 3.65e-3). Recorded, and the radius is **kept at
+100 chords** as the plan directs: moving it changes every mesh and is the author's decision, not
+S0's. Consequence: CL in the dataset carries a far-field truncation of the order of 1e-3 to a few
+1e-3 relative to an unbounded domain; it is the same for every method compared, since all use the
+same meshes.
+
+**The floor** (training grid 256x97 minus fine grid 512x193, `summary.json` "mesh"; CD in counts =
+1e4 x CD; surface Cp compared at the fine grid's every second wall point):
+
+| case | ΔCL | ΔCD (counts) | ΔCM | Cp L2 | Cp max |
+| --- | --- | --- | --- | --- | --- |
+| sym | 1.2e-14 | −0.13 | 1.5e-15 | 0.0346 | 0.301 |
+| sub0 | −2.45e-3 | −0.03 | −5.80e-4 | 0.0340 | 0.300 |
+| sub2 | −3.36e-3 | +0.12 | −7.23e-4 | 0.0337 | 0.295 |
+| super | −1.19e-2 | −8.92 | −3.78e-3 | 0.0328 | 0.429 |
+| anchor | −8.67e-3 | −3.53 | −2.35e-3 | 0.0335 | 0.320 |
+
+Observed orders (log2 of |coarse − train| / |train − fine|), CL / CD / CM: sym −8.33 / 4.77 /
+−1.14 (CL and CM are round-off, ~1e-14); sub0 0.02 / 7.07 / −0.15; sub2 −0.84 / 5.32 / −2.23;
+super −1.68 / −0.84 / −2.80; anchor −0.63 / 0.88 / −1.20. **For CL they are negative or
+non-monotone on every lifting case**: sub2, super and anchor have the 256→512 change larger than
+the 128→256 change, and sub0's CL goes 0.28787 / 0.28538 / 0.28783 (down then up; its 0.02 comes
+from a non-monotone sequence). CD is non-monotone on sym, sub0, super and anchor. **The three grids
+are not in the asymptotic range, and Richardson extrapolation does not apply**; the floor is
+reported as the plain train-minus-fine difference above, not as an extrapolated error.
+
+**Known answers** (`summary.json` "known_answers", 512x193):
+- sym |CL| = 2.1e-15 (zero to round-off, as symmetry requires).
+- Subcritical CD (inviscid, so ideally zero): sym −0.74, sub0 −0.21, sub2 +1.23 counts.
+- Lift-slope ratio, (CL(sub2) − CL(sub0)) / 2° against 2π/√(1 − M²) at M 0.5: **1.129** (above
+  Prandtl-Glauert, as a 12 %-thick section's slope is expected to be; recorded, not judged).
+- Anchor (NACA 0012, M 0.8, α 1.25°) CL at 512x193: **anchor_cl_fine = 0.326031618**.
+- Vassberg & Jameson (2010), "In pursuit of grid convergence for two-dimensional Euler solutions",
+  J. Aircraft 47(4):1152-1166, DOI 10.2514/1.46737 (earlier AIAA 2009-4114): the DOI resolves via
+  Crossref, but the paper is paywalled at AIAA ARC, no open copy was found, and web search is not
+  available in this environment. **The paper was not read, so no comparison is made**; a
+  remembered value is not used as if it had been read. The comparison stays open.
+
+**Per-case cost** (MGLEVEL 0, radius 100, the final `runs/s0/*/*/result.json`, five cases per
+level, 6 concurrent workers; median (mean) seconds):
+
+| level | wall | CPU |
+| --- | --- | --- |
+| 128x49 | 23.7 (27.2) | 18.0 (20.7) |
+| 256x97 | 132.6 (162.3) | 127.0 (150.4) |
+| 512x193 | 1,248.6 (1,389.7) | 1,124.2 (1,290.3) |
+
+Command: `python -c "import json,glob,statistics as st; R=[json.load(open(p)) for p in glob.glob('runs/s0/*/*/result.json')]; [print(lv, st.median(w:=[r['wall_s'] for r in R if r['level']==lv and r['mglevel']==0 and r['radius']==100.0]), st.mean(w), st.median(c:=[r['cpu_s'] for r in R if r['level']==lv and r['mglevel']==0 and r['radius']==100.0]), st.mean(c)) for lv in ('128x49','256x97','512x193')]"`.
+
+Projected S1 time with 8 workers, wall: 1,104 cases at 256x97, 1,104 x 132.6 / 8 = **5.1 h** at
+the median (6.2 h at the mean); 80 cases at 512x193, 80 x 1,248.6 / 8 = **3.5 h** (3.9 h at the
+mean); about 9-10 h in all. The transonic cases cost about twice the subcritical ones, so the
+campaign's Mach mix sets where in that range it lands, and S0's wall times were measured at 6
+concurrent processes, not 8.
+
+**Workers: 8.** The machine has 12 cores; the endpoint-security agents use about 1.5 of them; SU2's
+resident memory was measured at about 100 MB per 256x97 process (controller ruling).
+
+**Frozen** (`src/apno/settings.py`, this commit): `BASE = Su2Settings(mglevel=0, iter_cap=10000,
+cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
+`CONVERGENCE = {"residual_drop": 5.0, "window": 500, "force_tol": 1e-6}` (unchanged),
+`WORKERS = 8`, `FROZEN = True`; `consistency_errors()` is empty and `check_frozen()` passes.

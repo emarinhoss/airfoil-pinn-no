@@ -16,30 +16,34 @@ def test_caps_by_level_and_judge_defaults():
 
 
 def test_settings_are_pinned():
-    """The S0 freeze edits these lines, FROZEN and BASE together, with its findings entry. An edit
-    anywhere else is a campaign change that resume and build_level would otherwise have to catch.
+    """The values frozen by the 2026-10-01 S0 findings entry. Changing any of them after S1 starts
+    needs a new dated findings entry and re-running every case it affects.
     """
-    assert WORKERS == 6
-    assert settings.FROZEN is False
-    assert BASE == Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-7)
+    assert WORKERS == 8
+    assert settings.FROZEN is True
+    assert BASE == Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-9)
+    assert settings.FINE_ITER_CAP == 20000
+    assert consistency_errors() == []
+    settings.check_frozen()
 
 
 def test_cauchy_stop_must_not_end_a_run_before_our_rule_can_pass():
     assert BASE.cauchy_elems == CONVERGENCE["window"]
-    assert any("not below force_tol" in e for e in consistency_errors())  # 1e-7: 7.5e-5 > 1e-6
-    assert consistency_errors(replace(BASE, cauchy_eps=1e-9)) == []  # 9.3e-7 < 1e-6
-    assert any("window" in e for e in consistency_errors(replace(BASE, cauchy_eps=1e-9,
-                                                                 cauchy_elems=250)))
+    assert consistency_errors() == []  # frozen 1e-9: 1e-9 * 500 * 1.86 = 9.3e-7 < 1e-6
+    for eps in (1e-7, 1e-8):  # S0 attempts 1 and 2: 9.3e-5 and 9.3e-6 > 1e-6
+        assert any("not below force_tol" in e
+                   for e in consistency_errors(replace(BASE, cauchy_eps=eps)))
+    assert any("window" in e for e in consistency_errors(replace(BASE, cauchy_elems=250)))
 
 
 def test_check_frozen(monkeypatch):
-    with pytest.raises(RuntimeError, match="not FROZEN"):
-        settings.check_frozen()
-    monkeypatch.setattr(settings, "FROZEN", True)
+    settings.check_frozen()
+    monkeypatch.setattr(settings, "BASE", replace(BASE, cauchy_eps=1e-7))
     with pytest.raises(RuntimeError, match="inconsistent"):
         settings.check_frozen()
-    monkeypatch.setattr(settings, "BASE", replace(BASE, cauchy_eps=1e-9))
-    settings.check_frozen()
+    monkeypatch.setattr(settings, "FROZEN", False)
+    with pytest.raises(RuntimeError, match="not FROZEN"):
+        settings.check_frozen()
 
 
 def test_s1_refuses_to_start_unfrozen(monkeypatch, tmp_path):
@@ -51,6 +55,7 @@ def test_s1_refuses_to_start_unfrozen(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["s1_campaign.py", "train"])
     monkeypatch.delenv("SU2_BIN_DIR", raising=False)
+    monkeypatch.setattr(settings, "FROZEN", False)
     with pytest.raises(RuntimeError, match="not FROZEN"):
         runpy.run_path(str(script), run_name="__main__")
     assert not (tmp_path / "runs").exists()

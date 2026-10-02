@@ -1,0 +1,1067 @@
+{
+  "runs": [
+    {
+      "case_id": "sym-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "128x49",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.570697893,
+        "cl_range": 2.7425110797999997e-14,
+        "cd_range": 1.448620000002324e-08,
+        "iterations": 865
+      },
+      "iterations": 865,
+      "cl": 1.010996842e-14,
+      "cd": 0.0002626704236,
+      "cm": 2.29081077e-15,
+      "max_surface_mach": 0.611247185411288,
+      "wall_s": 20.701124000013806,
+      "cpu_s": 13.865627,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "4d77773a727bfe70b2083f17fa2062a675335364882a143feeec947c27341c9f",
+      "mesh_sha256": "51cdfc366134162d4c39e671ae5504211e041eda2ff3786774d9149b4a8f669a",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub0-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "128x49",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.581331956,
+        "cl_range": 1.4390000002695302e-07,
+        "cd_range": 2.426299999997751e-09,
+        "iterations": 1127
+      },
+      "iterations": 1127,
+      "cl": 0.2878691878,
+      "cd": 0.000358994027,
+      "cm": 0.06020854046,
+      "max_surface_mach": 0.659096359233308,
+      "wall_s": 26.097024250018876,
+      "cpu_s": 18.023234,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "4d77773a727bfe70b2083f17fa2062a675335364882a143feeec947c27341c9f",
+      "mesh_sha256": "9430ce679c34c5d3a31fa1a835d577ba036ade6030e145f4fc616ddaba6807d6",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sym-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": false,
+      "reason": "CD varied 6.54e-05 > 1e-06 over the last 500",
+      "verdict": {
+        "converged": false,
+        "reason": "CD varied 6.54e-05 > 1e-06 over the last 500",
+        "residual_drop": 5.545864921000001,
+        "cl_range": 1.6247962175e-14,
+        "cd_range": 6.538324920000001e-05,
+        "iterations": 886
+      },
+      "iterations": 886,
+      "cl": 9.981978352e-15,
+      "cd": -8.671080158e-05,
+      "cm": 1.284129053e-15,
+      "max_surface_mach": null,
+      "wall_s": 109.19522279198281,
+      "cpu_s": 76.31234300000001,
+      "exit_code": -2,
+      "su2_version": "8.5.0",
+      "config_sha256": "4d77773a727bfe70b2083f17fa2062a675335364882a143feeec947c27341c9f",
+      "mesh_sha256": "25e6fdc938cb321ff6962a21cd0ebec9285782d06ae3c34dcc2efa0474e5fef2",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub0-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": false,
+      "reason": "CL varied 1.84e-04 > 1e-06 over the last 500; CD varied 1.27e-05 > 1e-06 over the last 500",
+      "verdict": {
+        "converged": false,
+        "reason": "CL varied 1.84e-04 > 1e-06 over the last 500; CD varied 1.27e-05 > 1e-06 over the last 500",
+        "residual_drop": 6.3774764059999995,
+        "cl_range": 0.00018358790000000402,
+        "cd_range": 1.271455072e-05,
+        "iterations": 1029
+      },
+      "iterations": 1029,
+      "cl": 0.2853754407,
+      "cd": -2.393229217e-05,
+      "cm": 0.0596851898,
+      "max_surface_mach": null,
+      "wall_s": 126.53606400001445,
+      "cpu_s": 88.145867,
+      "exit_code": -2,
+      "su2_version": "8.5.0",
+      "config_sha256": "4d77773a727bfe70b2083f17fa2062a675335364882a143feeec947c27341c9f",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub2-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "128x49",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.595890715,
+        "cl_range": 2.82499999948449e-07,
+        "cd_range": 9.406800000077466e-09,
+        "iterations": 1122
+      },
+      "iterations": 1122,
+      "cl": 0.5685456795,
+      "cd": 0.000616829626,
+      "cm": 0.0623988084,
+      "max_surface_mach": 0.7236045858839103,
+      "wall_s": 23.6954457089887,
+      "cpu_s": 17.869253999999998,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "9617013c17b78c14ba0162b353362fccc998f68b8b9662c2dc18b0733bef4126",
+      "mesh_sha256": "9430ce679c34c5d3a31fa1a835d577ba036ade6030e145f4fc616ddaba6807d6",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sym-mg3",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.341293535,
+        "cl_range": 4.928048355967e-08,
+        "cd_range": 1.5916100000050492e-09,
+        "iterations": 1113
+      },
+      "iterations": 1113,
+      "cl": 3.328428033e-11,
+      "cd": -8.663667628e-05,
+      "cm": 4.492908378e-12,
+      "max_surface_mach": 0.6178339311560692,
+      "wall_s": 224.17468104200088,
+      "cpu_s": 179.076738,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "018c86cff6f5a0d78f7d20e79319c1dd2381c1f00b2a974c76159e063b884426",
+      "mesh_sha256": "25e6fdc938cb321ff6962a21cd0ebec9285782d06ae3c34dcc2efa0474e5fef2",
+      "mglevel": 3
+    },
+    {
+      "case_id": "sub2-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 9.31339419,
+        "cl_range": 1.9140000007134006e-07,
+        "cd_range": 1.6306099999982906e-08,
+        "iterations": 1579
+      },
+      "iterations": 1579,
+      "cl": 0.5704280081,
+      "cd": 0.0001346781541,
+      "cm": 0.06255253554,
+      "max_surface_mach": 0.7327576951713983,
+      "wall_s": 132.61792449999484,
+      "cpu_s": 127.015307,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "9617013c17b78c14ba0162b353362fccc998f68b8b9662c2dc18b0733bef4126",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub0-mg3",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.364460385,
+        "cl_range": 1.4109999996181344e-07,
+        "cd_range": 1.5766300000002607e-09,
+        "iterations": 1270
+      },
+      "iterations": 1270,
+      "cl": 0.2853755547,
+      "cd": -2.394254683e-05,
+      "cm": 0.05968519715,
+      "max_surface_mach": 0.663504431344963,
+      "wall_s": 239.81233666700427,
+      "cpu_s": 204.067501,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "018c86cff6f5a0d78f7d20e79319c1dd2381c1f00b2a974c76159e063b884426",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 3
+    },
+    {
+      "case_id": "super-mg0",
+      "inputs": {
+        "mach": 0.75,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "128x49",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 9.597181213599999,
+        "cl_range": 1.731000000004812e-07,
+        "cd_range": 1.6289999994756332e-08,
+        "iterations": 1554
+      },
+      "iterations": 1554,
+      "cl": 0.8048712719,
+      "cd": 0.04294804362,
+      "cm": 0.1270914728,
+      "max_surface_mach": 1.4864853870736583,
+      "wall_s": 23.25956983299693,
+      "cpu_s": 22.657119,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "13cf415b2661321b9c6eea20a6a018903e1b6f3da1dbb2344bf0c672f7c73610",
+      "mesh_sha256": "9430ce679c34c5d3a31fa1a835d577ba036ade6030e145f4fc616ddaba6807d6",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub2-mg3",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 11.37450809,
+        "cl_range": 2.8320000000636725e-07,
+        "cd_range": 6.7331999999945165e-09,
+        "iterations": 1254
+      },
+      "iterations": 1254,
+      "cl": 0.5704280081,
+      "cd": 0.0001346781344,
+      "cm": 0.06255253554,
+      "max_surface_mach": 0.7327576952005768,
+      "wall_s": 212.24586983400513,
+      "cpu_s": 204.632272,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "9e68085b7926a7fb71461cdaee1397c58426d09f7870658fbb82173579c9a93d",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 3
+    },
+    {
+      "case_id": "super-mg0",
+      "inputs": {
+        "mach": 0.75,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.735644905999999,
+        "cl_range": 1.305999999257068e-07,
+        "cd_range": 1.1910000000114884e-08,
+        "iterations": 2480
+      },
+      "iterations": 2480,
+      "cl": 0.8085973467,
+      "cd": 0.04245055139,
+      "cm": 0.127636297,
+      "max_surface_mach": 1.4870720414430574,
+      "wall_s": 209.2463269160071,
+      "cpu_s": 199.28885,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "13cf415b2661321b9c6eea20a6a018903e1b6f3da1dbb2344bf0c672f7c73610",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 0
+    },
+    {
+      "case_id": "anchor-mg0",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "128x49",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 9.430759561899999,
+        "cl_range": 9.029999997745008e-08,
+        "cd_range": 4.97999999918286e-09,
+        "iterations": 1893
+      },
+      "iterations": 1893,
+      "cl": 0.3117635782,
+      "cd": 0.02152388278,
+      "cm": 0.02776679736,
+      "max_surface_mach": 1.3699157730451992,
+      "wall_s": 42.37555954197887,
+      "cpu_s": 31.249154,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "670338606851c38d688b78933ab1631ca40e58d739b5e12e606c3e28eb1e0c84",
+      "mesh_sha256": "51cdfc366134162d4c39e671ae5504211e041eda2ff3786774d9149b4a8f669a",
+      "mglevel": 0
+    },
+    {
+      "case_id": "super-mg3",
+      "inputs": {
+        "mach": 0.75,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 8.602711768999999,
+        "cl_range": 1.1760000007132732e-07,
+        "cd_range": 1.035000000287889e-08,
+        "iterations": 1829
+      },
+      "iterations": 1829,
+      "cl": 0.8085973497,
+      "cd": 0.04245055107,
+      "cm": 0.1276362966,
+      "max_surface_mach": 1.487072038211121,
+      "wall_s": 342.7366464170045,
+      "cpu_s": 283.32239799999996,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "672f281930f2f2264fd39c0ee0db91fdbf9d044d631cc04d9e66bff6ae9b0009",
+      "mesh_sha256": "ceb12dbaf66565230b6c1c4f700ef3b7e6ba9bd9ee1ca547f072708592a8abf4",
+      "mglevel": 3
+    },
+    {
+      "case_id": "anchor-mg0",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.873481923999999,
+        "cl_range": 5.640000000362022e-08,
+        "cd_range": 1.7609999999890213e-08,
+        "iterations": 2910
+      },
+      "iterations": 2910,
+      "cl": 0.317363334,
+      "cd": 0.02087563365,
+      "cm": 0.02879084913,
+      "max_surface_mach": 1.3737264260637843,
+      "wall_s": 280.4627928340051,
+      "cpu_s": 238.329587,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "670338606851c38d688b78933ab1631ca40e58d739b5e12e606c3e28eb1e0c84",
+      "mesh_sha256": "25e6fdc938cb321ff6962a21cd0ebec9285782d06ae3c34dcc2efa0474e5fef2",
+      "mglevel": 0
+    },
+    {
+      "case_id": "anchor-mg3",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 8.538239767,
+        "cl_range": 6.980000000211817e-08,
+        "cd_range": 1.3839999996739794e-08,
+        "iterations": 2044
+      },
+      "iterations": 2044,
+      "cl": 0.3173633346,
+      "cd": 0.02087563309,
+      "cm": 0.02879084858,
+      "max_surface_mach": 1.3737264271589598,
+      "wall_s": 319.5833541669999,
+      "cpu_s": 309.09344799999997,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "f5d092e37624ce1a96e95196d2ce54aa22050e48bcd964b226638b2b68e4b496",
+      "mesh_sha256": "25e6fdc938cb321ff6962a21cd0ebec9285782d06ae3c34dcc2efa0474e5fef2",
+      "mglevel": 3
+    },
+    {
+      "case_id": "sym-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "512x193",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.786806631000001,
+        "cl_range": 1.0958939377e-14,
+        "cd_range": 1.0006539999995252e-08,
+        "iterations": 3234
+      },
+      "iterations": 3234,
+      "cl": -2.075488219e-15,
+      "cd": -7.382950786e-05,
+      "cm": 9.665662368e-17,
+      "max_surface_mach": 0.6195893493707578,
+      "wall_s": 1248.393348750018,
+      "cpu_s": 1113.0601159999999,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "4827a57571f6140a70919b69a5419c42bab179f251a41ad456293a1e3852780f",
+      "mesh_sha256": "add8085098a967776be2e8494cb75dc41a84eb5127a8be557f69a41e4d5844af",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub2-R50",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 50.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 9.7711743,
+        "cl_range": 2.8320000000636725e-07,
+        "cd_range": 1.4959499999964328e-08,
+        "iterations": 1613
+      },
+      "iterations": 1613,
+      "cl": 0.5679007837,
+      "cd": 0.0003067796311,
+      "cm": 0.06255362383,
+      "max_surface_mach": 0.7319077488292501,
+      "wall_s": 134.09656762500526,
+      "cpu_s": 131.575194,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "9617013c17b78c14ba0162b353362fccc998f68b8b9662c2dc18b0733bef4126",
+      "mesh_sha256": "1f7423ef7885d83d4a550573bdf62c8b49392560af789e4430cd43248eb91ba7",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub0-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 0.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "512x193",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.829855728,
+        "cl_range": 1.899999990673251e-09,
+        "cd_range": 1.060423999999966e-08,
+        "iterations": 3257
+      },
+      "iterations": 3257,
+      "cl": 0.2878297162,
+      "cd": -2.109573692e-05,
+      "cm": 0.06026564785,
+      "max_surface_mach": 0.6650639379087021,
+      "wall_s": 1248.5521221249946,
+      "cpu_s": 1121.543141,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "4827a57571f6140a70919b69a5419c42bab179f251a41ad456293a1e3852780f",
+      "mesh_sha256": "e8eea337a533d5b73522b53eea2601575e4247510526028395c7fcb0d5762827",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub2-mg0",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "512x193",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.905570835000001,
+        "cl_range": 9.100000086803561e-09,
+        "cd_range": 1.1516099999986634e-08,
+        "iterations": 3282
+      },
+      "iterations": 3282,
+      "cl": 0.5737922501,
+      "cd": 0.0001225832563,
+      "cm": 0.0632754501,
+      "max_surface_mach": 0.7357843502204662,
+      "wall_s": 1216.9175260000047,
+      "cpu_s": 1124.235394,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "ec7ec99ea57d8684e8f75d0d194e91de13754706afa001e020e171b3fc0998e9",
+      "mesh_sha256": "e8eea337a533d5b73522b53eea2601575e4247510526028395c7fcb0d5762827",
+      "mglevel": 0
+    },
+    {
+      "case_id": "sub2-R200",
+      "inputs": {
+        "mach": 0.5,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "256x97",
+      "radius": 200.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 9.03985389,
+        "cl_range": 1.1489999995895062e-07,
+        "cd_range": 1.2720820000001304e-08,
+        "iterations": 1575
+      },
+      "iterations": 1575,
+      "cl": 0.5717173375,
+      "cd": 5.228896799e-05,
+      "cm": 0.06255584172,
+      "max_surface_mach": 0.7332229072484376,
+      "wall_s": 128.3426778750145,
+      "cpu_s": 126.960947,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "9617013c17b78c14ba0162b353362fccc998f68b8b9662c2dc18b0733bef4126",
+      "mesh_sha256": "1c7fc21f5b0d5b06b25decb5be15b18bda02053579c75eda76074a9fc8dc7323",
+      "mglevel": 0
+    },
+    {
+      "case_id": "anchor-R50",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 50.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 8.182109572,
+        "cl_range": 5.219999998917757e-08,
+        "cd_range": 1.1399999999550658e-08,
+        "iterations": 2870
+      },
+      "iterations": 2870,
+      "cl": 0.3137151706,
+      "cd": 0.02064234208,
+      "cm": 0.02829077276,
+      "max_surface_mach": 1.3762753480207928,
+      "wall_s": 222.71424137501162,
+      "cpu_s": 218.918057,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "670338606851c38d688b78933ab1631ca40e58d739b5e12e606c3e28eb1e0c84",
+      "mesh_sha256": "703291382ed035cb32efea91004974ea711313db157e24d98d26debfda5a3567",
+      "mglevel": 0
+    },
+    {
+      "case_id": "anchor-R200",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "256x97",
+      "radius": 200.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 8.289680739000001,
+        "cl_range": 1.5920000001612422e-07,
+        "cd_range": 6.899999998449813e-09,
+        "iterations": 3220
+      },
+      "iterations": 3220,
+      "cl": 0.3194246448,
+      "cd": 0.02101797629,
+      "cm": 0.02912162619,
+      "max_surface_mach": 1.3730993465590355,
+      "wall_s": 242.0186013749917,
+      "cpu_s": 237.871676,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "670338606851c38d688b78933ab1631ca40e58d739b5e12e606c3e28eb1e0c84",
+      "mesh_sha256": "acab4fb058afeec170c64a50421aa21e29991437adc31912d4088298c8ee99d8",
+      "mglevel": 0
+    },
+    {
+      "case_id": "super-mg0",
+      "inputs": {
+        "mach": 0.75,
+        "alpha_deg": 2.0,
+        "t": 0.12,
+        "m": 0.02
+      },
+      "level": "512x193",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.125604772000001,
+        "cl_range": 1.4510000001521917e-07,
+        "cd_range": 1.0059999999700864e-08,
+        "iterations": 4754
+      },
+      "iterations": 4754,
+      "cl": 0.8205232061,
+      "cd": 0.04334234613,
+      "cm": 0.1314190894,
+      "max_surface_mach": 1.4989152005565463,
+      "wall_s": 1622.5760688330047,
+      "cpu_s": 1516.413855,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "8b75e7bfcb9f5cdc7fa0a9e8dbb895f20dab132ccbd998a9a82a8f16bc8f5bae",
+      "mesh_sha256": "e8eea337a533d5b73522b53eea2601575e4247510526028395c7fcb0d5762827",
+      "mglevel": 0
+    },
+    {
+      "case_id": "anchor-mg0",
+      "inputs": {
+        "mach": 0.8,
+        "alpha_deg": 1.25,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "level": "512x193",
+      "radius": 100.0,
+      "converged": true,
+      "reason": "converged",
+      "verdict": {
+        "converged": true,
+        "reason": "converged",
+        "residual_drop": 7.327742591000001,
+        "cl_range": 6.27000000252842e-08,
+        "cd_range": 1.5439999997285403e-08,
+        "iterations": 5210
+      },
+      "iterations": 5210,
+      "cl": 0.326031618,
+      "cd": 0.0212281356,
+      "cm": 0.03114005554,
+      "max_surface_mach": 1.3810701702331665,
+      "wall_s": 1611.8695719579991,
+      "cpu_s": 1576.077967,
+      "exit_code": 0,
+      "su2_version": "8.5.0",
+      "config_sha256": "8de9b210a154496d5425b1b123a4c3f3104e5ad81eb45708a34ca4e052b6c773",
+      "mesh_sha256": "add8085098a967776be2e8494cb75dc41a84eb5127a8be557f69a41e4d5844af",
+      "mglevel": 0
+    }
+  ],
+  "scorer_check": [
+    {
+      "case": "sym-mg0",
+      "level": "128x49",
+      "max_diff": 2.5074018382420515e-14
+    },
+    {
+      "case": "sym-mg0",
+      "level": "512x193",
+      "max_diff": 4.5406251458421365e-15
+    },
+    {
+      "case": "sym-mg3",
+      "level": "256x97",
+      "max_diff": 1.8063350294694747e-15
+    },
+    {
+      "case": "sub0-mg0",
+      "level": "128x49",
+      "max_diff": 4.869646352823054e-12
+    },
+    {
+      "case": "sub0-mg0",
+      "level": "512x193",
+      "max_diff": 2.9535041079498114e-11
+    },
+    {
+      "case": "sub0-mg3",
+      "level": "256x97",
+      "max_diff": 6.199651902960568e-12
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "128x49",
+      "max_diff": 1.4952816762558996e-11
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "256x97",
+      "max_diff": 3.337652376700362e-11
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "512x193",
+      "max_diff": 3.283018301658558e-11
+    },
+    {
+      "case": "sub2-mg3",
+      "level": "256x97",
+      "max_diff": 4.06081834825045e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "128x49",
+      "max_diff": 4.6407877540843856e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "256x97",
+      "max_diff": 3.434186268691519e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "512x193",
+      "max_diff": 4.721947832742046e-11
+    },
+    {
+      "case": "super-mg3",
+      "level": "256x97",
+      "max_diff": 4.936051567483446e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "128x49",
+      "max_diff": 1.893729617563622e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "256x97",
+      "max_diff": 4.8838211252899555e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "512x193",
+      "max_diff": 3.782474333746677e-11
+    },
+    {
+      "case": "anchor-mg3",
+      "level": "256x97",
+      "max_diff": 2.546890476295971e-11
+    },
+    {
+      "case": "sub2-R50",
+      "level": "256x97",
+      "max_diff": 2.771971541193352e-11
+    },
+    {
+      "case": "sub2-R200",
+      "level": "256x97",
+      "max_diff": 9.529155242660181e-12
+    },
+    {
+      "case": "anchor-R50",
+      "level": "256x97",
+      "max_diff": 4.4428460910239664e-11
+    },
+    {
+      "case": "anchor-R200",
+      "level": "256x97",
+      "max_diff": 4.54786208692326e-12
+    }
+  ],
+  "mesh": {
+    "sym": "not all three levels converged",
+    "sub0": "not all three levels converged",
+    "sub2": {
+      "cl": {
+        "128x49": 0.5685456795,
+        "256x97": 0.5704280081,
+        "512x193": 0.5737922501,
+        "train_minus_fine": -0.0033642419999999618,
+        "observed_order": -0.8377629839208001
+      },
+      "cd": {
+        "128x49": 0.000616829626,
+        "256x97": 0.0001346781541,
+        "512x193": 0.0001225832563,
+        "train_minus_fine": 1.2094897800000017e-05,
+        "observed_order": 5.317015968391071
+      },
+      "cm": {
+        "128x49": 0.0623988084,
+        "256x97": 0.06255253554,
+        "512x193": 0.0632754501,
+        "train_minus_fine": -0.0007229145600000098,
+        "observed_order": -2.233453257280512
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03373101513914235,
+        "max": 0.29481766182044955
+      }
+    },
+    "super": {
+      "cl": {
+        "128x49": 0.8048712719,
+        "256x97": 0.8085973467,
+        "512x193": 0.8205232061,
+        "train_minus_fine": -0.011925859399999905,
+        "observed_order": -1.6783646918946156
+      },
+      "cd": {
+        "128x49": 0.04294804362,
+        "256x97": 0.04245055139,
+        "512x193": 0.04334234613,
+        "train_minus_fine": -0.0008917947400000001,
+        "observed_order": -0.8420376970080229
+      },
+      "cm": {
+        "128x49": 0.1270914728,
+        "256x97": 0.127636297,
+        "512x193": 0.1314190894,
+        "train_minus_fine": -0.0037827923999999846,
+        "observed_order": -2.795588911810533
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03276675726183852,
+        "max": 0.42906211531090555
+      }
+    },
+    "anchor": {
+      "cl": {
+        "128x49": 0.3117635782,
+        "256x97": 0.317363334,
+        "512x193": 0.326031618,
+        "train_minus_fine": -0.008668284000000026,
+        "observed_order": -0.6303825074021072
+      },
+      "cd": {
+        "128x49": 0.02152388278,
+        "256x97": 0.02087563365,
+        "512x193": 0.0212281356,
+        "train_minus_fine": -0.0003525019500000004,
+        "observed_order": 0.878917126517047
+      },
+      "cm": {
+        "128x49": 0.02776679736,
+        "256x97": 0.02879084913,
+        "512x193": 0.03114005554,
+        "train_minus_fine": -0.0023492064099999987,
+        "observed_order": -1.1978848281546979
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03346129558628732,
+        "max": 0.3196353676199263
+      }
+    }
+  },
+  "multigrid": {
+    "sub2": {
+      "mg0": {
+        "wall_s": 132.61792449999484,
+        "cpu_s": 127.015307,
+        "iterations": 1579,
+        "converged": true,
+        "cl": 0.5704280081
+      },
+      "mg3": {
+        "wall_s": 212.24586983400513,
+        "cpu_s": 204.632272,
+        "iterations": 1254,
+        "converged": true,
+        "cl": 0.5704280081
+      }
+    },
+    "super": {
+      "mg0": {
+        "wall_s": 209.2463269160071,
+        "cpu_s": 199.28885,
+        "iterations": 2480,
+        "converged": true,
+        "cl": 0.8085973467
+      },
+      "mg3": {
+        "wall_s": 342.7366464170045,
+        "cpu_s": 283.32239799999996,
+        "iterations": 1829,
+        "converged": true,
+        "cl": 0.8085973497
+      }
+    },
+    "anchor": {
+      "mg0": {
+        "wall_s": 280.4627928340051,
+        "cpu_s": 238.329587,
+        "iterations": 2910,
+        "converged": true,
+        "cl": 0.317363334
+      },
+      "mg3": {
+        "wall_s": 319.5833541669999,
+        "cpu_s": 309.09344799999997,
+        "iterations": 2044,
+        "converged": true,
+        "cl": 0.3173633346
+      }
+    }
+  },
+  "radius": {
+    "sub2": {
+      "50": 0.5679007837,
+      "200": 0.5717173375,
+      "100": 0.5704280081
+    },
+    "anchor": {
+      "50": 0.3137151706,
+      "200": 0.3194246448,
+      "100": 0.317363334
+    }
+  },
+  "known_answers": {
+    "sym_abs_cl_fine": 2.075488219e-15,
+    "subcritical_cd_counts_fine": {
+      "sym": -0.7382950786,
+      "sub0": -0.21095736920000002,
+      "sub2": 1.225832563
+    },
+    "lift_slope_ratio_to_prandtl_glauert": 1.1291523344875445,
+    "anchor_cl_fine": 0.326031618,
+    "vassberg_jameson_2010_cl": "read from the paper and recorded in docs/findings.md"
+  },
+  "scorer_worst_abs_diff": 4.936051567483446e-11
+}

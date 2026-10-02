@@ -1,10 +1,11 @@
-"""Campaign settings. Starting values from spec 4.4; stage S0 confirms or revises them, then they
-are FROZEN before S1. Changing a value after S1 starts requires a new dated entry in
-docs/findings.md and re-running every case it affects.
+"""Campaign settings, FROZEN by the 2026-10-01 stage S0 findings entry in docs/findings.md.
+Starting values were spec 4.4's; S0 revised cauchy_eps (1e-7 -> 1e-9) and WORKERS (6 -> 8).
+Changing a value after S1 starts requires a new dated entry in docs/findings.md and re-running
+every case it affects.
 
-The freeze is one edit: the S0-confirmed values into BASE and FROZEN = True, with its findings
+The freeze was one edit: the S0-confirmed values into BASE and FROZEN = True, with its findings
 entry, and the pinned values in tests/test_settings.py updated in the same commit. S1 refuses to
-start until then, and refuses settings whose SU2 stop cannot satisfy our convergence rule.
+start on unfrozen settings, and on settings whose SU2 stop cannot satisfy our convergence rule.
 """
 
 import math
@@ -13,11 +14,11 @@ from dataclasses import replace
 from apno.geometry.ogrid import FINE
 from apno.su2.config import Su2Settings
 
-BASE = Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-7)
+BASE = Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-9)
 FINE_ITER_CAP = 20000
 CONVERGENCE = {"residual_drop": 5.0, "window": 500, "force_tol": 1e-6}
-WORKERS = 6
-FROZEN = False
+WORKERS = 8
+FROZEN = True
 
 # |CL| ceiling over the input box: thin-airfoil lift with Prandtl-Glauert at its corner (alpha
 # 6 deg, m 0.04 so alpha_0 = -4.15 deg, M 0.80), 2 pi (0.1047 + 0.0725) / 0.6 = 1.856. Euler lift

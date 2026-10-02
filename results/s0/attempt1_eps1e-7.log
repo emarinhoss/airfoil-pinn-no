@@ -1,0 +1,62 @@
+[1/24] sym-mg0: CD varied 1.55e-06 > 1e-06 over the last 500 (736 it, 13 s)
+[2/24] sub0-mg0: CL varied 1.42e-05 > 1e-06 over the last 500 (877 it, 15 s)
+[3/24] sym-mg0: CD varied 1.46e-06 > 1e-06 over the last 500 (1191 it, 102 s)
+[4/24] sub0-mg0: CL varied 1.41e-05 > 1e-06 over the last 500; CD varied 1.01e-06 > 1e-06 over the last 500 (1207 it, 104 s)
+[5/24] sub2-mg0: CL varied 1.77e-05 > 1e-06 over the last 500; CD varied 1.77e-06 > 1e-06 over the last 500 (839 it, 13 s)
+[6/24] sym-mg3: CL varied 1.46e-06 > 1e-06 over the last 500; CD varied 1.67e-06 > 1e-06 over the last 500 (929 it, 156 s)
+[7/24] sub0-mg3: CL varied 1.42e-05 > 1e-06 over the last 500 (1038 it, 175 s)
+[8/24] super-mg0: CL varied 1.59e-05 > 1e-06 over the last 500; CD varied 1.65e-06 > 1e-06 over the last 500 (1107 it, 16 s)
+[9/24] sub2-mg0: CL varied 2.82e-05 > 1e-06 over the last 500; CD varied 1.27e-06 > 1e-06 over the last 500 (1230 it, 103 s)
+[10/24] sub2-mg3: CL varied 2.85e-05 > 1e-06 over the last 500 (1015 it, 182 s)
+[11/24] super-mg0: CL varied 1.19e-05 > 1e-06 over the last 500; CD varied 1.23e-06 > 1e-06 over the last 500 (1724 it, 155 s)
+[12/24] anchor-mg0: CL varied 8.22e-06 > 1e-06 over the last 500 (1403 it, 25 s)
+[13/24] super-mg3: CL varied 1.11e-05 > 1e-06 over the last 500 (1359 it, 235 s)
+[14/24] anchor-mg0: CL varied 5.68e-06 > 1e-06 over the last 500; CD varied 2.06e-06 > 1e-06 over the last 500 (2103 it, 196 s)
+[15/24] anchor-mg3: CL varied 9.87e-06 > 1e-06 over the last 500; CD varied 2.10e-06 > 1e-06 over the last 500 (1537 it, 253 s)
+[16/24] sym-mg0: CD varied 1.17e-06 > 1e-06 over the last 500 (2281 it, 851 s)
+[17/24] sub0-mg0: CD varied 1.02e-06 > 1e-06 over the last 500 (2308 it, 861 s)
+[18/24] sub2-R50: CL varied 2.79e-05 > 1e-06 over the last 500; CD varied 1.47e-06 > 1e-06 over the last 500 (1270 it, 110 s)
+[19/24] sub2-R200: CL varied 2.80e-05 > 1e-06 over the last 500; CD varied 1.10e-06 > 1e-06 over the last 500 (1204 it, 104 s)
+[20/24] sub2-mg0: CL varied 2.98e-06 > 1e-06 over the last 500; CD varied 1.14e-06 > 1e-06 over the last 500 (2327 it, 864 s)
+[21/24] anchor-R50: CL varied 5.30e-06 > 1e-06 over the last 500; CD varied 1.35e-06 > 1e-06 over the last 500 (2114 it, 168 s)
+[22/24] anchor-R200: CL varied 1.58e-05 > 1e-06 over the last 500; CD varied 1.23e-06 > 1e-06 over the last 500 (2168 it, 155 s)
+[23/24] super-mg0: CL varied 1.50e-05 > 1e-06 over the last 500 (3161 it, 1096 s)
+[24/24] anchor-mg0: CL varied 8.15e-06 > 1e-06 over the last 500; CD varied 1.76e-06 > 1e-06 over the last 500 (3735 it, 1156 s)
+{
+  "scorer_check": [],
+  "mesh": {
+    "sym": "not all three levels converged",
+    "sub0": "not all three levels converged",
+    "sub2": "not all three levels converged",
+    "super": "not all three levels converged",
+    "anchor": "not all three levels converged"
+  },
+  "multigrid": {},
+  "radius": {
+    "sub2": {
+      "50": "not converged",
+      "200": "not converged",
+      "100": "not converged"
+    },
+    "anchor": {
+      "50": "not converged",
+      "200": "not converged",
+      "100": "not converged"
+    }
+  },
+  "known_answers": {
+    "sym_abs_cl_fine": "not converged",
+    "subcritical_cd_counts_fine": {
+      "sym": "not converged",
+      "sub0": "not converged",
+      "sub2": "not converged"
+    },
+    "lift_slope_ratio_to_prandtl_glauert": "not converged",
+    "anchor_cl_fine": "not converged",
+    "vassberg_jameson_2010_cl": "read from the paper and recorded in docs/findings.md"
+  },
+  "scorer_worst_abs_diff": 0.0
+}
+NOT CONVERGED: ['sym-mg0@128x49: CD varied 1.55e-06 > 1e-06 over the last 500', 'sub0-mg0@128x49: CL varied 1.42e-05 > 1e-06 over the last 500', 'sym-mg0@256x97: CD varied 1.46e-06 > 1e-06 over the last 500', 'sub0-mg0@256x97: CL varied 1.41e-05 > 1e-06 over the last 500; CD varied 1.01e-06 > 1e-06 over the last 500', 'sub2-mg0@128x49: CL varied 1.77e-05 > 1e-06 over the last 500; CD varied 1.77e-06 > 1e-06 over the last 500', 'sym-mg3@256x97: CL varied 1.46e-06 > 1e-06 over the last 500; CD varied 1.67e-06 > 1e-06 over the last 500', 'sub0-mg3@256x97: CL varied 1.42e-05 > 1e-06 over the last 500', 'super-mg0@128x49: CL varied 1.59e-05 > 1e-06 over the last 500; CD varied 1.65e-06 > 1e-06 over the last 500', 'sub2-mg0@256x97: CL varied 2.82e-05 > 1e-06 over the last 500; CD varied 1.27e-06 > 1e-06 over the last 500', 'sub2-mg3@256x97: CL varied 2.85e-05 > 1e-06 over the last 500', 'super-mg0@256x97: CL varied 1.19e-05 > 1e-06 over the last 500; CD varied 1.23e-06 > 1e-06 over the last 500', 'anchor-mg0@128x49: CL varied 8.22e-06 > 1e-06 over the last 500', 'super-mg3@256x97: CL varied 1.11e-05 > 1e-06 over the last 500', 'anchor-mg0@256x97: CL varied 5.68e-06 > 1e-06 over the last 500; CD varied 2.06e-06 > 1e-06 over the last 500', 'anchor-mg3@256x97: CL varied 9.87e-06 > 1e-06 over the last 500; CD varied 2.10e-06 > 1e-06 over the last 500', 'sym-mg0@512x193: CD varied 1.17e-06 > 1e-06 over the last 500', 'sub0-mg0@512x193: CD varied 1.02e-06 > 1e-06 over the last 500', 'sub2-R50@256x97: CL varied 2.79e-05 > 1e-06 over the last 500; CD varied 1.47e-06 > 1e-06 over the last 500', 'sub2-R200@256x97: CL varied 2.80e-05 > 1e-06 over the last 500; CD varied 1.10e-06 > 1e-06 over the last 500', 'sub2-mg0@512x193: CL varied 2.98e-06 > 1e-06 over the last 500; CD varied 1.14e-06 > 1e-06 over the last 500', 'anchor-R50@256x97: CL varied 5.30e-06 > 1e-06 over the last 500; CD varied 1.35e-06 > 1e-06 over the last 500', 'anchor-R200@256x97: CL varied 1.58e-05 > 1e-06 over the last 500; CD varied 1.23e-06 > 1e-06 over the last 500', 'super-mg0@512x193: CL varied 1.50e-05 > 1e-06 over the last 500', 'anchor-mg0@512x193: CL varied 8.15e-06 > 1e-06 over the last 500; CD varied 1.76e-06 > 1e-06 over the last 500']
+SCORER CHECK NOT PERFORMED: no case converged
+S0_EXIT=1

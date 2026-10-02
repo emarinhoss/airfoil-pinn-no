@@ -1,0 +1,395 @@
+S0 attempt 3 with Su2Settings(mglevel=0, iter_cap=10000, cauchy_elems=500, cauchy_eps=1e-09)
+[1/24] sym-mg0: converged (865 it, 21 s)
+[2/24] sub0-mg0: converged (1127 it, 26 s)
+[3/24] sym-mg3: converged (1113 it, 224 s)
+[4/24] sub2-mg0: converged (1122 it, 24 s)
+[5/24] sub0-mg3: converged (1270 it, 240 s)
+[6/24] sym-mg0: converged (3234 it, 1248 s)
+[7/24] sub2-mg0: converged (1579 it, 133 s)
+[8/24] sub0-mg0: converged (3257 it, 1249 s)
+[9/24] super-mg0: converged (1554 it, 23 s)
+[10/24] sub2-mg3: converged (1254 it, 212 s)
+[11/24] sub2-mg0: converged (3282 it, 1217 s)
+[12/24] super-mg0: converged (2480 it, 209 s)
+[13/24] anchor-mg0: converged (1893 it, 42 s)
+[14/24] super-mg3: converged (1829 it, 343 s)
+[15/24] super-mg0: converged (4754 it, 1623 s)
+[16/24] anchor-mg0: converged (2910 it, 280 s)
+[17/24] anchor-mg3: converged (2044 it, 320 s)
+[18/24] anchor-mg0: converged (5210 it, 1612 s)
+[19/24] sub2-R200: converged (1575 it, 128 s)
+[20/24] sub2-R50: converged (1613 it, 134 s)
+[21/24] anchor-R50: converged (2870 it, 223 s)
+[22/24] anchor-R200: converged (3220 it, 242 s)
+[23/24] sub0-mg0: converged (1565 it, 94 s)
+[24/24] sym-mg0: converged (1561 it, 95 s)
+{
+  "scorer_check": [
+    {
+      "case": "sym-mg0",
+      "level": "128x49",
+      "max_diff": 2.5074018382420515e-14
+    },
+    {
+      "case": "sym-mg0",
+      "level": "256x97",
+      "max_diff": 3.0243955126754707e-15
+    },
+    {
+      "case": "sym-mg0",
+      "level": "512x193",
+      "max_diff": 4.5406251458421365e-15
+    },
+    {
+      "case": "sym-mg3",
+      "level": "256x97",
+      "max_diff": 1.8063350294694747e-15
+    },
+    {
+      "case": "sub0-mg0",
+      "level": "128x49",
+      "max_diff": 4.869646352823054e-12
+    },
+    {
+      "case": "sub0-mg0",
+      "level": "256x97",
+      "max_diff": 3.533118242415867e-12
+    },
+    {
+      "case": "sub0-mg0",
+      "level": "512x193",
+      "max_diff": 2.9535041079498114e-11
+    },
+    {
+      "case": "sub0-mg3",
+      "level": "256x97",
+      "max_diff": 6.199651902960568e-12
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "128x49",
+      "max_diff": 1.4952816762558996e-11
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "256x97",
+      "max_diff": 3.337652376700362e-11
+    },
+    {
+      "case": "sub2-mg0",
+      "level": "512x193",
+      "max_diff": 3.283018301658558e-11
+    },
+    {
+      "case": "sub2-mg3",
+      "level": "256x97",
+      "max_diff": 4.06081834825045e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "128x49",
+      "max_diff": 4.6407877540843856e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "256x97",
+      "max_diff": 3.434186268691519e-11
+    },
+    {
+      "case": "super-mg0",
+      "level": "512x193",
+      "max_diff": 4.721947832742046e-11
+    },
+    {
+      "case": "super-mg3",
+      "level": "256x97",
+      "max_diff": 4.936051567483446e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "128x49",
+      "max_diff": 1.893729617563622e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "256x97",
+      "max_diff": 4.8838211252899555e-11
+    },
+    {
+      "case": "anchor-mg0",
+      "level": "512x193",
+      "max_diff": 3.782474333746677e-11
+    },
+    {
+      "case": "anchor-mg3",
+      "level": "256x97",
+      "max_diff": 2.546890476295971e-11
+    },
+    {
+      "case": "sub2-R50",
+      "level": "256x97",
+      "max_diff": 2.771971541193352e-11
+    },
+    {
+      "case": "sub2-R200",
+      "level": "256x97",
+      "max_diff": 9.529155242660181e-12
+    },
+    {
+      "case": "anchor-R50",
+      "level": "256x97",
+      "max_diff": 4.4428460910239664e-11
+    },
+    {
+      "case": "anchor-R200",
+      "level": "256x97",
+      "max_diff": 4.54786208692326e-12
+    }
+  ],
+  "mesh": {
+    "sym": {
+      "cl": {
+        "128x49": 1.010996842e-14,
+        "256x97": 1.014802391e-14,
+        "512x193": -2.075488219e-15,
+        "train_minus_fine": 1.2223512129e-14,
+        "observed_order": -8.327338556433535
+      },
+      "cd": {
+        "128x49": 0.0002626704236,
+        "256x97": -8.663666407e-05,
+        "512x193": -7.382950786e-05,
+        "train_minus_fine": -1.2807156210000001e-05,
+        "observed_order": 4.769473845942351
+      },
+      "cm": {
+        "128x49": 2.29081077e-15,
+        "256x97": 1.604348165e-15,
+        "512x193": 9.665662368e-17,
+        "train_minus_fine": 1.5076915413200001e-15,
+        "observed_order": -1.1350882608337682
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03455985492753035,
+        "max": 0.30149795909986443
+      }
+    },
+    "sub0": {
+      "cl": {
+        "128x49": 0.2878691878,
+        "256x97": 0.2853755547,
+        "512x193": 0.2878297162,
+        "train_minus_fine": -0.002454161499999996,
+        "observed_order": 0.02301901928992379
+      },
+      "cd": {
+        "128x49": 0.000358994027,
+        "256x97": -2.394253154e-05,
+        "512x193": -2.109573692e-05,
+        "train_minus_fine": -2.8467946199999974e-06,
+        "observed_order": 7.0716231744632685
+      },
+      "cm": {
+        "128x49": 0.06020854046,
+        "256x97": 0.05968519715,
+        "512x193": 0.06026564785,
+        "train_minus_fine": -0.0005804506999999987,
+        "observed_order": -0.14941588231483616
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.0340026665429601,
+        "max": 0.2998163293381191
+      }
+    },
+    "sub2": {
+      "cl": {
+        "128x49": 0.5685456795,
+        "256x97": 0.5704280081,
+        "512x193": 0.5737922501,
+        "train_minus_fine": -0.0033642419999999618,
+        "observed_order": -0.8377629839208001
+      },
+      "cd": {
+        "128x49": 0.000616829626,
+        "256x97": 0.0001346781541,
+        "512x193": 0.0001225832563,
+        "train_minus_fine": 1.2094897800000017e-05,
+        "observed_order": 5.317015968391071
+      },
+      "cm": {
+        "128x49": 0.0623988084,
+        "256x97": 0.06255253554,
+        "512x193": 0.0632754501,
+        "train_minus_fine": -0.0007229145600000098,
+        "observed_order": -2.233453257280512
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03373101513914235,
+        "max": 0.29481766182044955
+      }
+    },
+    "super": {
+      "cl": {
+        "128x49": 0.8048712719,
+        "256x97": 0.8085973467,
+        "512x193": 0.8205232061,
+        "train_minus_fine": -0.011925859399999905,
+        "observed_order": -1.6783646918946156
+      },
+      "cd": {
+        "128x49": 0.04294804362,
+        "256x97": 0.04245055139,
+        "512x193": 0.04334234613,
+        "train_minus_fine": -0.0008917947400000001,
+        "observed_order": -0.8420376970080229
+      },
+      "cm": {
+        "128x49": 0.1270914728,
+        "256x97": 0.127636297,
+        "512x193": 0.1314190894,
+        "train_minus_fine": -0.0037827923999999846,
+        "observed_order": -2.795588911810533
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03276675726183852,
+        "max": 0.42906211531090555
+      }
+    },
+    "anchor": {
+      "cl": {
+        "128x49": 0.3117635782,
+        "256x97": 0.317363334,
+        "512x193": 0.326031618,
+        "train_minus_fine": -0.008668284000000026,
+        "observed_order": -0.6303825074021072
+      },
+      "cd": {
+        "128x49": 0.02152388278,
+        "256x97": 0.02087563365,
+        "512x193": 0.0212281356,
+        "train_minus_fine": -0.0003525019500000004,
+        "observed_order": 0.878917126517047
+      },
+      "cm": {
+        "128x49": 0.02776679736,
+        "256x97": 0.02879084913,
+        "512x193": 0.03114005554,
+        "train_minus_fine": -0.0023492064099999987,
+        "observed_order": -1.1978848281546979
+      },
+      "cp_train_vs_fine": {
+        "l2": 0.03346129558628732,
+        "max": 0.3196353676199263
+      }
+    }
+  },
+  "multigrid": {
+    "sym": {
+      "mg0": {
+        "wall_s": 94.96769966700231,
+        "cpu_s": 93.990042,
+        "iterations": 1561,
+        "converged": true,
+        "cl": 1.014802391e-14
+      },
+      "mg3": {
+        "wall_s": 224.17468104200088,
+        "cpu_s": 179.076738,
+        "iterations": 1113,
+        "converged": true,
+        "cl": 3.328428033e-11
+      }
+    },
+    "sub0": {
+      "mg0": {
+        "wall_s": 94.26474516600138,
+        "cpu_s": 93.287981,
+        "iterations": 1565,
+        "converged": true,
+        "cl": 0.2853755547
+      },
+      "mg3": {
+        "wall_s": 239.81233666700427,
+        "cpu_s": 204.067501,
+        "iterations": 1270,
+        "converged": true,
+        "cl": 0.2853755547
+      }
+    },
+    "sub2": {
+      "mg0": {
+        "wall_s": 132.61792449999484,
+        "cpu_s": 127.015307,
+        "iterations": 1579,
+        "converged": true,
+        "cl": 0.5704280081
+      },
+      "mg3": {
+        "wall_s": 212.24586983400513,
+        "cpu_s": 204.632272,
+        "iterations": 1254,
+        "converged": true,
+        "cl": 0.5704280081
+      }
+    },
+    "super": {
+      "mg0": {
+        "wall_s": 209.2463269160071,
+        "cpu_s": 199.28885,
+        "iterations": 2480,
+        "converged": true,
+        "cl": 0.8085973467
+      },
+      "mg3": {
+        "wall_s": 342.7366464170045,
+        "cpu_s": 283.32239799999996,
+        "iterations": 1829,
+        "converged": true,
+        "cl": 0.8085973497
+      }
+    },
+    "anchor": {
+      "mg0": {
+        "wall_s": 280.4627928340051,
+        "cpu_s": 238.329587,
+        "iterations": 2910,
+        "converged": true,
+        "cl": 0.317363334
+      },
+      "mg3": {
+        "wall_s": 319.5833541669999,
+        "cpu_s": 309.09344799999997,
+        "iterations": 2044,
+        "converged": true,
+        "cl": 0.3173633346
+      }
+    }
+  },
+  "radius": {
+    "sub2": {
+      "50": 0.5679007837,
+      "200": 0.5717173375,
+      "100": 0.5704280081
+    },
+    "anchor": {
+      "50": 0.3137151706,
+      "200": 0.3194246448,
+      "100": 0.317363334
+    }
+  },
+  "known_answers": {
+    "sym_abs_cl_fine": 2.075488219e-15,
+    "subcritical_cd_counts_fine": {
+      "sym": -0.7382950786,
+      "sub0": -0.21095736920000002,
+      "sub2": 1.225832563
+    },
+    "lift_slope_ratio_to_prandtl_glauert": 1.1291523344875445,
+    "anchor_cl_fine": 0.326031618,
+    "vassberg_jameson_2010_cl": "read from the paper and recorded in docs/findings.md"
+  },
+  "scorer_worst_abs_diff": 4.936051567483446e-11
+}
+NOT CONVERGED: none
+scorer check passed: worst difference 4.936e-11
+S0_EXIT=0

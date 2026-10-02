@@ -95,6 +95,11 @@ def cell_areas(X, Y):
 
 def write_su2(path, X, Y):
     """Write the grid in SU2 native format. Node id = j*NI + i; markers 'airfoil', 'farfield'."""
+    Path(path).write_text(su2_text(X, Y))
+
+
+def su2_text(X, Y):
+    """The text write_su2 writes, so a driver can hash a mesh without writing it."""
     if not (np.all(np.isfinite(X)) and np.all(np.isfinite(Y))) or not (cell_areas(X, Y).min() > 0):
         raise ValueError("grid has non-positive or non-finite cells; refusing to write it")
     ni, nj = X.shape
@@ -116,4 +121,4 @@ def write_su2(path, X, Y):
     for tag, j in (("airfoil", 0), ("farfield", nj - 1)):
         out += [f"MARKER_TAG= {tag}", f"MARKER_ELEMS= {ni}"]
         out += [f"3 {nid(i, j)} {nid(i + 1, j)}" for i in range(ni)]
-    Path(path).write_text("\n".join(out) + "\n")
+    return "\n".join(out) + "\n"

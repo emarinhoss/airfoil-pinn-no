@@ -67,3 +67,26 @@ def test_manufactured_solution():
     x, y, *_ = (t.detach().numpy() for t in metrics(xi, eta, GEOM))
     want = np.stack([div[k](x, y) - nu * lap[k](x, y) for k in range(3)], 1)
     np.testing.assert_allclose(r, want, rtol=1e-8, atol=1e-8)
+
+
+def test_viscous_residual_is_the_euler_divergence_minus_nu_laplacian_in_two_extra_passes(
+        monkeypatch):
+    import apno.physics.euler as euler
+
+    xi, eta = _pts(300, 2)
+    eta = eta * 0.05
+
+    def state(xi, eta):
+        x, y, *_ = metrics(xi, eta, GEOM)
+        rho = 1 + 0.1 * torch.sin(x) * torch.cos(y)
+        return rho, 1 + 0.1 * torch.cos(x) * y, 0.1 * torch.sin(y), 3 + 0.1 * torch.cos(x + y)
+
+    calls = []
+    real = euler._d
+    monkeypatch.setattr(euler, "_d", lambda f, w: calls.append(1) or real(f, w))
+    inviscid = residual(xi, eta, state, GEOM)
+    n_inviscid = len(calls)
+    calls.clear()
+    viscous = residual(xi, eta, state, GEOM, viscosity=1e-2)
+    assert len(calls) == n_inviscid + 2 * 3  # q_xi and q_eta per conserved variable, nothing more
+    assert not torch.allclose(viscous, inviscid)

@@ -46,9 +46,70 @@ def test_shock_suction_peak_on_trailing_edge_node_returns_none():
     x = np.linspace(0, 1, 101)
     xw = np.concatenate([x[::-1], x[1:-1]])
     cpw = np.full(len(xw), -0.2)
-    cpw[0] = -5.0  # node 0 is the TE node ending both surfaces
+    cpw[0] = -1.0  # node 0 is the TE node ending both surfaces; supersonic (M 1.19), p > 0
     out = shocks(xw, cpw, 0.75)
     assert out == {"lower": None, "upper": None}
+
+
+# A real cosine-clustered wall: the last interval before the trailing edge is about 1.5e-4 chord, so
+# the closing stagnation rise is far steeper (dCp/dx in the thousands) than any captured shock.
+XW = X[:, 0]
+NI = len(XW)
+LE = NI // 2
+UPPER = np.arange(LE + 1, NI)
+MACH = 0.75
+
+
+def _wall_cp(x_shock, supersonic=True):
+    """Upper: a supersonic plateau, a jump at x_shock, recovery; lower subsonic; TE stagnation."""
+    cp = np.full(NI, -0.2)
+    xu = XW[UPPER]
+    plateau = -0.9 if supersonic else -0.3  # Cp* is about -0.43 at M 0.75
+    after = -0.1 + 0.3 * np.clip((xu - x_shock) / (1 - x_shock), 0, 1)
+    cp[UPPER] = np.where(xu < x_shock, plateau, after)
+    cp[LE] = 1.0  # leading-edge stagnation
+    cp[0] = 0.9  # trailing-edge stagnation rise over the last ~1e-4 chord
+    return cp
+
+
+def _field_with_wall_cp(cp, alpha=2.0):
+    q = _free(alpha)
+    q[:, 0, 3] = 1.0 + 0.5 * 1.4 * MACH**2 * cp
+    return q
+
+
+def test_shock_on_a_cosine_clustered_wall_is_not_the_trailing_edge_recompression():
+    cp = _wall_cp(0.65)
+    out = shocks(XW, cp, MACH)
+    assert out["lower"] is None
+    assert out["upper"]["x"] == pytest.approx(0.65, abs=0.01)
+    assert out["upper"]["mach_ahead"] > 1.0
+
+
+def test_supersonic_leading_edge_node_is_not_a_lower_surface_shock():
+    cp = _wall_cp(0.65)
+    cp[LE] = -0.9  # the shared LE node is supersonic, at the upper plateau
+    cp[LE - 1] = 1.0  # lower-surface stagnation just aft of the LE: a compression, not a shock
+    out = shocks(XW, cp, MACH)
+    assert out["lower"] is None
+    assert out["upper"]["x"] == pytest.approx(0.65, abs=0.01)
+
+
+def test_score_case_supercritical_branch():
+    truth = _field_with_wall_cp(_wall_cp(0.65))
+    pred = _field_with_wall_cp(_wall_cp(0.60))
+    s = score_case(pred, truth, X, Y, MACH, 2.0, "supercritical")["shock"]
+    assert set(s) == {"upper"}  # the truth's lower surface is subsonic
+    u = s["upper"]
+    assert u["x_true"] == pytest.approx(0.65, abs=0.01)
+    assert u["x_err"] == pytest.approx(-0.05, abs=0.01) and u["missed"] is False
+    assert u["mach_ahead_true"] > 1.0 and u["mach_ahead_err"] == pytest.approx(0.0, abs=1e-12)
+    assert 0.8 <= u["overshoot"] <= 0.84  # recovery from 0.60 against the -0.9 plateau to 0.65
+
+    smooth = _field_with_wall_cp(_wall_cp(0.65, supersonic=False))
+    u = score_case(smooth, truth, X, Y, MACH, 2.0, "supercritical")["shock"]["upper"]
+    assert u["missed"] is True and u["x_err"] is None and u["mach_ahead_err"] is None
+    assert u["overshoot"] > 0
 
 
 def test_missing_and_nonfinite_predictions():

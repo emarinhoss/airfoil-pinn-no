@@ -410,7 +410,13 @@ loss. Each output channel is then standardised over the training set.
   Mach number exceeds 1, the shock position is the x/c of the steepest pressure rise downstream of that
   surface's suction peak; the Mach number just
   ahead of it comes from the isentropic relation; the overshoot is the largest |ΔCp| within 0.05 chord
-  of the true shock.
+  of the true shock. (Amended 2026-10-01 by the final review: the steepest rise is taken only over
+  segments whose upstream node is supersonic, and the leading-edge node, shared by both surfaces,
+  counts for the upper surface only. Without the restriction the rule finds the trailing-edge
+  recompression into the closing stagnation point on every real solution — S0 attempt 2's M 0.75 case gave an
+  upper shock at x/c = 0.99993 with a subsonic Mach 0.41 ahead at 256 × 97, because the last
+  interval of the cosine-clustered wall is about 10⁻⁴ chord — and with it the same restarts give
+  x/c = 0.675 (Mach 1.22 ahead), and the NACA 0012 anchor gives 0.627 upper and 0.349 lower.)
 - **Physics checks**, applied to every column including SU2 itself: entropy rise in subcritical cases
   (maximum and area-weighted mean over the near field); |H/H∞ − 1|; the RMS velocity through the wall;
   net mass flux through the closed grid lines j = 8, 24, 48 and 72 of the training grid, from just off

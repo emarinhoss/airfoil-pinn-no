@@ -32,19 +32,34 @@ def _surfaces(ni):
 
 
 def shocks(xw, cp, mach):
+    """Per surface, the steepest pressure rise downstream of the suction peak whose upstream node is
+    supersonic (spec 8.2 as amended 2026-10-01), or None if that surface has no such segment.
+
+    The supersonic-upstream restriction is what makes this a shock rule. Without it the steepest
+    rise on a cosine-clustered wall is the trailing-edge recompression into the closing stagnation
+    point (the last interval is about 1e-4 chord, so its dCp/dx is 100-2000 against 50-70 for a
+    smeared captured shock), and every shock lands at x/c = 0.9999 with a subsonic Mach ahead. The
+    leading-edge node is shared by both surfaces and counts for the upper one only, so a supersonic
+    LE node cannot make the lower surface report its LE-to-stagnation compression as a shock.
+    """
     out = {}
     for name, idx in _surfaces(len(xw)).items():
         x, c = xw[idx], cp[idx]
-        m_loc = isentropic_mach_from_cp(c, mach)
-        if not np.nanmax(m_loc) > 1.0:
+        with np.errstate(invalid="ignore"):  # Cp above stagnation -> NaN Mach, never supersonic
+            m_loc = isentropic_mach_from_cp(c, mach)
+            sup = m_loc > 1.0
+        if name == "lower":
+            sup[0] = False  # the shared LE node belongs to the upper surface
+        if not sup.any():
             out[name] = None
             continue
         k0 = int(np.argmin(c))
         dx = np.diff(x[k0:])
-        if dx.size == 0 or not (dx > 0).any():
+        ok = (dx > 0) & sup[k0:-1]
+        if dx.size == 0 or not ok.any():
             out[name] = None
             continue
-        slope = np.where(dx > 0, np.diff(c[k0:]) / np.where(dx > 0, dx, 1), -np.inf)
+        slope = np.where(ok, np.diff(c[k0:]) / np.where(ok, dx, 1), -np.inf)
         k = k0 + int(np.argmax(slope))
         out[name] = {"x": float(0.5 * (x[k] + x[k + 1])), "mach_ahead": float(m_loc[k])}
     return out

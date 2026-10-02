@@ -71,7 +71,7 @@ def _mass_flux(q, X, Y, j):
     return float(np.sum(rho * (u * n[:, 0] + v * n[:, 1])))
 
 
-def physics_checks(q, X, Y, mach, near):
+def physics_checks(q, X, Y, mach, near, flux_lines=FLUX_LINES):
     w = node_areas(X, Y)[near]
     s = entropy(q[..., 0], q[..., 3])[near]
     h = total_enthalpy_ratio(*(q[..., k] for k in range(4)), mach)[near]
@@ -81,10 +81,11 @@ def physics_checks(q, X, Y, mach, near):
     return {"entropy_max": float(np.max(s)), "entropy_mean": float(np.sum(w * s) / np.sum(w)),
             "enthalpy_max_dev": float(np.max(np.abs(h - 1))),
             "wall_normal_rms": float(np.sqrt(np.mean(un * un))),
-            "mass_flux": {j: _mass_flux(q, X, Y, j) for j in FLUX_LINES}}
+            "mass_flux": {j: _mass_flux(q, X, Y, j) for j in flux_lines}}
 
 
-def score_case(pred_q, true_q, X, Y, mach, alpha_deg, truth_regime):
+def score_case(pred_q, true_q, X, Y, mach, alpha_deg, truth_regime, flux_lines=FLUX_LINES):
+    """flux_lines are j indices of THIS grid: FLUX_LINES on the training grid, j // 2 at 128x49."""
     if pred_q is None:
         return {"status": "missing"}
     if not np.isfinite(pred_q).all():
@@ -104,7 +105,7 @@ def score_case(pred_q, true_q, X, Y, mach, alpha_deg, truth_regime):
            "cp_l2": float(np.sqrt(np.mean((cp_p - cp_t) ** 2))),
            "cp_max": float(np.abs(cp_p - cp_t).max()),
            "near_field_rel_l2": float(np.sqrt(np.sum(w * (dp - dt) ** 2)) / den) if den else 0.0,
-           "physics": physics_checks(pred_q, X, Y, mach, near)}
+           "physics": physics_checks(pred_q, X, Y, mach, near, flux_lines)}
     if truth_regime == "supercritical":
         sp, st = shocks(xw, cp_p, mach), shocks(xw, cp_t, mach)
         res = {}

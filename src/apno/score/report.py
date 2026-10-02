@@ -1,4 +1,11 @@
-"""Aggregation, tables and plots for stage S4. Every training run is reported, not only the best."""
+"""Aggregation, tables and plots for stage S4. Every training run is reported, not only the best.
+
+Three tables, every one split by method, configuration, grid, test set and regime (spec 8.4):
+forces, surface and near field (`aggregate`); shocks on supercritical cases (`aggregate_shocks`),
+pooled over the surfaces where the truth has a shock, with misses counted; and the physics checks
+(`aggregate_physics`). A check a contestant satisfies by construction (BY_CONSTRUCTION) is printed
+as "by construction", never as a value that reads as a pass (spec 8.2).
+"""
 
 from collections import defaultdict
 
@@ -8,16 +15,25 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-KEYS = ("method", "variant", "n_train", "seed", "split", "regime")
+KEYS = ("method", "variant", "grid", "n_train", "seed", "split", "regime")
 SCALARS = ("cl_err", "cd_err_counts", "cm_err", "cp_l2", "cp_max", "near_field_rel_l2")
+PHYSICS = ("entropy_max", "entropy_mean", "enthalpy_max_dev", "wall_normal_rms")
+# The PINN's state is built from the free-stream total enthalpy and its wall velocity is projected
+# tangent (spec 7.3), so these two checks are identities for it, not results.
+BY_CONSTRUCTION = {"pinn": ("enthalpy_max_dev", "wall_normal_rms")}
+BY_CONSTRUCTION_CELL = "by construction"
+
+
+def _groups(rows):
+    groups = defaultdict(list)
+    for r in rows:
+        groups[tuple(r.get(k, "") for k in KEYS)].append(r["score"])
+    return sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0])))
 
 
 def aggregate(rows):
-    groups = defaultdict(list)
-    for r in rows:
-        groups[tuple(r[k] for k in KEYS)].append(r["score"])
     out = []
-    for key, scores in sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0]))):
+    for key, scores in _groups(rows):
         g = dict(zip(KEYS, key))
         ok = [s for s in scores if s["status"] == "ok"]
         for status in ("ok", "missing", "non-finite"):
@@ -32,14 +48,70 @@ def aggregate(rows):
     return out
 
 
+def _stats(prefix, vals, signed=False):
+    vals = np.asarray(vals, dtype=float)
+    if not vals.size:
+        return {}
+    if signed:
+        return {f"{prefix}_median": float(np.median(vals)),
+                f"{prefix}_absmax": float(np.abs(vals).max())}
+    return {f"{prefix}_median": float(np.median(vals)), f"{prefix}_max": float(vals.max())}
+
+
+def aggregate_shocks(rows):
+    """Per group of supercritical rows: shocks in the truth, misses, |x_err|, Mach-ahead error and
+    overshoot, pooled over every (case, surface) where the truth has a shock."""
+    out = []
+    for key, scores in _groups(r for r in rows if r.get("regime") == "supercritical"):
+        g = dict(zip(KEYS, key))
+        ok = [s for s in scores if s["status"] == "ok"]
+        found = [v for s in ok for v in s.get("shock", {}).values()]
+        hit = [v for v in found if not v["missed"]]
+        g.update(n_supercritical=len(scores), n_scored=len(ok), n_true_shocks=len(found),
+                 n_missed=len(found) - len(hit))
+        g.update(_stats("abs_x_err", [abs(v["x_err"]) for v in hit]))
+        g.update(_stats("mach_ahead_err", [v["mach_ahead_err"] for v in hit], signed=True))
+        g.update(_stats("overshoot", [v["overshoot"] for v in found]))
+        out.append(g)
+    return out
+
+
+def aggregate_physics(rows):
+    """Per group: median and maximum of each physics check, and of |mass flux| per grid line."""
+    out = []
+    for key, scores in _groups(rows):
+        g = dict(zip(KEYS, key))
+        ok = [s["physics"] for s in scores if s["status"] == "ok"]
+        g["n_ok"] = len(ok)
+        skip = BY_CONSTRUCTION.get(g["method"], ())
+        for m in PHYSICS:
+            if m in skip:
+                g[f"{m}_median"] = g[f"{m}_max"] = BY_CONSTRUCTION_CELL
+            else:
+                g.update(_stats(m, [p[m] for p in ok]))
+        lines = sorted({j for p in ok for j in p["mass_flux"]})
+        for k, j in enumerate(lines):
+            g.update(_stats(f"mass_flux_line{k}", [abs(p["mass_flux"][j]) for p in ok]))
+            g[f"mass_flux_line{k}_j"] = j
+        out.append(g)
+    return out
+
+
 def break_even(costs, n_max):
     n = np.arange(n_max + 1)
     return {k: c["fixed"] + n * c["per"] for k, c in costs.items()}
 
 
-def markdown_table(groups, metrics=("near_field_rel_l2_mean", "cl_err_absmax",
-                                    "cd_err_counts_absmax", "cp_max_mean")):
-    head = list(KEYS) + ["n_ok", "n_missing", "n_non-finite"] + list(metrics)
+SHOCK_METRICS = ("n_supercritical", "n_scored", "n_true_shocks", "n_missed", "abs_x_err_median",
+                 "abs_x_err_max", "mach_ahead_err_median", "mach_ahead_err_absmax",
+                 "overshoot_median", "overshoot_max")
+PHYSICS_METRICS = ("n_ok",) + tuple(f"{m}_{s}" for m in PHYSICS for s in ("median", "max")) + \
+    tuple(f"mass_flux_line{k}_{s}" for k in range(4) for s in ("j", "median", "max"))
+
+
+def markdown_table(groups, metrics=("n_ok", "n_missing", "n_non-finite", "near_field_rel_l2_mean",
+                                    "cl_err_absmax", "cd_err_counts_absmax", "cp_max_mean")):
+    head = list(KEYS) + list(metrics)
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for g in groups:
         cells = [g.get(h, "") for h in head]
@@ -52,7 +124,8 @@ def plot_break_even(curves, path):
     fig, ax = plt.subplots(figsize=(7, 4.5))
     for k, y in curves.items():
         ax.plot(np.arange(len(y)), y / 3600, label=k, ls="--" if k == "su2" else "-")
-    ax.set(xlabel="new cases answered", ylabel="cumulative CPU hours", yscale="log",
+    ax.set(xlabel="new cases answered",
+           ylabel="cumulative cost, hours (CPU time; GPU training at wall time)", yscale="log",
            title="Cost to answer n new cases")
     ax.legend()
     fig.tight_layout()
@@ -61,11 +134,17 @@ def plot_break_even(curves, path):
 
 
 def plot_efficiency(points, floor, path):
+    """points: method -> (n paid for, error[, n_cases trained on]); n_cases labels each point."""
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    for method, (n, err) in points.items():
+    for method, pt in points.items():
+        n, err = pt[0], pt[1]
         ax.plot(n, err, "o-", label=method)
+        for x, y, c in zip(n, err, pt[2] if len(pt) > 2 else ()):
+            if np.isfinite(y):
+                ax.annotate(f"{c}", (x, y), textcoords="offset points", xytext=(4, 4), fontsize=7)
     ax.axhline(floor, color="k", ls=":", label="floor: SU2 256x97 vs 512x193")
-    ax.set(xscale="log", yscale="log", xlabel="SU2 training cases",
+    ax.set(xscale="log", yscale="log",
+           xlabel="SU2 training cases paid for (label: converged cases trained on)",
            ylabel="near-field relative L2 (test_in, mean)", title="Data efficiency")
     ax.legend()
     fig.tight_layout()

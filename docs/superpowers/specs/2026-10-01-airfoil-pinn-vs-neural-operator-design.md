@@ -275,7 +275,14 @@ loss. Each output channel is then standardised over the training set.
   pointwise linear path; GELU activation.
 - Around the airfoil (i) the FFT is exact, because the grid is periodic. Radially (j) the field is
   zero-padded by (NJ − 1)/6 rows (8 at 128 × 49) before the FFT and cropped after, so the padded
-  domain spans the same η at every resolution.
+  domain spans the same η at every resolution. (Amended 2026-10-01 by the final review: what fixes a
+  learned radial mode's physical wavenumber is the DFT period, NJ + pad samples, not the padded span,
+  so the padding is round(3(NJ − 1)/16) − 1 rows — 8 at 128 × 49 and 17 at 256 × 97 — making the
+  period 19/16 in η at both. (NJ − 1)/6 gave periods 57/48 and 113/96, 0.88 % apart, and one spectral
+  layer then differed by 4–71 % between 128 × 49 and the shared nodes of 256 × 97 on a wrap-periodic
+  field, against 10⁻¹⁴ with matched periods. The transfer is still only O(h), because the padded
+  field jumps to zero at the wrap; stage S2 measures it at 128 × 49 against 256 × 97 sampled at
+  every second node, and S4 scores the FNO at both resolutions.)
 - Truncating the modes smooths jumps, so smeared shocks and overshoot are expected; §8 measures them.
 - Hyperparameters are tuned on the validation set within a budget of at most eight configurations,
   listed before tuning starts.

@@ -1,6 +1,8 @@
 import numpy as np
 
-from apno.data.sampling import BOX, EXTRAP_MACH, campaign_specs, case_specs, design
+from apno.data.sampling import (
+    BOX, EXTRAP_MACH, campaign_specs, case_specs, design, prefix_indices, sobol_index,
+)
 
 
 def test_deterministic_and_sized():
@@ -38,3 +40,11 @@ def test_case_specs():
     assert specs[3].case_id == "test_ext-0003" and specs[3].level == "512x193"
     assert len(campaign_specs("train")) == 896 + 128 + 64 + 16
     assert len(campaign_specs("fine")) == 64 + 16
+
+
+def test_prefix_is_the_sobol_prefix_minus_failures():
+    survivors = [f"train-{k:04d}" for k in range(100) if k not in (3, 70)]
+    assert sobol_index("test_in-0063") == 63
+    idx = prefix_indices(survivors, 64)
+    assert len(idx) == 63 and max(sobol_index(survivors[k]) for k in idx) == 63
+    assert len(prefix_indices(survivors, 896)) == 98

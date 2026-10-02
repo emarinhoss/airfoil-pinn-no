@@ -39,3 +39,17 @@ def campaign_specs(which):
     if which == "fine":
         return [s for split in ("test_in", "test_ext") for s in case_specs(split, FINE)]
     raise ValueError(which)
+
+
+def sobol_index(case_id):
+    """The Sobol index of a case id f"{split}-{k:04d}" (k counts within the split)."""
+    return int(case_id.rsplit("-", 1)[1])
+
+
+def prefix_indices(case_ids, n):
+    """Positions of the cases among the first n Sobol points of their split (spec 5.3).
+
+    A prefix is the balanced design of the first n points minus whatever failed to converge, never
+    the first n survivors: those would reach past point n and be costed as if they were n.
+    """
+    return np.array([k for k, c in enumerate(case_ids) if sobol_index(c) < n], dtype=int)

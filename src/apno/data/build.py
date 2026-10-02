@@ -62,6 +62,10 @@ def build_level(specs_by_split, root, out_path, dtype):
                                             "inputs": spec.inputs()})
                 else:
                     cases.append(c)
+            if not cases:
+                reasons = sorted({x["reason"] for x in failures[split]})[:5]
+                raise ValueError(f"split {split!r}: no converged cases among "
+                                 f"{len(failures[split])}; first reasons: {reasons}")
             g = f.create_group(split)
             g["xy"] = np.stack([c["xy"] for c in cases]).astype(dtype)
             g["q"] = np.stack([c["q"] for c in cases]).astype(dtype)

@@ -61,3 +61,16 @@ def test_showcase_on_survivors():
     assert picked == ["c1", "c3", "c4", "c6", "c8", "c9"]
     with pytest.raises(ValueError, match="at least 6"):
         showcase(ids[:5], np.arange(5.0))
+
+
+def test_build_level_all_failed_split_names_split_and_reasons(tmp_path):
+    import pytest
+    from apno.data import build as B
+    class S:
+        case_id = "c0"
+        level = "s1"
+        def inputs(self):
+            return [0.0]
+    import numpy as np
+    with pytest.raises(ValueError, match="no converged cases.*not run"):
+        B.build_level({"train": [S()]}, tmp_path, tmp_path / "o.h5", np.float32)

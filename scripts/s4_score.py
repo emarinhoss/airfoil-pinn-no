@@ -67,8 +67,13 @@ def main():
     (OUT / "scores.md").write_text(markdown_table(groups) + "\n")
 
     # costs, in CPU seconds
-    results = [json.loads(p.read_text()) for p in Path("runs/su2/256x97").glob("*/result.json")]
-    per_su2 = float(np.median([r["cpu_s"] for r in results if r["case_id"].startswith("test")]))
+    su2_glob = "runs/su2/256x97/*/result.json"
+    results = [json.loads(p.read_text()) for p in Path(".").glob(su2_glob)]
+    test_cpu = [r["cpu_s"] for r in results if r["case_id"].startswith("test")]
+    if not test_cpu:
+        raise SystemExit(f"no 'test*' result.json under {su2_glob}: found {len(results)} "
+                         "result.json files in total; cannot cost SU2 per query")
+    per_su2 = float(np.median(test_cpu))
     campaign = {n: sum(r["cpu_s"] for r in results
                        if r["case_id"].startswith("val")
                        or (r["case_id"].startswith("train") and int(r["case_id"][-4:]) < n))
@@ -96,8 +101,14 @@ def main():
         for g in gs:
             by_n.setdefault(g["n_train"], []).append((g["n_ok"], g.get("near_field_rel_l2_mean")))
         n = sorted(by_n)
-        err = [sum(k * e for k, e in by_n[m] if e is not None) / sum(k for k, _ in by_n[m])
-               for m in n]
+        err = []
+        for m in n:
+            total = sum(k for k, _ in by_n[m])
+            if total == 0:
+                print(f"data efficiency: dropping {method} n_train={m} (n_ok = 0 in every group)")
+                err.append(float("nan"))
+            else:
+                err.append(sum(k * e for k, e in by_n[m] if e is not None) / total)
         pts[method] = (n, err)
     fl = [r["score"]["near_field_rel_l2"] for r in rows
           if r["method"] == "su2-256x97" and r["split"] == "test_in"]

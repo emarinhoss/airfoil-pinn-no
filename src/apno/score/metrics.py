@@ -41,6 +41,9 @@ def shocks(xw, cp, mach):
             continue
         k0 = int(np.argmin(c))
         dx = np.diff(x[k0:])
+        if dx.size == 0 or not (dx > 0).any():
+            out[name] = None
+            continue
         slope = np.where(dx > 0, np.diff(c[k0:]) / np.where(dx > 0, dx, 1), -np.inf)
         k = k0 + int(np.argmax(slope))
         out[name] = {"x": float(0.5 * (x[k] + x[k + 1])), "mach_ahead": float(m_loc[k])}

@@ -42,6 +42,15 @@ def test_shock_found_on_a_synthetic_step():
     assert out["lower"] is None
 
 
+def test_shock_suction_peak_on_trailing_edge_node_returns_none():
+    x = np.linspace(0, 1, 101)
+    xw = np.concatenate([x[::-1], x[1:-1]])
+    cpw = np.full(len(xw), -0.2)
+    cpw[0] = -5.0  # node 0 is the TE node ending both surfaces
+    out = shocks(xw, cpw, 0.75)
+    assert out == {"lower": None, "upper": None}
+
+
 def test_missing_and_nonfinite_predictions():
     q = _free()
     assert score_case(None, q, X, Y, 0.6, 2.0, "subcritical") == {"status": "missing"}

@@ -37,11 +37,18 @@ def residual(xi, eta, state_fn, geom, radius=FAR_RADIUS, ratio=None, viscosity=0
     rho, u, v, p = state_fn(xi, eta)
     F = (rho * u, rho * u * u + p, rho * u * v)
     G = (rho * v, rho * u * v, rho * v * v + p)
-    out = []
-    for f, g, q in zip(F, G, (rho, rho * u, rho * v)):
-        if viscosity:  # fold -nu grad(q) into the fluxes: one divergence pass, not two
-            q_xi, q_eta = _d(q, xi), _d(q, eta)
-            f = f - viscosity * (q_xi * y_eta - q_eta * y_xi) / J
-            g = g - viscosity * (-q_xi * x_eta + q_eta * x_xi) / J
-        out.append((_d(y_eta * f - x_eta * g, xi) + _d(-y_xi * f + x_xi * g, eta)) / J)
-    return torch.stack(out, -1)
+    terms = (x_xi, x_eta, y_xi, y_eta, J)
+    return torch.stack([divergence(f, g, q, xi, eta, terms, viscosity)
+                        for f, g, q in zip(F, G, (rho, rho * u, rho * v))], -1)
+
+
+def divergence(f, g, q, xi, eta, terms, viscosity=0.0):
+    """div(f, g) - nu * Laplacian(q) in strong conservation form, with terms = (x_xi, x_eta, y_xi,
+    y_eta, J) from `metrics` at the same (xi, eta). Shared by the Euler and full-potential
+    residuals, so both use one operator, artificial viscosity included."""
+    x_xi, x_eta, y_xi, y_eta, J = terms
+    if viscosity:  # fold -nu grad(q) into the fluxes: one divergence pass, not two
+        q_xi, q_eta = _d(q, xi), _d(q, eta)
+        f = f - viscosity * (q_xi * y_eta - q_eta * y_xi) / J
+        g = g - viscosity * (-q_xi * x_eta + q_eta * x_xi) / J
+    return (_d(y_eta * f - x_eta * g, xi) + _d(-y_xi * f + x_xi * g, eta)) / J

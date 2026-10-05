@@ -43,11 +43,14 @@ def _tiny(**kw):
 
 
 def test_grad_balanced_variant_runs_and_records_its_weights():
-    cfg = _tiny(grad_balance=True, balance_every=10)
+    # the Euler PINN's weights (outer, Kutta); the potential PINN's (wall, Kutta) are tested in
+    # test_pinn_potential.py, now that "potential" is the default formulation (2026-10-04)
+    cfg = _tiny(grad_balance=True, balance_every=10, formulation="euler")
     _, rec = train(PinnCase(0.3, 2.0, Section(0.12, 0.0)), cfg, log=lambda *a: None)
     assert rec["weights"]["outer"] != 10.0 and np.isfinite(rec["weights"]["outer"])
     assert np.isfinite(rec["final"]["total"]) and "w_outer" in rec["history"][0]
-    _, fixed = train(PinnCase(0.3, 2.0, Section(0.12, 0.0)), _tiny(), log=lambda *a: None)
+    _, fixed = train(PinnCase(0.3, 2.0, Section(0.12, 0.0)), _tiny(formulation="euler"),
+                     log=lambda *a: None)
     assert fixed["weights"] == {"outer": 10.0, "kutta": 10.0}
 
 

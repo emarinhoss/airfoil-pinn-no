@@ -90,3 +90,46 @@ def test_a_shard_writes_only_its_own_files_and_budgets_only_its_own_runs(s3):
 def test_a_bad_shard_is_refused(s3, bad):
     with pytest.raises(SystemExit):
         s3.main(["--preflight-only", "--shard", bad])
+
+
+def test_the_plan_is_the_potential_pinn_by_default_and_euler_on_request(s3):
+    assert {cfg.formulation for _, _, cfg in s3.plan()} == {"potential"}
+    euler = s3.plan("euler")
+    assert {cfg.formulation for _, _, cfg in euler} == {"euler"}
+    assert [(v, c) for v, c, _ in euler] == [(v, c) for v, c, _ in s3.plan()]  # same variants
+
+
+@pytest.mark.parametrize("formulation, name", [("potential", "preflight.json"),
+                                                ("euler", "preflight_euler.json")])
+def test_preflight_records_the_formulation_and_keeps_euler_apart(s3, formulation, name):
+    argv = ["--budget-hours", "1000", "--preflight-only"]
+    extra = [] if formulation == "potential" else ["--formulation", formulation]
+    assert s3.main(argv + extra) == 0
+    assert sorted(p.name for p in Path("results/s3").iterdir()) == [name]
+    pre = json.loads(Path("results/s3", name).read_text())
+    assert pre["formulation"] == formulation
+    assert {t["formulation"] for t in pre["timing_s"].values()} == {formulation}
+    assert {cfg.formulation for cfg in s3.timed} == {formulation}
+
+
+def test_a_run_records_its_formulation_in_the_prediction_and_the_run_record(s3, monkeypatch):
+    import numpy as np
+
+    from apno.data.predictions import read_predictions
+
+    def fake_train(case, cfg):
+        rec = {"wall_s": 1.0, "cpu_s": 1.0, "adam_wall_s": 0.5, "adam_device": "cpu",
+               "lbfgs_device": "cpu", "formulation": cfg.formulation, "final": {}, "weights": {},
+               "history": []}
+        return None, rec
+
+    monkeypatch.setattr(s3, "train", fake_train)
+    monkeypatch.setattr(s3, "evaluate_on_grid", lambda pinn, shape: np.ones((*shape, 4)))
+    monkeypatch.setattr(s3, "plan", lambda f="potential", _plan=s3.plan: _plan(f)[:1])
+    assert s3.main(["--budget-hours", "1000", "--formulation", "euler"]) == 0
+    (path,) = Path("runs/predictions").iterdir()
+    assert path.name.endswith("_euler.h5")
+    _, attrs = read_predictions(path)
+    assert attrs["formulation"] == "euler" and attrs["variant"] == "euler"
+    rec = json.loads(Path("results/s3/pinn_runs_euler.json").read_text())
+    assert [r["formulation"] for r in rec.values()] == ["euler"]

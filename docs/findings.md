@@ -248,3 +248,82 @@ cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
   writes `results/s3/pinn_runs_shard{K}of{N}.json` and `preflight_shard{K}of{N}.json` (`0/1`, the
   default, keeps the unsharded names). The preflight and the run record name the device of each
   phase; prediction files carry `train_device`, `adam_device` and `lbfgs_device`.
+
+## 2026-10-04 — the Euler PINN converges to fluid at rest
+
+- **The S3a warm-up failed** (`python scripts/s3_warmup.py`, then the Euler PINN of spec 7.1-7.7,
+  Adam on MPS and L-BFGS on the CPU, 7.65 h wall; `results/s3/warmup.json`, exit 1): max|ΔCp| 3.94
+  against the 0.1 bound, CL 7.8e-7 and CD 1.8e-5, final residual 1.7e-5. Read off the saved field
+  (`runs/warmup_q.npy`): the PINN converged to **fluid at rest around the cylinder** — wall speed
+  0.004 where potential flow gives 2.0, Cp 0.937 everywhere (stagnation), free stream reached only at
+  the outer boundary. Mass and momentum are conserved to 1e-5 for r < 2 but violated in the far
+  field: closed-line mass flux −0.13 and x-momentum flux −0.42 at r 25-50.
+- **Five hypotheses, each refuted** by a throwaway probe (scripts in `runs/warmup_probe*.py`, logs
+  in `runs/probe*.log`; not committed). Each trained the cylinder warm-up configuration (or the
+  showcase airfoil) with Adam for 6,000-8,000 steps from seed 0 and printed the shoulder wall speed
+  (node i = 64 of 256x97, potential flow 2.0) and max|ΔCp| every 1,000 steps:
+  1. *Residual weighting* — the mean of |div|² over points uniform in (ξ, η) weights the domain by
+     1/J, so the residual weighted by J^p: p = 0 (as specified) collapses by step 1000 (shoulder
+     0.001, max|ΔCp| 3.02, `probe_p0_cpu.log`); p = 0.5 collapses (0.002 and 3.92 at step 8000);
+     p = 1 does not collapse but never leaves its initial state (shoulder 0.987, max|ΔCp| 3.35,
+     unweighted residual 9.6). Weighting moves where the network fails, not whether.
+  2. *Low-Mach stiffness* (at M 0.1 the momentum residual is 71x more sensitive to density than to
+     velocity) — an exact reparameterisation, the network outputting the pressure perturbation in
+     dynamic-pressure units: J⁰ collapses (shoulder 0.004, max|ΔCp| 3.27 at step 6000,
+     `probe2_cylP0.log`); J¹ stays near its initial state (0.998, 3.46).
+  3. *Far-field size* — a 10-chord outer boundary collapses (shoulder 0.022, max|ΔCp| 3.81 at step
+     6000, `probe3_cylR10.log`).
+  4. *Rotational solutions* — a homentropic closure collapses on the cylinder (0.003, 4.00,
+     `probe3_cylH.log`) and on the airfoil (wall speed 0.009, Cp_min 1.03 against SU2's −0.94,
+     `probe3_foilH.log`).
+  5. *The real cases* — the unmodified PINN on showcase case test_in-0022 collapses too (wall speed
+     max 0.001-0.005 from step 1000; Cp_min −0.58 against SU2's −0.94 at step 4000,
+     `probe2_foil0.log`): the failure is S3's, not the warm-up's.
+- **The decisive probe** (`runs/warmup_probe4.py`, `runs/probe4.log`): (a) the analytic
+  incompressible potential flow through the Euler residual has mean square 8.3e-8 at M 0.01 and
+  8.2e-4 at M 0.1 (it is not the compressible solution), above the rest state's 6e-5 to 2e-4; (b) a
+  network supervised-fitted to it for 4,000 Adam steps (shoulder 1.995, max|ΔCp| 0.030 — it would
+  pass the warm-up) has PINN loss 0.31 (residual 3.10e-1, outer 3.8e-3), about 1000x the rest
+  state's ~1e-4, because small fit errors are large derivative errors; (c) 1,000 PINN-only Adam
+  steps from that fit drive it away from the answer (residual 5.85e-3, shoulder 1.237, max|ΔCp|
+  1.812).
+- **Root cause.** Under the strong-form Euler residual with a soft far-field condition, fluid at rest
+  satisfies the equations and the wall condition exactly and violates only the weakly enforced far
+  field, and every near-correct flow costs more than it: descent leaves even the true solution. It
+  is the formulation, not a parameter. For the full-potential equation in subcritical flow the
+  residual loss is (near-)convex in the potential, with no rest attractor, and a Dirichlet far field
+  makes rest inadmissible.
+- **The author's decision (2026-10-04): "Full-potential PINN".** Spec §7.8 records the formulation
+  (φ = free stream + Γξ + ψ·(1 − η), learned Γ, continuity div(ρ∇φ) = 0 with isentropic Bernoulli
+  density, soft Neumann wall, exact Dirichlet far field, Kutta on ∂φ/∂ξ at the trailing edge; exact
+  for shock-free inviscid flow, an isentropic approximation at shocks). The Euler PINN stays runnable
+  as this negative result: `PinnConfig(formulation="euler")`, `--formulation euler` on
+  `scripts/s3_warmup.py` and `scripts/s3_pinn.py`.
+- **The analytic field through the new residual** (`apno.physics.potential.residual`, 20,000 points
+  uniform in (ξ, η), seed 1, incompressible cylinder potential with Bernoulli density): mean square
+  2.6e-8 at M 0.01 and 2.6e-4 at M 0.1, with zero wall violation. Command:
+  `python -c "import torch; torch.set_default_dtype(torch.float64); from apno.geometry.ogrid import *; from apno.models.pinn_potential import state_from_potential as s; from apno.physics.potential import residual; g=Cylinder(); R=stretch_ratio(100.0); G=torch.Generator().manual_seed(1); xi=torch.rand(20000,generator=G); eta=1-torch.rand(20000,generator=G); phi=lambda a,b,x,y: (x-0.5)+0.25*(x-0.5)/((x-0.5)**2+y*y); [print(M, float((residual(xi,eta,lambda a,b: s(phi,a,b,g,100.0,R,M),g,100.0,R)**2).mean())) for M in (0.01,0.1)]"`.
+- **Probe of the potential formulation (evidence, not a pass criterion).** The cylinder warm-up
+  configuration (`PinnConfig(kutta=False, zero_circulation=True, device="cpu")`: spec sizes, Γ fixed
+  at 0, the first 3,000 steps of the 30,000-step Adam schedule) on the **CPU** (the GPU was running
+  S2's FNO training), seed 0, evaluating a copy of the network on the 256x97 grid every 500 steps
+  with `evaluate_on_grid` and `circle_cp_error` (load average 17-53; 2,678 s wall, 0.89 s per step):
+
+  | Adam step | shoulder speed (2.0) | max\|ΔCp\| | residual | wall | total |
+  |---|---|---|---|---|---|
+  | 0 | 1.017 | 2.968 | 1.56e+0 | 5.03e-1 | 6.58e+0 |
+  | 500 | 2.305 | 1.658 | 6.08e-1 | 1.51e-2 | 7.60e-1 |
+  | 1000 | 2.299 | 1.362 | 4.89e-1 | 2.03e-2 | 6.92e-1 |
+  | 1500 | 2.512 | 2.300 | 5.92e-1 | 7.59e-3 | 6.68e-1 |
+  | 2000 | 2.323 | 1.367 | 4.96e-1 | 1.96e-2 | 6.92e-1 |
+  | 2500 | 2.613 | 2.753 | 4.32e-1 | 6.34e-3 | 4.95e-1 |
+  | 3000 | 2.671 | 3.041 | 3.94e-1 | 5.26e-3 | 4.47e-1 |
+
+  It does **not** collapse toward rest: the shoulder speed leaves 1.0 within 500 steps and stays at
+  2.3-2.7. It is not converged either: it overshoots 2.0 (the max|ΔCp| is the shoulder's, and grows
+  from step 2000), and its residual, 0.39 at step 3000, is ~1500x the analytic field's 2.6e-4 at
+  this Mach, so the descent has not yet reached the minimum near the right answer. Whether the full
+  30,000 Adam steps and L-BFGS reach it is what the warm-up (run by the controller) measures. The
+  probe was a script outside the repository: it repeated `train`'s Adam loop (`make_pinn`,
+  `_points`, `losses`, the same Adam and exponential decay) and printed
+  `step k: shoulder ... max|dCp| ... residual ... wall ... total ...` every 500 steps.

@@ -1,6 +1,14 @@
 """Stage S3: the PINN on the showcase cases (spec 7.3-7.5). Resumes by skipping finished files.
 
     python scripts/s3_pinn.py [--budget-hours 48] [--preflight-only] [--shard K/N]
+                              [--formulation potential|euler]
+
+The PINN is the full-potential one by default (spec 7 as amended 2026-10-04); `--formulation euler`
+runs the Euler PINN, the recorded negative result, under the same plan. The formulation is recorded
+in every preflight timing entry, run record and prediction file's attrs, and a non-default one
+suffixes every file it writes (pinn-<variant>-<case>_euler.h5, pinn_runs_euler.json,
+preflight_euler.json), so the two never resume from or overwrite each other's runs. The variant
+names are the plan's: "euler" is the base inviscid run, whichever formulation solves it.
 
 Before any run starts, every planned configuration is timed for a few Adam steps and L-BFGS
 closures on its own showcase case, the measurements and the projected wall time of every run are
@@ -29,26 +37,28 @@ from apno.data.sampling import case_specs
 from apno.geometry.ogrid import TRAIN, Section
 from apno.models.pinn import PinnCase
 from apno.models.train_pinn import (
-    PinnConfig, evaluate_on_grid, projected_s, resolve_device, time_steps, train,
+    FORMULATIONS, PinnConfig, evaluate_on_grid, projected_s, resolve_device, time_steps, train,
 )
 
 PRED, RES = Path("runs/predictions"), Path("results/s3")
 BUDGET_HOURS = 48.0  # the stage's whole projected wall time; override deliberately, on record
 
 
-def plan():
+def plan(formulation="potential"):
     show = json.loads(Path("results/s1/showcase.json").read_text())["cases"]
     sup = [c for c in show if c["regime"] == "supercritical"]
     sub = [c for c in show if c["regime"] == "subcritical"]
-    runs = [("euler", c["case_id"], PinnConfig()) for c in show]
+    f = formulation
+    runs = [("euler", c["case_id"], PinnConfig(formulation=f)) for c in show]
     # spec 7.5's variant: gradient-norm balanced weights, on the median-Mach showcase case
-    runs.append(("gradnorm", show[len(show) // 2]["case_id"], PinnConfig(grad_balance=True)))
-    runs += [("visc1e-3", c["case_id"], PinnConfig(viscosity=1e-3)) for c in sup]
+    runs.append(("gradnorm", show[len(show) // 2]["case_id"],
+                 PinnConfig(grad_balance=True, formulation=f)))
+    runs += [("visc1e-3", c["case_id"], PinnConfig(viscosity=1e-3, formulation=f)) for c in sup]
     if sup:
         top = max(sup, key=lambda c: c["max_surface_mach"])["case_id"]
-        runs.append(("visc3e-4", top, PinnConfig(viscosity=3e-4)))
+        runs.append(("visc3e-4", top, PinnConfig(viscosity=3e-4, formulation=f)))
     if sub:
-        runs.append(("nokutta", sub[0]["case_id"], PinnConfig(kutta=False)))
+        runs.append(("nokutta", sub[0]["case_id"], PinnConfig(kutta=False, formulation=f)))
     return runs
 
 
@@ -67,35 +77,46 @@ def parse_shard(text):
     return k, n
 
 
-def _suffix(k, n):
-    return "" if n == 1 else f"_shard{k}of{n}"
+def _suffix(k, n, formulation="potential"):
+    return ("" if n == 1 else f"_shard{k}of{n}") + _fsuffix(formulation)
+
+
+def _fsuffix(formulation):
+    return "" if formulation == "potential" else f"_{formulation}"
+
+
+def prediction_path(variant, cid, formulation="potential"):
+    return PRED / f"pinn-{variant}-{cid}{_fsuffix(formulation)}.h5"
 
 
 def _case(spec):
     return PinnCase(spec.mach, spec.alpha_deg, Section(spec.t, spec.m))
 
 
-def preflight(runs, specs, budget_hours, n_adam=5, n_closure=2, shard_kn=(0, 1)):
+def preflight(runs, specs, budget_hours, n_adam=5, n_closure=2, shard_kn=(0, 1),
+              formulation="potential"):
     """Time each planned variant on its first case, project every unfinished run; True if within
     budget. Writes results/s3/preflight{suffix}.json either way, with the device of each phase."""
     timing = {}
     for variant, cid, cfg in runs:
         if variant not in timing:
-            timing[variant] = {"case_id": cid, "adam_device": resolve_device(cfg.device),
-                               "lbfgs_device": "cpu",
+            timing[variant] = {"case_id": cid, "formulation": cfg.formulation,
+                               "adam_device": resolve_device(cfg.device), "lbfgs_device": "cpu",
                                **time_steps(_case(specs[cid]), cfg, n_adam, n_closure)}
             print(f"preflight {variant} on {cid}: {timing[variant]}", flush=True)
-    todo = [(v, c, cfg) for v, c, cfg in runs if not (PRED / f"pinn-{v}-{c}.h5").exists()]
+    todo = [(v, c, cfg) for v, c, cfg in runs
+            if not prediction_path(v, c, cfg.formulation).exists()]
     proj = [{"variant": v, "case_id": c, "hours": projected_s(cfg, timing[v]) / 3600}
             for v, c, cfg in todo]
     total = sum(r["hours"] for r in proj)
-    out = {"shard": f"{shard_kn[0]}/{shard_kn[1]}", "n_adam_timed": n_adam,
+    out = {"shard": f"{shard_kn[0]}/{shard_kn[1]}", "formulation": formulation,
+           "n_adam_timed": n_adam,
            "n_closure_timed": n_closure, "timing_s": timing,
            "runs": proj, "projected_total_hours": total, "budget_hours": budget_hours,
            "within_budget": total <= budget_hours,
            "note": "wall time, serial; L-BFGS projected at one closure per iteration (a lower "
                    "bound)"}
-    (RES / f"preflight{_suffix(*shard_kn)}.json").write_text(json.dumps(out, indent=2))
+    (RES / f"preflight{_suffix(*shard_kn, formulation)}.json").write_text(json.dumps(out, indent=2))
     for r in proj:
         print(f"  {r['variant']:9s} {r['case_id']}: {r['hours']:.1f} h", flush=True)
     print(f"projected total {total:.1f} h for {len(proj)} runs against a budget of "
@@ -109,31 +130,36 @@ def main(argv=None):
     ap.add_argument("--preflight-only", action="store_true")
     ap.add_argument("--shard", type=parse_shard, default=(0, 1), metavar="K/N",
                     help="run only the plan entries with index K mod N (default 0/1: all)")
+    ap.add_argument("--formulation", choices=FORMULATIONS, default="potential",
+                    help="the PINN's equations (default potential; euler is the negative result)")
     args = ap.parse_args(argv)
     specs = {s.case_id: s for s in case_specs("test_in", TRAIN)}
     RES.mkdir(parents=True, exist_ok=True)
-    runs = shard(plan(), *args.shard)
-    if not preflight(runs, specs, args.budget_hours, shard_kn=args.shard):
+    runs = shard(plan(args.formulation), *args.shard)
+    if not preflight(runs, specs, args.budget_hours, shard_kn=args.shard,
+                     formulation=args.formulation):
         print("REFUSING TO START: the projected S3 wall time exceeds the budget. Reduce points, "
               "steps or viscous runs as a recorded spec decision, or raise --budget-hours "
               "deliberately.", flush=True)
         return 3
     if args.preflight_only:
         return 0
-    record_path = RES / f"pinn_runs{_suffix(*args.shard)}.json"
+    record_path = RES / f"pinn_runs{_suffix(*args.shard, args.formulation)}.json"
     record = json.loads(record_path.read_text()) if record_path.exists() else {}
     for variant, cid, cfg in runs:
-        path = PRED / f"pinn-{variant}-{cid}.h5"
+        path = prediction_path(variant, cid, cfg.formulation)
         if path.exists():
             continue
         pinn, rec = train(_case(specs[cid]), cfg)
         q = evaluate_on_grid(pinn, TRAIN)
         write_predictions(path, [cid], q[None], {
-            "method": "pinn", "tag": path.stem, "variant": variant, "seed": cfg.seed,
+            "method": "pinn", "tag": path.stem, "variant": variant,
+            "formulation": cfg.formulation, "seed": cfg.seed,
             "n_train": 0, "train_wall_s": rec["wall_s"], "train_cpu_s": rec["cpu_s"],
             "query_s": rec["wall_s"], "train_device": rec["adam_device"],
             "adam_device": rec["adam_device"], "lbfgs_device": rec["lbfgs_device"]})
-        record[f"{variant}/{cid}"] = {"wall_s": rec["wall_s"], "cpu_s": rec["cpu_s"],
+        record[f"{variant}/{cid}"] = {"formulation": rec["formulation"],
+                                      "wall_s": rec["wall_s"], "cpu_s": rec["cpu_s"],
                                       "adam_wall_s": rec["adam_wall_s"],
                                       "adam_device": rec["adam_device"],
                                       "lbfgs_device": rec["lbfgs_device"],

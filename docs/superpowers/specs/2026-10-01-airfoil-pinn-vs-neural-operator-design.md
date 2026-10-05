@@ -316,6 +316,9 @@ loss. Each output channel is then standardised over the training set.
 
 ## 7. The PINN (stage S3)
 
+(Amended 2026-10-04 by the author's decision: S3 uses the full-potential PINN of §7.8. §7.1-7.7
+specify the Euler PINN, kept runnable as the documented negative result.)
+
 ### 7.1 The problem it solves
 
 - Steady compressible Euler on the same domain as SU2 (wall to the 100-chord circle), one test case at
@@ -387,6 +390,52 @@ loss. Each output channel is then standardised over the training set.
   right where the Kutta condition acts. The trailing-edge error is watched specifically.
 - **Circulation is only weakly fixed by the outer boundary** at 100 chords; the Kutta condition
   carries it.
+
+### 7.8 Amendment, 2026-10-04: the full-potential PINN replaces the Euler PINN for S3
+
+The author's decision of 2026-10-04, after the diagnosis in `docs/findings.md` ("2026-10-04 — the
+Euler PINN converges to fluid at rest"). §7.1-7.7 above are kept as written: they specify the
+Euler PINN, which stays runnable (`PinnConfig(formulation="euler")`, `--formulation euler` on both
+S3 scripts) as the documented negative result.
+
+- **Why.** The S3a warm-up failed (max|ΔCp| 3.94 against 0.1; wall speed 0.004 where potential flow
+  gives 2.0; Cp 0.937 everywhere): the Euler PINN converged to fluid at rest around the body, which
+  satisfies the strong-form equations and the wall condition exactly and violates only the weakly
+  enforced far field. Five hypotheses were tested and refuted (residual weighting J⁰/J⁰·⁵/J¹,
+  a pressure-perturbation reparameterisation, a 10-chord boundary, a homentropic closure); a network
+  fitted to the analytic potential flow (shoulder 1.995, max|ΔCp| 0.030) has PINN loss 0.31, ~1000×
+  the rest state's ~1e-4, and 1,000 PINN-only steps drive it away (shoulder 1.24, max|ΔCp| 1.81).
+  The unmodified PINN collapses on showcase case test_in-0022 too (wall speed 0.005 against SU2's
+  Cp_min −0.94). For the full-potential equation in subcritical flow the residual loss is
+  (near-)convex in the potential, with no rest attractor.
+- **Formulation.** One scalar network ψ = NN(cos 2πξ, sin 2πξ, η) and a learned circulation Γ give
+  the velocity potential φ = x cos α + y sin α + Γξ + ψ·(1 − η) (units U∞ × chord). ξ is the wake-cut
+  angle term: it jumps by one across ξ = 0 while its gradient (from the map's metric terms) is
+  continuous, and tends to the vortex Γ/(2πr) on the outer circle. Γ is the clockwise circulation, so
+  Γ > 0 is positive lift. The state is algebraic: (u, v) = ∇φ through the autograd metrics; ρ from
+  isentropic Bernoulli at H∞, ρ = (1 + (γ−1)/2 M² (1 − |u|²))^(1/(γ−1)) with the base floored at
+  1e-6; p/p∞ = ρ^γ. Predictions are written in the dataset's units, so the scorer is unchanged.
+- **Equations.** The residual is steady continuity, div(ρ∇φ) = 0, in strong conservation form in
+  (ξ, η): the full-potential equation. Momentum holds by construction (irrotational, isentropic,
+  constant H). **This is exact for shock-free inviscid flow and an isentropic approximation at
+  shocks** (no entropy jump, so shock positions and strengths on the supercritical cases are those
+  of isentropic flow, not of Euler). The artificial-viscosity variants subtract ν∇²ρ from the
+  continuity residual (the operator §7.4 uses for continuity), a stated change to the equations.
+- **Boundary conditions.** Far field: Dirichlet, exact by construction (the perturbation ψ·(1 − η)
+  vanishes on the 100-chord circle; the neglected doublet is ~1e-3 there). Wall: ∂φ/∂n = 0 as a soft
+  penalty on (u · n̂)², weight 10, at the wall points shifted by half a spacing. Kutta, weight 10: the
+  section's cosine clustering makes the map degenerate at the trailing-edge wall point (J = 0), where
+  a smooth φ(ξ, η) has a finite velocity iff ∂φ/∂ξ = 0, so the penalty is (∂φ/∂ξ)² at (0, 0) — the
+  finite form of |u|² = 0 — and the state reports the stagnation value u = 0 at that one node. With
+  Kutta this fixes Γ; without it (the `nokutta` run) Γ is free. The cylinder warm-up fixes Γ = 0 in
+  place of the zero-circulation penalty.
+- **Unchanged.** Points, the Adam/L-BFGS schedule, the devices, sharding, gradient-norm balancing
+  (on the wall and Kutta terms) and the variants and their order (the base variant keeps its name
+  "euler", meaning the inviscid run). An Adam step costs more (third rather than second derivatives
+  of the network): on the CPU at the spec sizes on the cylinder, 0.88 s against the Euler PINN's
+  0.60 s (load average ~17).
+- **Consequence for scoring (§8.2), not changed here:** under this formulation the wall-normal
+  velocity is a result (soft) rather than an identity, and the entropy is zero by construction.
 
 ---
 

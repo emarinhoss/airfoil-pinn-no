@@ -8,10 +8,16 @@ Points are uniform in (xi, eta), which the map turns into clustering near the wa
 condition is a penalty on the velocity at the trailing-edge wall point (xi, eta) = (0, 0); the
 cylinder warm-up replaces it with zero circulation, since a cylinder has no sharp edge to fix it.
 
-Loss weights are fixed (residual 1, outer 10, Kutta 10) unless `grad_balance` is set, the spec's
-variant: gradient-norm balancing after Wang, Teng & Perdikaris (2021, "learning-rate annealing"),
-every `balance_every` Adam steps lambda_k <- (1 - a) lambda_k + a max|grad L_res| / mean|grad L_k|
-for the outer and Kutta (or circulation) terms, a = `balance_alpha`. L-BFGS keeps the last weights.
+`PinnConfig.formulation` picks the PINN: "potential" (the default since the author's decision of
+2026-10-04, `apno.models.pinn_potential`: a velocity potential, continuity only, soft wall, exact
+far field) or "euler" (spec 7 as first written, `apno.models.pinn`: kept runnable as the documented
+negative result, since it converges to fluid at rest; docs/findings.md, 2026-10-04).
+
+Loss weights are fixed (residual 1, soft boundary 10, Kutta 10) unless `grad_balance` is set, the
+spec's variant: gradient-norm balancing after Wang, Teng & Perdikaris (2021, "learning-rate
+annealing"), every `balance_every` Adam steps lambda_k <- (1 - a) lambda_k + a max|grad L_res| /
+mean|grad L_k| for the soft boundary term (Euler: the outer circle; potential: the wall) and the
+Kutta (or circulation) term, a = `balance_alpha`. L-BFGS keeps the last weights.
 `time_steps` measures what one Adam step and one L-BFGS closure of a configuration cost, so a stage
 can project its total before committing days to it.
 """
@@ -24,8 +30,12 @@ import numpy as np
 import torch
 
 from apno.geometry.ogrid import stretch_ratio
+from apno.models import pinn_potential
 from apno.models.pinn import Pinn, PinnNet, to_dataset_q
+from apno.models.pinn_potential import PotentialNet, PotentialPinn
 from apno.physics.euler import residual
+
+FORMULATIONS = ("potential", "euler")
 
 
 @dataclass
@@ -41,7 +51,8 @@ class PinnConfig:
     lr1: float = 1e-4
     lbfgs_iters: int = 5000
     w_res: float = 1.0
-    w_outer: float = 10.0
+    w_outer: float = 10.0  # Euler: the soft free-stream penalty on the outer circle
+    w_wall: float = 10.0  # potential: the soft no-penetration penalty on the wall
     w_kutta: float = 10.0
     viscosity: float = 0.0
     kutta: bool = True
@@ -51,6 +62,7 @@ class PinnConfig:
     balance_alpha: float = 0.9
     seed: int = 0
     device: str = "auto"  # the Adam phase's; L-BFGS and evaluation are always CPU float64
+    formulation: str = "potential"  # or "euler", the recorded negative result (see the docstring)
 
 
 def resolve_device(name):
@@ -58,6 +70,24 @@ def resolve_device(name):
     if name == "auto":
         return "mps" if torch.backends.mps.is_available() else "cpu"
     return name
+
+
+def make_pinn(case, cfg, device="cpu", dtype=torch.float32):
+    """The PINN of cfg.formulation, its network in `dtype` on `device`. The potential PINN learns
+    its circulation unless cfg.zero_circulation (the cylinder warm-up), which fixes it at 0."""
+    if cfg.formulation == "euler":
+        return Pinn(case, PinnNet(cfg.hidden, cfg.depth).to(dtype).to(device))
+    if cfg.formulation == "potential":
+        net = PotentialNet(cfg.hidden, cfg.depth, circulation=not cfg.zero_circulation)
+        return PotentialPinn(case, net.to(dtype).to(device))
+    raise ValueError(f"unknown formulation {cfg.formulation!r}; expected one of {FORMULATIONS}")
+
+
+def initial_weights(pinn, cfg):
+    """The soft-term weights the PINN's losses take, before any balancing."""
+    if getattr(pinn, "formulation", "euler") == "potential":
+        return {"wall": cfg.w_wall, "kutta": cfg.w_kutta}
+    return {"outer": cfg.w_outer, "kutta": cfg.w_kutta}
 
 
 def _points(cfg, gen, dtype, device="cpu"):
@@ -72,8 +102,11 @@ def _points(cfg, gen, dtype, device="cpu"):
 
 
 def losses(pinn, pts, cfg, ratio, weights=None):
-    """Each loss term and their weighted total; `weights` overrides cfg's outer and Kutta ones."""
-    w = weights or {"outer": cfg.w_outer, "kutta": cfg.w_kutta}
+    """Each loss term and their weighted total; `weights` overrides cfg's soft-term ones. The
+    formulation is the PINN object's, so an Euler `Pinn` gets the Euler losses whatever cfg says."""
+    w = weights or initial_weights(pinn, cfg)
+    if getattr(pinn, "formulation", "euler") == "potential":
+        return pinn_potential.losses(pinn, pts, cfg, ratio, w)
     case = pinn.case
     r = residual(pts["xi"], pts["eta"], pinn.state, case.geometry, case.radius, ratio,
                  cfg.viscosity)
@@ -114,7 +147,8 @@ def balance_weights(L, params, weights, alpha):
 
     g_res = grads(L["residual"]).max()
     out = dict(weights)
-    for name, term in (("outer", L["outer"]), ("kutta", L["kutta"] + L["circulation"])):
+    for name in weights:
+        term = L["kutta"] + L["circulation"] if name == "kutta" else L[name]
         if not term.requires_grad:
             continue
         mean = grads(term).mean()
@@ -146,11 +180,11 @@ def train(case, cfg, log=print):
     torch.manual_seed(cfg.seed)
     gen = torch.Generator().manual_seed(cfg.seed)
     ratio = stretch_ratio(case.radius)
-    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float().to(device))
+    pinn = make_pinn(case, cfg, device)
     opt = torch.optim.Adam(pinn.parameters(), lr=cfg.lr0)
     sched = torch.optim.lr_scheduler.ExponentialLR(opt, (cfg.lr1 / cfg.lr0) ** (1 / cfg.adam_steps))
     history = []
-    weights = {"outer": cfg.w_outer, "kutta": cfg.w_kutta}
+    weights = initial_weights(pinn, cfg)
     t0, c0 = time.perf_counter(), time.process_time()
     pts = None
     for step in range(cfg.adam_steps):
@@ -165,8 +199,8 @@ def train(case, cfg, log=print):
         opt.step()
         sched.step()
         if step % max(1, cfg.adam_steps // 60) == 0 or step == cfg.adam_steps - 1:
-            history.append({"step": step, **_snapshot(L), "w_outer": weights["outer"],
-                            "w_kutta": weights["kutta"]})
+            history.append({"step": step, **_snapshot(L),
+                            **{f"w_{k}": v for k, v in weights.items()}})
             log(f"adam {step}: {history[-1]}")
     _sync(device)
     adam_wall_s = time.perf_counter() - t0
@@ -187,7 +221,7 @@ def train(case, cfg, log=print):
     log(f"final: {final}")
     rec = {"wall_s": time.perf_counter() - t0, "cpu_s": time.process_time() - c0,
            "adam_wall_s": adam_wall_s, "adam_device": device, "lbfgs_device": "cpu",
-           "history": history, "final": final, "weights": weights}
+           "formulation": cfg.formulation, "history": history, "final": final, "weights": weights}
     return pinn, rec
 
 
@@ -201,9 +235,9 @@ def time_steps(case, cfg, n_adam=5, n_closure=2):
     torch.manual_seed(cfg.seed)
     gen = torch.Generator().manual_seed(cfg.seed)
     ratio = stretch_ratio(case.radius)
-    pinn = Pinn(case, PinnNet(cfg.hidden, cfg.depth).float().to(device))
+    pinn = make_pinn(case, cfg, device)
     opt = torch.optim.Adam(pinn.parameters(), lr=cfg.lr0)
-    weights = {"outer": cfg.w_outer, "kutta": cfg.w_kutta}
+    weights = initial_weights(pinn, cfg)
     pts = _points(cfg, gen, torch.float32, device)
 
     def timed(fn, n, on=device):
@@ -221,7 +255,8 @@ def time_steps(case, cfg, n_adam=5, n_closure=2):
         losses(pinn, pts, cfg, ratio, weights)["total"].backward()
         opt.step()
 
-    rec = {"adam_device": device, "lbfgs_device": "cpu", "adam_s": timed(adam, n_adam)}
+    rec = {"adam_device": device, "lbfgs_device": "cpu", "formulation": cfg.formulation,
+           "adam_s": timed(adam, n_adam)}
     if cfg.grad_balance:
         rec["balance_s"] = timed(lambda: balance_weights(losses(pinn, pts, cfg, ratio, weights),
                                                          pinn.parameters(), weights,

@@ -37,21 +37,76 @@ def s3(tmp_path, monkeypatch):
     return mod
 
 
-def test_plan_has_the_gradient_balanced_variant_and_euler_runs_first(s3):
-    variants = [v for v, _, _ in s3.plan()]
-    assert variants[:7] == ["euler"] * 6 + ["gradnorm"]
-    assert set(variants) == {"euler", "gradnorm", "visc1e-3", "visc3e-4", "nokutta"}
+def test_the_default_plan_is_eight_non_viscous_runs_in_order(s3):
+    show = json.loads(Path("results/s1/showcase.json").read_text())["cases"]
+    ids = [c["case_id"] for c in show]
+    runs = s3.plan()
+    assert [(v, c) for v, c, _ in runs] == ([("pure", c) for c in ids]
+                                           + [("gradnorm", ids[3]), ("nokutta", ids[0])])
+    assert all(cfg.viscosity == 0.0 for _, _, cfg in runs)
+    assert [cfg.grad_balance for _, _, cfg in runs] == [False] * 6 + [True, False]
+    assert [cfg.kutta for _, _, cfg in runs] == [True] * 7 + [False]
+
+
+def test_the_viscous_runs_stay_selectable_but_off_the_default_plan(s3):
+    visc = [(v, cfg.viscosity) for v, _, cfg in s3.plan(viscous=True) if cfg.viscosity]
+    assert visc == [("visc1e-3", 1e-3), ("visc1e-3", 1e-3), ("visc3e-4", 3e-4)]
+    assert [r[:2] for r in s3.plan(viscous=True)][:8] == [r[:2] for r in s3.plan()]
 
 
 def test_s3_refuses_to_start_past_its_budget(s3):
     assert s3.main(["--budget-hours", "48"]) == 3
     pre = json.loads(Path("results/s3/preflight.json").read_text())
-    euler = 30000 * 1.0 + 5000 * 2.0  # s per Euler run: 11.1 h
-    visc = 30000 * 10.0 + 5000 * 2.0
+    run = 30000 * 1.0 + 5000 * 2.0  # s per inviscid run: 11.1 h
     balance = 300 * 5.0  # gradnorm: one balancing update every 100 of 30,000 steps
-    assert pre["projected_total_hours"] == pytest.approx((8 * euler + balance + 3 * visc) / 3600)
-    assert not pre["within_budget"] and len(s3.timed) == 5  # one timing per variant
+    assert pre["projected_total_hours"] == pytest.approx((8 * run + balance) / 3600)
+    assert not pre["within_budget"] and len(s3.timed) == 3  # one timing per variant
     assert not Path("runs/predictions").exists()
+
+
+def _earlier_preflight(path, adam_s, legacy=False):
+    """An earlier preflight file, as preflight() writes it; `legacy` names the base run 'euler',
+    as Task 25's plan did."""
+    t = {"formulation": "potential", "adam_device": "mps", "lbfgs_device": "cpu",
+         "adam_s": adam_s, "closure_s": 2.0}
+    timing = {("euler" if legacy else "pure"): {"case_id": "x", **t},
+              "gradnorm": {"case_id": "y", **t, "balance_s": 5.0},
+              "nokutta": {"case_id": "z", **t}}
+    Path(path).write_text(json.dumps({"formulation": "potential", "timing_s": timing}))
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_preflight_file_reuses_its_timings_and_the_budget_uses_them(s3, tmp_path, legacy):
+    _earlier_preflight(tmp_path / "earlier.json", 0.5, legacy)
+    argv = ["--budget-hours", "1000", "--preflight-only", "--preflight-file",
+            str(tmp_path / "earlier.json")]
+    assert s3.main(argv) == 0
+    assert s3.timed == []  # nothing re-timed
+    pre = json.loads(Path("results/s3/preflight.json").read_text())
+    run = 30000 * 0.5 + 5000 * 2.0
+    assert pre["projected_total_hours"] == pytest.approx((8 * run + 300 * 5.0) / 3600)
+    assert pre["timing_s"]["pure"]["adam_s"] == 0.5
+    assert pre["timings_from"] == str(tmp_path / "earlier.json")
+
+
+def test_preflight_file_still_refuses_over_budget(s3, tmp_path):
+    _earlier_preflight(tmp_path / "earlier.json", 3.0)
+    argv = ["--budget-hours", "48", "--preflight-file", str(tmp_path / "earlier.json")]
+    assert s3.main(argv) == 3 and s3.timed == []
+    assert not json.loads(Path("results/s3/preflight.json").read_text())["within_budget"]
+    assert not Path("runs/predictions").exists()
+
+
+def test_preflight_file_times_what_it_does_not_hold(s3, tmp_path):
+    path = tmp_path / "earlier.json"
+    _earlier_preflight(path, 0.5)
+    d = json.loads(path.read_text())
+    del d["timing_s"]["nokutta"]
+    d["timing_s"]["gradnorm"]["formulation"] = "euler"  # another formulation's: not reused
+    path.write_text(json.dumps(d))
+    assert s3.main(["--budget-hours", "1000", "--preflight-only", "--preflight-file",
+                    str(path)]) == 0
+    assert [(cfg.grad_balance, cfg.kutta) for cfg in s3.timed] == [(True, True), (False, False)]
 
 
 def test_s3_preflight_only_within_budget(s3):
@@ -120,16 +175,18 @@ def test_a_run_records_its_formulation_in_the_prediction_and_the_run_record(s3, 
     def fake_train(case, cfg):
         rec = {"wall_s": 1.0, "cpu_s": 1.0, "adam_wall_s": 0.5, "adam_device": "cpu",
                "lbfgs_device": "cpu", "formulation": cfg.formulation, "final": {}, "weights": {},
-               "history": []}
+               "history": [], "te_dropped": [{"step": 0, "dropped": 7}]}
         return None, rec
 
     monkeypatch.setattr(s3, "train", fake_train)
     monkeypatch.setattr(s3, "evaluate_on_grid", lambda pinn, shape: np.ones((*shape, 4)))
-    monkeypatch.setattr(s3, "plan", lambda f="potential", _plan=s3.plan: _plan(f)[:1])
+    real_plan = s3.plan
+    monkeypatch.setattr(s3, "plan", lambda f="potential", viscous=False: real_plan(f, viscous)[:1])
     assert s3.main(["--budget-hours", "1000", "--formulation", "euler"]) == 0
     (path,) = Path("runs/predictions").iterdir()
     assert path.name.endswith("_euler.h5")
     _, attrs = read_predictions(path)
-    assert attrs["formulation"] == "euler" and attrs["variant"] == "euler"
+    assert attrs["formulation"] == "euler" and attrs["variant"] == "pure"
     rec = json.loads(Path("results/s3/pinn_runs_euler.json").read_text())
     assert [r["formulation"] for r in rec.values()] == ["euler"]
+    assert [r["te_dropped"] for r in rec.values()] == [[{"step": 0, "dropped": 7}]]

@@ -1,22 +1,31 @@
 """Stage S3: the PINN on the showcase cases (spec 7.3-7.5). Resumes by skipping finished files.
 
     python scripts/s3_pinn.py [--budget-hours 48] [--preflight-only] [--shard K/N]
-                              [--formulation potential|euler]
+                              [--formulation potential|euler] [--preflight-file PATH] [--viscous]
+
+The plan (spec 7 as amended 2026-10-05, the author's scope decision): the six showcase cases with
+no artificial viscosity (variant "pure"), the gradient-norm balanced run on the median-Mach case
+and the no-Kutta run on the first subcritical case, 8 runs. The artificial-viscosity variants
+(visc1e-3 on every supercritical case, visc3e-4 on the strongest) are not planned; `--viscous`
+appends them, so the nu term stays selectable on record. (Until 2026-10-05 the base variant was
+named "euler", after the PINN's first formulation.)
 
 The PINN is the full-potential one by default (spec 7 as amended 2026-10-04); `--formulation euler`
 runs the Euler PINN, the recorded negative result, under the same plan. The formulation is recorded
 in every preflight timing entry, run record and prediction file's attrs, and a non-default one
 suffixes every file it writes (pinn-<variant>-<case>_euler.h5, pinn_runs_euler.json,
-preflight_euler.json), so the two never resume from or overwrite each other's runs. The variant
-names are the plan's: "euler" is the base inviscid run, whichever formulation solves it.
+preflight_euler.json), so the two never resume from or overwrite each other's runs.
 
 Before any run starts, every planned configuration is timed for a few Adam steps and L-BFGS
 closures on its own showcase case, the measurements and the projected wall time of every run are
 written to results/s3/preflight.json beside the warm-up, and the stage REFUSES to start if the
-projected total for the runs not yet finished exceeds --budget-hours. Spec 7.5 estimated one to
-two hours per case; the final review measured viscous runs at days each with the nested Laplacian
-(now folded into the fluxes), so the budget is a decision to be taken on the measurement, not a
-default to be trusted. Euler runs come first.
+projected total for the runs not yet finished exceeds --budget-hours. `--preflight-file PATH`
+reuses the per-variant timings of an earlier preflight file instead (one measured uncontended:
+three shards preflighting at once measured one variant at 0.83, 1.14 and 29.3 s per Adam step
+against 0.75 s alone, and refused on that noise); a variant it does not hold for this formulation
+is timed as usual, its legacy name "euler" stands for "pure", and the budget check is the same.
+Spec 7.5 estimated one to two hours per case; the final review measured viscous runs at days each,
+so the budget is a decision to be taken on the measurement, not a default to be trusted.
 
 The Adam phase runs on PinnConfig.device ('auto': the Apple GPU when MPS is available) and L-BFGS
 on the CPU in float64; the preflight and the run record name the device of each phase.
@@ -44,21 +53,23 @@ PRED, RES = Path("runs/predictions"), Path("results/s3")
 BUDGET_HOURS = 48.0  # the stage's whole projected wall time; override deliberately, on record
 
 
-def plan(formulation="potential"):
+def plan(formulation="potential", viscous=False):
     show = json.loads(Path("results/s1/showcase.json").read_text())["cases"]
     sup = [c for c in show if c["regime"] == "supercritical"]
     sub = [c for c in show if c["regime"] == "subcritical"]
     f = formulation
-    runs = [("euler", c["case_id"], PinnConfig(formulation=f)) for c in show]
+    runs = [("pure", c["case_id"], PinnConfig(formulation=f)) for c in show]
     # spec 7.5's variant: gradient-norm balanced weights, on the median-Mach showcase case
     runs.append(("gradnorm", show[len(show) // 2]["case_id"],
                  PinnConfig(grad_balance=True, formulation=f)))
-    runs += [("visc1e-3", c["case_id"], PinnConfig(viscosity=1e-3, formulation=f)) for c in sup]
-    if sup:
-        top = max(sup, key=lambda c: c["max_surface_mach"])["case_id"]
-        runs.append(("visc3e-4", top, PinnConfig(viscosity=3e-4, formulation=f)))
     if sub:
         runs.append(("nokutta", sub[0]["case_id"], PinnConfig(kutta=False, formulation=f)))
+    if viscous:  # not planned since the author's decision of 2026-10-05; kept selectable
+        runs += [("visc1e-3", c["case_id"], PinnConfig(viscosity=1e-3, formulation=f))
+                 for c in sup]
+        if sup:
+            top = max(sup, key=lambda c: c["max_surface_mach"])["case_id"]
+            runs.append(("visc3e-4", top, PinnConfig(viscosity=3e-4, formulation=f)))
     return runs
 
 
@@ -93,12 +104,35 @@ def _case(spec):
     return PinnCase(spec.mach, spec.alpha_deg, Section(spec.t, spec.m))
 
 
+LEGACY_VARIANTS = {"pure": "euler"}  # the base run's name in preflight files before 2026-10-05
+
+
+def earlier_timings(path, formulation):
+    """{variant: timing} from an earlier preflight file, for this formulation only, with legacy
+    variant names mapped to today's."""
+    held = json.loads(Path(path).read_text())["timing_s"]
+    out = {}
+    for name, t in held.items():
+        if t.get("formulation", "euler") != formulation:
+            continue
+        now = next((v for v, old in LEGACY_VARIANTS.items() if old == name), name)
+        if now not in held or now == name:
+            out[now] = dict(t)
+    return out
+
+
 def preflight(runs, specs, budget_hours, n_adam=5, n_closure=2, shard_kn=(0, 1),
-              formulation="potential"):
-    """Time each planned variant on its first case, project every unfinished run; True if within
-    budget. Writes results/s3/preflight{suffix}.json either way, with the device of each phase."""
+              formulation="potential", preflight_file=None):
+    """Time each planned variant on its first case (or take its timing from `preflight_file`),
+    project every unfinished run; True if within budget. Writes results/s3/preflight{suffix}.json
+    either way, with the device of each phase."""
+    reuse = earlier_timings(preflight_file, formulation) if preflight_file else {}
     timing = {}
     for variant, cid, cfg in runs:
+        if variant in reuse and variant not in timing:
+            timing[variant] = {**reuse[variant], "reused_from": str(preflight_file)}
+            print(f"preflight {variant}: reused from {preflight_file}: {timing[variant]}",
+                  flush=True)
         if variant not in timing:
             timing[variant] = {"case_id": cid, "formulation": cfg.formulation,
                                "adam_device": resolve_device(cfg.device), "lbfgs_device": "cpu",
@@ -110,6 +144,7 @@ def preflight(runs, specs, budget_hours, n_adam=5, n_closure=2, shard_kn=(0, 1),
             for v, c, cfg in todo]
     total = sum(r["hours"] for r in proj)
     out = {"shard": f"{shard_kn[0]}/{shard_kn[1]}", "formulation": formulation,
+           "timings_from": None if preflight_file is None else str(preflight_file),
            "n_adam_timed": n_adam,
            "n_closure_timed": n_closure, "timing_s": timing,
            "runs": proj, "projected_total_hours": total, "budget_hours": budget_hours,
@@ -132,14 +167,18 @@ def main(argv=None):
                     help="run only the plan entries with index K mod N (default 0/1: all)")
     ap.add_argument("--formulation", choices=FORMULATIONS, default="potential",
                     help="the PINN's equations (default potential; euler is the negative result)")
+    ap.add_argument("--preflight-file", type=Path, default=None, metavar="PATH",
+                    help="reuse this earlier preflight's per-variant timings instead of timing")
+    ap.add_argument("--viscous", action="store_true",
+                    help="append the artificial-viscosity variants (not planned since 2026-10-05)")
     args = ap.parse_args(argv)
     specs = {s.case_id: s for s in case_specs("test_in", TRAIN)}
     RES.mkdir(parents=True, exist_ok=True)
-    runs = shard(plan(args.formulation), *args.shard)
+    runs = shard(plan(args.formulation, args.viscous), *args.shard)
     if not preflight(runs, specs, args.budget_hours, shard_kn=args.shard,
-                     formulation=args.formulation):
-        print("REFUSING TO START: the projected S3 wall time exceeds the budget. Reduce points, "
-              "steps or viscous runs as a recorded spec decision, or raise --budget-hours "
+                     formulation=args.formulation, preflight_file=args.preflight_file):
+        print("REFUSING TO START: the projected S3 wall time exceeds the budget. Reduce points "
+              "or steps as a recorded spec decision, or raise --budget-hours "
               "deliberately.", flush=True)
         return 3
     if args.preflight_only:
@@ -164,7 +203,8 @@ def main(argv=None):
                                       "adam_device": rec["adam_device"],
                                       "lbfgs_device": rec["lbfgs_device"],
                                       "final": rec["final"], "weights": rec["weights"],
-                                      "history": rec["history"]}
+                                      "history": rec["history"],
+                                      "te_dropped": rec.get("te_dropped", [])}
         record_path.write_text(json.dumps(record, indent=2))
         print(variant, cid, rec["final"], flush=True)
     return 0

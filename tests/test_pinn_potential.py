@@ -8,9 +8,11 @@ from apno.constants import GAMMA
 from apno.geometry.ogrid import FAR_RADIUS, Cylinder, Section, map_xy, stretch_ratio
 from apno.models.pinn import Pinn, PinnCase, PinnNet, to_dataset_q
 from apno.models.pinn_potential import (
-    PotentialNet, PotentialPinn, bernoulli_density, state_from_potential, wall_weight,
+    PotentialNet, PotentialPinn, bernoulli_density, state_from_potential, vortex_angle, wall_weight,
 )
-from apno.models.train_pinn import PinnConfig, _points, evaluate_on_grid, losses, make_pinn, train
+from apno.models.train_pinn import (
+    PinnConfig, _points, evaluate_on_grid, exclude_trailing_edge, losses, make_pinn, train,
+)
 from apno.physics.potential import residual
 from apno.score.forces import wall_forces
 
@@ -82,53 +84,71 @@ def test_analytic_incompressible_cylinder_potential_satisfies_the_residual_at_lo
     assert float(torch.hypot(u, v).detach()) == pytest.approx(2.0, abs=1e-12)
 
 
-def test_circulation_term_has_a_continuous_gradient_across_the_wake_cut_and_a_unit_jump():
-    p = _pinn(gamma=1.0, psi_zero=True, alpha=0.0)
+def _grad_theta(xi, eta, geom=SEC):
+    """grad(Theta_v) through the map's metric terms, as the PINN's own state computes it."""
+    def phi(xi_, eta_, x, y):
+        return vortex_angle(x, y)
+
+    _, u, v, _ = state_from_potential(phi, xi, eta, geom, FAR_RADIUS, RATIO, 0.5)
+    return u.detach(), v.detach()
+
+
+def test_vortex_angle_has_a_unit_jump_across_the_wake_cut_and_a_continuous_gradient():
     eta = torch.linspace(0.02, 1.0, 50)
     eps = 1e-7
-
-    def grad_theta(xi):
-        def phi(xi_, eta_, x, y):
-            return p.theta(xi_)
-
-        _, u, v, _ = state_from_potential(phi, xi, eta, SEC, FAR_RADIUS, RATIO, 0.5)
-        return u, v
-
-    ua, va = grad_theta(torch.full_like(eta, 1.0 - eps))
-    ub, vb = grad_theta(torch.full_like(eta, eps))
+    ua, va = _grad_theta(torch.full_like(eta, 1.0 - eps), eta)
+    ub, vb = _grad_theta(torch.full_like(eta, eps), eta)
     scale = torch.hypot(ub, vb)
+    assert torch.isfinite(scale).all() and (scale > 0).all()
     assert ((ua - ub).abs() / scale).max() < 1e-4 and ((va - vb).abs() / scale).max() < 1e-4
-    jump = p.theta(torch.tensor(1.0 - eps)) - p.theta(torch.tensor(0.0))
-    assert float(jump) == pytest.approx(1.0, abs=1e-6)
+    for e in (0.0, 0.3, 1.0):  # the jump, on the wall and off it
+        xi = torch.tensor([1.0 - eps, eps])
+        x, y = map_xy(xi, torch.full_like(xi, e), SEC, FAR_RADIUS, RATIO, xp=torch)
+        th = vortex_angle(x, y)
+        assert float(th[0] - th[1]) == pytest.approx(1.0, abs=1e-5)
 
 
-def test_circulation_term_tends_to_the_vortex_velocity_at_the_outer_circle():
+def test_vortex_angle_gradient_is_regular_at_the_trailing_edge():
+    """Theta = xi had |grad| ~ 1/sqrt(r) there (the map's x_xi = y_xi = 0); Theta_v is the vortex
+    about the quarter chord, 1 / (2 pi |x - (0.25, 0)|) = 1 / (1.5 pi) at the TE, on both sides."""
+    want = 1.0 / (2 * math.pi * 0.75)
+    for xi in (1e-4, 1e-3, 1.0 - 1e-3, 1.0 - 1e-4):
+        for eta in (0.0, 1e-4, 1e-3):
+            u, v = _grad_theta(torch.tensor([xi]), torch.tensor([eta]))
+            assert float(torch.hypot(u, v)) == pytest.approx(want, rel=0.05)
+    # clockwise about the quarter chord: just behind the TE the vortex flows in -y
+    u, v = _grad_theta(torch.tensor([1e-3]), torch.tensor([1e-3]))
+    assert float(v) < 0 and abs(float(u)) < 0.1 * abs(float(v))
+
+
+def test_vortex_angle_tends_to_the_vortex_velocity_at_the_outer_circle():
     xi = torch.linspace(0, 1, 129)[:-1]
-    eta = torch.ones_like(xi)
-
-    def phi(xi_, eta_, x, y):
-        return 0.7 * xi_
-
-    _, u, v, _ = state_from_potential(phi, xi, eta, SEC, FAR_RADIUS, RATIO, 0.5)
-    x, y = map_xy(xi, eta, SEC, FAR_RADIUS, RATIO, xp=torch)
-    r = torch.hypot(x - 0.5, y)
-    want = 0.7 / (2 * math.pi * r)
-    assert ((torch.hypot(u, v) - want).abs() / want).max() < 0.05
+    u, v = _grad_theta(xi, torch.ones_like(xi))
+    x, y = map_xy(xi, torch.ones_like(xi), SEC, FAR_RADIUS, RATIO, xp=torch)
+    want = 1.0 / (2 * math.pi * torch.hypot(x - 0.25, y))
+    assert ((torch.hypot(u, v) - want).abs() / want).max() < 1e-6
     # clockwise: at the top of the circle (xi = 0.75, polar angle +90 deg) the vortex flows in +x
     k = 96
-    u, v = u.detach(), v.detach()
-    assert float(u[k]) > 0 and abs(float(v[k])) < 1e-3 * float(u[k])
+    assert float(u[k]) > 0 and abs(float(v[k])) < 1e-2 * float(u[k])
+    # and far from the body Theta_v is the wake-cut angle xi
+    torch.testing.assert_close(vortex_angle(x, y)[1:], xi[1:], rtol=0, atol=1e-3)
 
 
 def test_positive_gamma_is_clockwise_circulation_and_positive_lift():
     """Convention: Gamma is the CLOCKWISE circulation (the counterclockwise line integral of the
-    velocity is -Gamma), so Kutta-Joukowski gives L' = rho U Gamma > 0, cl = 2 Gamma / (U c)."""
+    velocity is -Gamma), so Kutta-Joukowski gives L' = rho U Gamma > 0, cl = 2 Gamma / (U c).
+    The line integral is the model's own term (a vortex at the quarter chord); the lift is the
+    same convention's vortex moved to the cylinder's centre, where the wall is a streamline and
+    the pressure integral is exactly Kutta-Joukowski."""
     geom, mach, gamma = Cylinder(), 0.01, 0.2
     p = _pinn(geom=geom, mach=mach, alpha=0.0, gamma=gamma, psi_zero=True)
     doublet = _cylinder_potential()
 
     def phi(xi, eta, x, y):  # the model's own free-stream and circulation terms plus the doublet
         return p.potential(xi, eta, x, y) + doublet(xi, eta, x, y) - (x - 0.5)
+
+    def centred(xi, eta, x, y):
+        return doublet(xi, eta, x, y) + gamma * vortex_angle(x, y, x0=0.5)
 
     n = 512
     xi = torch.arange(n) / n
@@ -139,13 +159,17 @@ def test_positive_gamma_is_clockwise_circulation_and_positive_lift():
     ccw = -(0.5 * (u + torch.roll(u, -1)) * (xn - x) + 0.5 * (v + torch.roll(v, -1)) * (yn - y))
     assert float(ccw.sum().detach()) == pytest.approx(-gamma, rel=1e-3)
     xw = torch.arange(n) / n
-    rho, u, v, pr = state_from_potential(phi, xw, torch.zeros_like(xw), geom, FAR_RADIUS, RATIO,
-                                         mach)
-    q = to_dataset_q(rho, u, v, pr, mach).detach().numpy()
-    cp = (q[:, 3] - 1.0) / (0.5 * GAMMA * mach * mach)
     X, Y = map_xy(xw.numpy(), np.zeros(n), geom, FAR_RADIUS, RATIO)
-    cl, cd, _ = wall_forces(X, Y, cp, 0.0)
-    assert cl == pytest.approx(2 * gamma, rel=1e-2) and abs(cd) < 1e-3
+    for f, want in ((centred, 2 * gamma), (phi, None)):
+        rho, u, v, pr = state_from_potential(f, xw, torch.zeros_like(xw), geom, FAR_RADIUS,
+                                             RATIO, mach)
+        q = to_dataset_q(rho, u, v, pr, mach).detach().numpy()
+        cp = (q[:, 3] - 1.0) / (0.5 * GAMMA * mach * mach)
+        cl, cd, _ = wall_forces(X, Y, cp, 0.0)
+        if want is None:
+            assert cl > 0  # the model's own off-centre vortex: still positive lift
+        else:
+            assert cl == pytest.approx(want, rel=1e-2) and abs(cd) < 1e-3
 
 
 def test_outer_dirichlet_holds_exactly():
@@ -154,7 +178,7 @@ def test_outer_dirichlet_holds_exactly():
     xi = torch.rand(64)
     one = torch.ones_like(xi)
     x, y = map_xy(xi, one, SEC, FAR_RADIUS, RATIO, xp=torch)
-    want = x * p.ca + y * p.sa + 0.3 * xi
+    want = x * p.ca + y * p.sa + 0.3 * vortex_angle(x, y)
     torch.testing.assert_close(p.potential(xi, one, x, y), want, rtol=0, atol=0)
 
 
@@ -170,16 +194,63 @@ def test_state_satisfies_the_isentropic_relations_exactly():
     assert float(bernoulli_density(torch.tensor(100.0), M)) > 0  # clamped, never NaN
 
 
-def test_trailing_edge_node_is_finite_and_the_kutta_slope_is_dphi_dxi():
+def test_trailing_edge_node_is_finite():
     p = _pinn(gamma=0.2)
     zero = torch.zeros(1)
     rho, u, v, pr = (t.detach() for t in p.state(zero, zero))  # the map is degenerate (J = 0)
     assert torch.isfinite(torch.stack([rho, u, v, pr])).all()
-    assert float(u) == 0.0 and float(v) == 0.0  # the stagnation value Kutta imposes
-    xi = zero.clone().requires_grad_(True)
-    x, y = map_xy(xi, zero, SEC, FAR_RADIUS, RATIO, xp=torch)
-    want = torch.autograd.grad(p.potential(xi, zero, x, y).sum(), xi)[0]
-    torch.testing.assert_close(p.trailing_edge_slope(zero), want)
+    assert float(u) == 0.0 and float(v) == 0.0
+
+
+def test_equal_speed_kutta_term_is_zero_for_a_symmetric_state_and_not_otherwise():
+    sym = _pinn(geom=Section(0.12, 0.0), alpha=0.0, gamma=0.0)
+    with torch.no_grad():  # psi even in xi: no dependence on sin(2 pi xi), a symmetric flow
+        sym.net.mlp[0].weight[:, 1] = 0.0
+    like = torch.zeros(1)
+    assert PinnConfig().kutta_delta == 0.055
+    _, u, v, _ = sym.state(torch.tensor([0.055]), torch.zeros(1))
+    assert abs(float(torch.hypot(u, v).detach()) - 1.0) > 1e-3  # not merely the uniform free stream
+    assert abs(float(sym.kutta_residual(0.055, like).detach())) < 1e-12
+    for p in (_pinn(geom=Section(0.12, 0.0), alpha=0.0, gamma=0.1, psi_zero=True),
+              _pinn(geom=Section(0.12, 0.0), alpha=0.0),  # psi with a sin(2 pi xi) part
+              _pinn(alpha=3.0)):  # cambered, at incidence
+        assert abs(float(p.kutta_residual(0.055, like).detach())) > 1e-4
+    # it is the difference of |u|^2 at the two wall points xi = delta and 1 - delta
+    p = _pinn(gamma=0.1)
+    xk = torch.tensor([0.055, 1 - 0.055])
+    _, u, v, _ = p.state(xk, torch.zeros_like(xk))
+    q2 = (u * u + v * v).detach()
+    assert float(p.kutta_residual(0.055, like).detach()) == pytest.approx(float(q2[0] - q2[1]))
+    cfg = _tiny()
+    L = losses(p, _points(cfg, torch.Generator().manual_seed(0), torch.float64), cfg, RATIO)
+    assert float(L["kutta"].detach()) == pytest.approx(float(q2[0] - q2[1]) ** 2)
+
+
+def test_trailing_edge_exclusion_drops_exactly_the_points_within_the_radius():
+    cfg = _tiny(n_interior=20000)
+    pts = _points(cfg, torch.Generator().manual_seed(0), torch.float64)
+    assert PinnConfig().te_exclusion == 0.02
+    x, y = map_xy(pts["xi"], pts["eta"], SEC, FAR_RADIUS, RATIO, xp=torch)
+    near = torch.hypot(x - 1.0, y) < 0.02
+    assert int(near.sum()) > 0
+    kept, dropped = exclude_trailing_edge(pts, SEC, FAR_RADIUS, RATIO, 0.02)
+    assert dropped == int(near.sum())
+    torch.testing.assert_close(kept["xi"], pts["xi"][~near], rtol=0, atol=0)
+    torch.testing.assert_close(kept["eta"], pts["eta"][~near], rtol=0, atol=0)
+    for k in ("xi_wall", "xi_outer"):  # the wall and Kutta terms are unaffected
+        assert kept[k] is pts[k]
+    same, none = exclude_trailing_edge(pts, Cylinder(), FAR_RADIUS, RATIO, 0.02)
+    assert none == 0 and same["xi"] is pts["xi"]
+
+
+def test_training_drops_the_trailing_edge_points_and_records_how_many():
+    cfg = _tiny(n_interior=4000, resample_every=10)
+    _, rec = train(PinnCase(0.3, 2.0, SEC), cfg, log=lambda *a: None)
+    assert [d["step"] for d in rec["te_dropped"]] == [0, 10, 20]
+    assert all(d["dropped"] > 0 for d in rec["te_dropped"])
+    _, cyl = train(PinnCase(0.1, 0.0, Cylinder()), _tiny(kutta=False, zero_circulation=True),
+                   log=lambda *a: None)
+    assert all(d["dropped"] == 0 for d in cyl["te_dropped"])
 
 
 def test_config_default_is_potential_and_euler_still_builds_todays_pinn():
@@ -198,8 +269,9 @@ def test_config_default_is_potential_and_euler_still_builds_todays_pinn():
 
 
 def _tiny(**kw):
-    return PinnConfig(hidden=8, depth=2, n_interior=128, resample_every=50, n_outer=32, n_wall=32,
-                      adam_steps=30, lbfgs_iters=2, device="cpu", **kw)
+    base = dict(hidden=8, depth=2, n_interior=128, resample_every=50, n_outer=32, n_wall=32,
+                adam_steps=30, lbfgs_iters=2, device="cpu")
+    return PinnConfig(**{**base, **kw})
 
 
 def _losses_on(device, cfg, case=PinnCase(0.3, 2.0, SEC)):
@@ -242,7 +314,7 @@ def test_grad_balanced_potential_variant_updates_the_wall_weight():
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="no Apple GPU (MPS)")
 def test_potential_state_and_boundary_terms_on_mps_match_the_cpu():
-    """The device-specific code (the J = 0 mask, the trailing-edge slope, the Gamma parameter) on
+    """The device-specific code (the J = 0 mask, the Kutta term, the Gamma parameter) on
     the GPU against the CPU. The residual is not compared here: its first MPS call compiles ~1 s of
     kernels on a GPU another stage is using, and its operator is `euler.divergence`, which the Euler
     PINN's MPS test in test_train_pinn.py already exercises on the GPU."""
@@ -256,7 +328,8 @@ def test_potential_state_and_boundary_terms_on_mps_match_the_cpu():
         with torch.no_grad():
             pinn.net.gamma.fill_(0.1)
         x, e = xi.to(device), eta.to(device)
-        terms = [*pinn.state(x, e), pinn.wall_normal_velocity(x), pinn.trailing_edge_slope(x)]
+        terms = [*pinn.state(x, e), pinn.wall_normal_velocity(x),
+                 pinn.kutta_residual(0.055, x)]
         assert all(t.device.type == device for t in terms)
         out[device] = [t.detach().cpu() for t in terms]
     for a, b in zip(out["cpu"], out["mps"]):

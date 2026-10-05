@@ -1,19 +1,25 @@
-"""The full-potential PINN (spec 7, amended 2026-10-04): one scalar network, one equation.
+"""The full-potential PINN (spec 7, amended 2026-10-04 and 2026-10-05): one scalar network, one
+equation.
 
 Velocity potential, in units of U_inf x chord:
 
-    phi = x cos(alpha) + y sin(alpha) + Gamma * Theta(xi) + psi(xi, eta) * w(eta)
+    phi = x cos(alpha) + y sin(alpha) + Gamma * Theta_v(x, y) + psi(xi, eta) * w(eta)
 
 - psi is the network NN(cos 2 pi xi, sin 2 pi xi, eta): periodic in xi, so single-valued.
 - w(eta) = 1 - eta vanishes on the 100-chord circle, so there phi is free stream plus the vortex
   term exactly: a hard Dirichlet condition (the neglected doublet is ~1e-3 there).
-- Gamma is a learned scalar, the circulation, and Theta = xi is the wake-cut angle term. xi runs
-  once around the O-grid, so Theta jumps by one unit across the line xi = 0 (the trailing edge out
-  to the far field) while its gradient, set by the map's metric terms, is periodic and therefore
-  continuous across it. On the outer circle the far-field point sits at polar angle -2 pi xi about
-  mid-chord, so grad(Gamma xi) -> Gamma / (2 pi r), clockwise. Convention: Gamma is the CLOCKWISE
-  circulation (the counterclockwise line integral of the velocity is -Gamma), so Kutta-Joukowski
-  gives L' = rho U Gamma and positive Gamma is positive lift. A cylinder warm-up fixes Gamma at 0.
+- Gamma is a learned scalar, the circulation, and Theta_v is the angle of a point vortex at the
+  quarter chord (`vortex_angle`): Theta_v = 1 - (atan2(y, x - 0.25) mod 2 pi) / (2 pi). Its unit
+  jump lies on the ray y = 0, x > 0.25, which in the domain is exactly the O-grid's xi = 0 line
+  (the trailing edge out to the far field, the wake cut); its gradient, the vortex velocity
+  1 / (2 pi r) clockwise, is continuous across that line and regular everywhere in the domain,
+  the trailing edge included. Far from the body Theta_v ~ xi. (Until 2026-10-05 this term was
+  Theta = xi, whose gradient is singular at the trailing edge, ~1/sqrt(r), because the section's
+  cosine clustering makes x_xi = y_xi = 0 there: on test_in-0022 the Gamma-only residual was
+  1.2e4 with Theta = xi and 8e-3 with Theta_v; docs/findings.md, 2026-10-05.) Convention: Gamma
+  is the CLOCKWISE circulation (the counterclockwise line integral of the velocity is -Gamma), so
+  Kutta-Joukowski gives L' = rho U Gamma and positive Gamma is positive lift. A cylinder warm-up
+  fixes Gamma at 0.
 
 The state follows algebraically: (u, v) = grad(phi) through the map's autograd metric terms (the
 same ones as `apno.physics.euler`), rho from isentropic Bernoulli at the free-stream total enthalpy,
@@ -22,12 +28,18 @@ floor, and p / p_inf = rho^gamma. `state` returns p in rho_inf U_inf^2 units lik
 `to_dataset_q` reports (rho/rho_inf, u/U_inf, v/U_inf, p/p_inf) and the scorer is unchanged.
 
 The trailing edge. The section's cosine clustering makes d(x, y)/dxi vanish at the trailing-edge
-wall point, so the map is degenerate there (J = 0) and a smooth phi(xi, eta) gives a finite
-velocity there iff dphi/dxi = 0 at (xi, eta) = (0, 0); otherwise the velocity ~ dphi/dxi / xi, the
-corner singularity. So the Kutta condition is a penalty on (dphi/dxi)^2 at that point
-(`trailing_edge_slope`), the finite form of the |u|^2 = 0 the spec states, and at that one point,
-where 0/0 has no value, `state` reports the stagnation velocity zero that the Kutta condition
-imposes. Every other point (and every cylinder point) has J > 0.
+wall point, so the map is degenerate there (J = 0); at that one point, where 0/0 has no value,
+`state` reports velocity zero. The network term's second derivatives are singular at the sharp
+corner whatever its input features (as the true corner flow is), so the training excludes the
+interior points within `PinnConfig.te_exclusion` chords of the trailing edge from the residual
+(`apno.models.train_pinn.exclude_trailing_edge`). The Kutta condition is the equal-speed form,
+|u|^2 at the wall point xi = delta equal to |u|^2 at xi = 1 - delta (`kutta_residual`), with
+delta = `PinnConfig.kutta_delta` (0.055: about 0.03 chord upstream of the trailing edge on a NACA
+4-digit section, just outside the exclusion). Equal speeds on the two surfaces a finite distance
+upstream are an approximation to the trailing-edge limit, where they are equal exactly (no
+loading at the edge). It replaces dphi/dxi = 0 at the trailing-edge point, which was degenerate:
+there x_xi = y_xi = 0, so the free-stream and circulation terms contribute nothing to it and it
+never constrains Gamma. Every point other than the trailing-edge wall point has J > 0.
 """
 
 import math
@@ -36,12 +48,13 @@ import torch
 from torch import nn
 
 from apno.constants import GAMMA
-from apno.geometry.ogrid import map_xy, stretch_ratio
+from apno.geometry.ogrid import stretch_ratio
 from apno.models.pinn import wall_normal
-from apno.physics.euler import _d, metrics
+from apno.physics.euler import metrics
 from apno.physics.potential import residual
 
 G = GAMMA
+QUARTER_CHORD = 0.25  # the circulation's vortex sits at (0.25, 0)
 DENSITY_FLOOR = 1e-6  # floor on the Bernoulli base, so a supersonic overshoot cannot give NaN
 
 
@@ -64,6 +77,13 @@ class PotentialNet(nn.Module):
     def forward(self, xi, eta):
         f = torch.stack([torch.cos(2 * math.pi * xi), torch.sin(2 * math.pi * xi), eta], -1)
         return self.mlp(f)[..., 0]
+
+
+def vortex_angle(x, y, x0=QUARTER_CHORD):
+    """Theta_v = 1 - (atan2(y, x - x0) mod 2 pi) / (2 pi), the clockwise point vortex's angle
+    about (x0, 0) in units of one turn: a unit jump on the ray y = 0, x > x0 (the O-grid's wake
+    cut xi = 0) and a gradient 1 / (2 pi r), clockwise, that is continuous across it."""
+    return 1.0 - torch.remainder(torch.atan2(y, x - x0), 2 * math.pi) / (2 * math.pi)
 
 
 def wall_weight(eta):
@@ -123,12 +143,12 @@ class PotentialPinn:
         return self
 
     @staticmethod
-    def theta(xi):
-        """The wake-cut angle term: one unit of jump across xi = 0, periodic gradient."""
-        return xi
+    def theta(x, y):
+        """The circulation's angle term, `vortex_angle`."""
+        return vortex_angle(x, y)
 
     def potential(self, xi, eta, x, y):
-        return (x * self.ca + y * self.sa + self.net.gamma * self.theta(xi)
+        return (x * self.ca + y * self.sa + self.net.gamma * self.theta(x, y)
                 + self.net(xi, eta) * wall_weight(eta))
 
     def state(self, xi, eta):
@@ -136,15 +156,13 @@ class PotentialPinn:
         return state_from_potential(self.potential, xi, eta, c.geometry, c.radius, self.ratio,
                                     c.mach)
 
-    def trailing_edge_slope(self, like):
-        """dphi/dxi at the trailing-edge wall point (0, 0), on `like`'s device and dtype. Zero is
-        the Kutta condition (the free-stream term contributes nothing, since dx/dxi = dy/dxi = 0
-        there on a section)."""
-        with torch.enable_grad():
-            xi = torch.zeros(1, dtype=like.dtype, device=like.device, requires_grad=True)
-            eta = torch.zeros_like(xi)
-            x, y = map_xy(xi, eta, self.case.geometry, self.case.radius, self.ratio, xp=torch)
-            return _d(self.potential(xi, eta, x, y), xi)
+    def kutta_residual(self, delta, like):
+        """|u|^2 at the wall point xi = delta minus |u|^2 at xi = 1 - delta, on `like`'s device
+        and dtype: zero is the equal-speed Kutta condition (see the module docstring)."""
+        xk = torch.tensor([delta, 1.0 - delta], dtype=like.dtype, device=like.device)
+        _, u, v, _ = self.state(xk, torch.zeros_like(xk))
+        q2 = u * u + v * v
+        return q2[0] - q2[1]
 
     def wall_normal_velocity(self, xi):
         """u . n_w at wall points xi (n_w from `wall_normal`, finite at the trailing edge)."""
@@ -156,12 +174,12 @@ class PotentialPinn:
 def losses(pinn, pts, cfg, ratio, weights):
     """The potential formulation's loss terms and weighted total.
 
-    residual: mean square of the continuity residual over the interior points; wall: the soft
-    Neumann condition, mean (u . n_w)^2 over the wall points shifted by half a spacing (the
-    trailing-edge point itself has no finite velocity to penalise unless Kutta holds; see the
-    module docstring); kutta: (dphi/dxi)^2 at the trailing edge when cfg.kutta; circulation: zero,
-    since a cylinder warm-up fixes Gamma = 0 instead of penalising it. There is no outer term: the
-    far-field condition is exact.
+    residual: mean square of the continuity residual over the interior points (for a section,
+    those left after `train_pinn.exclude_trailing_edge`); wall: the soft Neumann condition, mean
+    (u . n_w)^2 over the wall points shifted by half a spacing (so the degenerate trailing-edge
+    point is not one of them); kutta: the equal-speed condition, `kutta_residual(cfg.kutta_delta)`
+    squared, when cfg.kutta; circulation: zero, since a cylinder warm-up fixes Gamma = 0 instead of
+    penalising it. There is no outer term: the far-field condition is exact.
     """
     case = pinn.case
     r = residual(pts["xi"], pts["eta"], pinn.state, case.geometry, case.radius, ratio,
@@ -169,7 +187,7 @@ def losses(pinn, pts, cfg, ratio, weights):
     xw = pts["xi_wall"] + 0.5 / cfg.n_wall
     zero = torch.zeros((), dtype=xw.dtype, device=xw.device)
     out = {"residual": (r * r).mean(), "wall": (pinn.wall_normal_velocity(xw) ** 2).mean()}
-    out["kutta"] = (pinn.trailing_edge_slope(xw) ** 2).sum() if cfg.kutta else zero
+    out["kutta"] = pinn.kutta_residual(cfg.kutta_delta, xw) ** 2 if cfg.kutta else zero
     out["circulation"] = zero
     out["total"] = (cfg.w_res * out["residual"] + weights["wall"] * out["wall"]
                     + weights["kutta"] * out["kutta"])

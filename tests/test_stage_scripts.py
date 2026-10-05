@@ -144,3 +144,19 @@ def test_s2_then_s4(staged, monkeypatch, capsys):
     shutil.copy("runs/predictions/fno-n896-s0.h5", "runs/predictions/stray.h5")
     with pytest.raises(SystemExit, match="pool"):
         s4.main()
+
+
+def test_s4_costs_the_pure_pinn_runs_only():
+    s4 = _module("s4_score")
+
+    def pinn(variant, wall_s, grid="256x97", **extra):
+        attrs = {"method": "pinn", "variant": variant, "train_device": "mps",
+                 "train_wall_s": wall_s, "train_cpu_s": 1.0, **extra}
+        return (f"pinn-{variant}", grid, attrs, {})
+
+    contestants = [("su2-256x97", "256x97", {"method": "su2-256x97"}, {}),
+                   pinn("pure", 100.0), pinn("pure", 300.0), pinn("gradnorm", 1e4),
+                   pinn("nokutta", 1e4), pinn("euler", 1e4), pinn("pure", 1e4, grid="128x49"),
+                   ("fno-n896-s0", "256x97", {"method": "fno", "variant": ""}, {})]
+    assert s4.pinn_cost(contestants) == {"fixed": 0.0, "per": 200.0}
+    assert s4.pinn_cost(contestants[:1] + contestants[3:5]) is None

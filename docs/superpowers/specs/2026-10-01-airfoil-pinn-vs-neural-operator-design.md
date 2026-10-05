@@ -437,6 +437,50 @@ S3 scripts) as the documented negative result.
 - **Consequence for scoring (§8.2), not changed here:** under this formulation the wall-normal
   velocity is a result (soft) rather than an identity, and the entropy is zero by construction.
 
+### 7.9 Amendment, 2026-10-05: trailing-edge fixes, and S3 without the viscous runs
+
+The author's decision of 2026-10-05 ("Fix + non-viscous runs"), after the diagnosis in
+`docs/findings.md` ("2026-10-05 — the potential PINN's trailing edge"). §7.8 stands except where
+this replaces it.
+
+- **Why.** On showcase case test_in-0022 the §7.8 PINN's residual at initialisation was ~1e5, the
+  top 10 of 20,000 collocation points carrying 99.9 % of it, all within ξ < 0.0014, η < 0.05 of the
+  trailing edge (TE), where J ~ 1e-3 (on the cylinder the top-10 share is 1.7 %). Two causes: (a) the
+  circulation term Γξ is singular at the TE, because the cosine-clustered map has x_ξ = y_ξ = 0 there
+  and |∇ξ| ~ 1/√r (Γ-only residual 1.2e4; 8e-3 with the vortex angle below); (b) the network term's
+  second derivatives are singular at the sharp corner whatever its input features, as the true corner
+  flow is. The S3 shards started on the §7.8 code thrashed (residual 150-1000, wall loss 5-110 after
+  11,000 Adam steps) and were stopped.
+- **Circulation term.** Γξ is replaced by Γ·Θ_v, the angle of a clockwise point vortex at the
+  quarter chord, Θ_v(x, y) = 1 − ((atan2(y, x − 0.25)) mod 2π)/(2π). Its unit jump lies on the ray
+  y = 0, x > 0.25, which in the domain is exactly the O-grid's ξ = 0 line (the wake cut); ∇Θ_v is
+  continuous across the cut and regular at the TE (1/(2π · 0.75) there); far from the body Θ_v ≈ ξ,
+  so the sign convention (Γ > 0 is positive lift) is unchanged. The cylinder fixes Γ = 0: no change.
+- **TE exclusion.** For a section, the interior collocation points within `te_exclusion` = 0.02
+  chord of the TE (1, 0) are dropped from the residual after every (re)sampling (about 225 of 20,000
+  on test_in-0022); the wall and Kutta terms are unaffected and the cylinder has no exclusion. The
+  count dropped at each resample is recorded with the run. Probes: with the vortex term and a
+  0.02-chord exclusion the initial residual is ~8 (cylinder-like), training does not collapse and the
+  wall Cp L2 against SU2 is 0.33-0.35 with Cp_min −0.78 to −0.95 (SU2 −0.942) by 4,000-5,000 Adam
+  steps; a 0.005-chord exclusion does not train (initial residual 566, suction peak lost).
+- **Kutta condition.** (∂φ/∂ξ)² at the TE point is degenerate: x_ξ = y_ξ = 0 there, so the
+  free-stream and circulation terms contribute nothing to it and it never constrains Γ. It is replaced
+  by the standard equal-speed form, (|u|²(ξ = δ) − |u|²(ξ = 1 − δ))² at the wall, weight 10, with
+  δ = `kutta_delta` = 0.055 (≈ 0.03 chord upstream of the TE on a NACA 4-digit section, just outside
+  the exclusion). Equal speeds on the two surfaces a finite distance upstream are an approximation to
+  the TE limit, where the loading vanishes.
+- **The circulation finding (a result, not fixed here).** The equal-speed condition is satisfied to
+  ~1e-6 in every probe, yet Γ stays ~0.02 where SU2's CL 0.319 on test_in-0022 implies ~0.16: the
+  PINN's lift is about 8× too small. S3 reports it.
+- **The S3 plan (the author's scope decision).** Six showcase cases without artificial viscosity
+  (variant renamed `euler` → `pure`, since the formulation is the potential one; files of the Euler
+  formulation stay distinguishable by their recorded `formulation`), then `gradnorm` and `nokutta`:
+  8 runs. The viscous variants (§7.4) are not run; the ν term stays in the code and selectable
+  (`--viscous`). S4 costs the PINN from the `pure` runs.
+- **Preflight reuse.** `--preflight-file PATH` reuses the per-variant timings of an earlier,
+  uncontended preflight: three shards preflighting at once measured one variant at 0.83 / 1.14 /
+  29.3 s per Adam step (uncontended 0.75 s) and refused on that noise. The budget check is unchanged.
+
 ---
 
 ## 8. Head-to-head scoring (stage S4)

@@ -4,8 +4,12 @@ Adam runs in float32 on `PinnConfig.device` ("auto": the Apple GPU when MPS is a
 and grid evaluation run on the CPU in float64, which MPS does not have. Points are drawn from a CPU
 generator and moved, so a seed gives the same points on every device.
 
-Points are uniform in (xi, eta), which the map turns into clustering near the wall. The Kutta
-condition is a penalty on the velocity at the trailing-edge wall point (xi, eta) = (0, 0); the
+Points are uniform in (xi, eta), which the map turns into clustering near the wall. For the
+potential PINN on a section, the interior points within `te_exclusion` chords of the trailing edge
+are dropped from the residual after every (re)sampling (`exclude_trailing_edge`; the corner flow is
+singular there), and the count dropped at each resample is recorded in the run record's
+`te_dropped`. The Kutta condition is the formulation's own (potential: equal wall speeds at
+xi = kutta_delta and 1 - kutta_delta; Euler: zero velocity at the trailing-edge wall point); the
 cylinder warm-up replaces it with zero circulation, since a cylinder has no sharp edge to fix it.
 
 `PinnConfig.formulation` picks the PINN: "potential" (the default since the author's decision of
@@ -29,7 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from apno.geometry.ogrid import stretch_ratio
+from apno.geometry.ogrid import Section, map_xy, stretch_ratio
 from apno.models import pinn_potential
 from apno.models.pinn import Pinn, PinnNet, to_dataset_q
 from apno.models.pinn_potential import PotentialNet, PotentialPinn
@@ -54,6 +58,8 @@ class PinnConfig:
     w_outer: float = 10.0  # Euler: the soft free-stream penalty on the outer circle
     w_wall: float = 10.0  # potential: the soft no-penetration penalty on the wall
     w_kutta: float = 10.0
+    kutta_delta: float = 0.055  # potential: the equal-speed Kutta points, xi = delta and 1 - delta
+    te_exclusion: float = 0.02  # potential, sections: residual-free radius about the TE, chords
     viscosity: float = 0.0
     kutta: bool = True
     zero_circulation: bool = False
@@ -99,6 +105,31 @@ def _points(cfg, gen, dtype, device="cpu"):
     xw = torch.arange(cfg.n_wall, dtype=dtype) / cfg.n_wall
     return {k: v.to(device) for k, v in
             {"xi": xi, "eta": eta, "xi_outer": xo, "xi_wall": xw}.items()}
+
+
+def exclude_trailing_edge(pts, geom, radius, ratio, te_exclusion):
+    """(pts, n_dropped): the interior points (xi, eta) whose physical distance from the trailing
+    edge (1, 0) is below te_exclusion removed, for a Section; the wall and outer points, and every
+    point of any other geometry (the cylinder has no corner), unchanged. The distance is taken in
+    float64 on the CPU, so the same points are dropped on every device."""
+    if not isinstance(geom, Section) or te_exclusion <= 0:
+        return pts, 0
+    xi, eta = pts["xi"].detach().cpu().double(), pts["eta"].detach().cpu().double()
+    x, y = map_xy(xi, eta, geom, radius, ratio, xp=torch)
+    keep = torch.hypot(x - 1.0, y) >= te_exclusion
+    out = dict(pts)
+    keep = keep.to(pts["xi"].device)
+    out["xi"], out["eta"] = pts["xi"][keep], pts["eta"][keep]
+    return out, int((~keep).sum())
+
+
+def _sample(pinn, cfg, gen, dtype, device, ratio):
+    """Fresh points, with the potential PINN's trailing-edge exclusion applied."""
+    pts = _points(cfg, gen, dtype, device)
+    if getattr(pinn, "formulation", "euler") != "potential":
+        return pts, 0
+    case = pinn.case
+    return exclude_trailing_edge(pts, case.geometry, case.radius, ratio, cfg.te_exclusion)
 
 
 def losses(pinn, pts, cfg, ratio, weights=None):
@@ -186,10 +217,11 @@ def train(case, cfg, log=print):
     history = []
     weights = initial_weights(pinn, cfg)
     t0, c0 = time.perf_counter(), time.process_time()
-    pts = None
+    pts, te_dropped = None, []
     for step in range(cfg.adam_steps):
         if step % cfg.resample_every == 0:
-            pts = _points(cfg, gen, torch.float32, device)
+            pts, n = _sample(pinn, cfg, gen, torch.float32, device, ratio)
+            te_dropped.append({"step": step, "dropped": n})
         opt.zero_grad()
         L = losses(pinn, pts, cfg, ratio, weights)
         if cfg.grad_balance and step % cfg.balance_every == 0:
@@ -221,7 +253,8 @@ def train(case, cfg, log=print):
     log(f"final: {final}")
     rec = {"wall_s": time.perf_counter() - t0, "cpu_s": time.process_time() - c0,
            "adam_wall_s": adam_wall_s, "adam_device": device, "lbfgs_device": "cpu",
-           "formulation": cfg.formulation, "history": history, "final": final, "weights": weights}
+           "formulation": cfg.formulation, "history": history, "te_dropped": te_dropped,
+           "final": final, "weights": weights}
     return pinn, rec
 
 
@@ -238,7 +271,7 @@ def time_steps(case, cfg, n_adam=5, n_closure=2):
     pinn = make_pinn(case, cfg, device)
     opt = torch.optim.Adam(pinn.parameters(), lr=cfg.lr0)
     weights = initial_weights(pinn, cfg)
-    pts = _points(cfg, gen, torch.float32, device)
+    pts, _ = _sample(pinn, cfg, gen, torch.float32, device, ratio)
 
     def timed(fn, n, on=device):
         out = []

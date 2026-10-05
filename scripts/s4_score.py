@@ -79,6 +79,15 @@ def _tuning_cost(path):
     return total, len(rows)
 
 
+def pinn_cost(contestants):
+    """The PINN's cost: no fixed cost, and per use the mean training cost of its base runs (variant
+    "pure", the plan's six showcase cases without artificial viscosity), or None if there are
+    none."""
+    pinn = [_train_cost(a)[0] for _, gname, a, _ in contestants[1:]
+            if gname == "256x97" and a["method"] == "pinn" and a.get("variant") == "pure"]
+    return {"fixed": 0.0, "per": float(np.mean(pinn))} if pinn else None
+
+
 def costs_record(by_tag, campaign, su2_per, tuning_path):
     costs = {"su2": {"fixed": 0.0, "per": su2_per}}
     for method, tag in COST_TAGS.items():
@@ -177,10 +186,9 @@ def main():
                 for n in (64, 128, 256, 512, 896)}
     by_tag = {tag: attrs for tag, gname, attrs, _ in contestants[1:] if gname == "256x97"}
     costs = costs_record(by_tag, campaign[896], per_su2, Path("results/s2/tuning.json"))
-    pinn = [_train_cost(a)[0] for _, gname, a, _ in contestants[1:]
-            if gname == "256x97" and a["method"] == "pinn" and a.get("variant") == "euler"]
+    pinn = pinn_cost(contestants)
     if pinn:
-        costs["pinn"] = {"fixed": 0.0, "per": float(np.mean(pinn))}
+        costs["pinn"] = pinn
     (OUT / "costs.json").write_text(json.dumps(
         {"costs": costs, "campaign_cpu_s": campaign,
          "break_even_uses": "fixed: campaign + model search + final training, for FNO and POD"},

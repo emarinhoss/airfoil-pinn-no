@@ -404,3 +404,59 @@ largest allowed (256) at n = 512 and 896, so both selections sit on the edge of 
 and the POD baseline may be under-tuned. The FNO and POD validation errors are computed by different code paths in different units of account, so they are not compared here; S4 scores both on the test sets with one scorer.
 
 Prediction files for both test sets were written to `runs/predictions/` (not committed).
+
+## 2026-10-05 — the potential PINN's trailing edge, and S3 without the viscous runs
+
+Author's decision of 2026-10-05: "Fix + non-viscous runs". Spec §7.9 records the amendment; the
+probes are `runs/probe_te_exclusion.py`, `runs/probe_equal_kutta.py` and their logs (not committed).
+
+**The trailing-edge singularity.** On showcase case test_in-0022 (M 0.3605, α 2.19°, NACA t 0.140,
+m 0.0022) the §7.8 PINN's residual at initialisation was ~1e5, the top 10 of 20,000 collocation
+points carrying 99.9 % of it, all within ξ < 0.0014 and η < 0.05 of the trailing edge (TE), where
+J ~ 1e-3; on the cylinder the top-10 share is 1.7 %. Two causes. (a) The circulation term Γξ: the
+cosine-clustered map has x_ξ = y_ξ = 0 at the TE, so |∇ξ| ~ 1/√r there; the Γ-only residual is 1.2e4
+with Θ = ξ and 8e-3 with the quarter-chord vortex angle Θ_v. Measured through the map at
+ξ ∈ {1e-4, 1e-3}, η ∈ {0, 1e-4}: |∇ξ| = 11,191 / 4,882 / 993 / 891, against |∇Θ_v| = 0.2122 at all
+four (the analytic 1/(2π · 0.75)). (b) The network term's second derivatives are singular at the sharp
+corner whatever its input features, as the true corner flow is. The S3 shards started on the §7.8
+code thrashed (residual 150-1000, wall loss 5-110 after 11,000 Adam steps) and were stopped
+(`results/s3/shard*_stopped_te_singularity.log`).
+
+**The fix that trains.** Θ_v = 1 − ((atan2(y, x − 0.25)) mod 2π)/(2π) for the circulation term, plus
+dropping the interior points within 0.02 chord of the TE from the residual: in the probes the
+initial residual is ~8 (cylinder-like), training does not collapse, and the wall Cp L2 against SU2 is
+0.33-0.35 with Cp_min −0.78 to −0.95 (SU2 −0.942) by 4,000-5,000 Adam steps
+(`runs/probe_teexcl_trig.log`, `runs/probe_eqk_excl02_d*.log`). A 0.005-chord exclusion does not
+train (initial residual 566; suction peak lost).
+
+**The Kutta condition as first implemented was degenerate.** (∂φ/∂ξ)² at the TE point never
+constrains Γ, because x_ξ = y_ξ = 0 there and the free-stream and vortex terms contribute nothing.
+It is replaced by the equal-speed form (|u|²(ξ = δ) − |u|²(ξ = 1 − δ))² on the wall, δ = 0.055
+(≈ 0.03 chord upstream of the TE, just outside the exclusion), an approximation to the TE limit.
+**The circulation finding:** the equal-speed condition is satisfied to ~1e-6 in every probe, yet Γ
+stays ~0.02, where SU2's CL 0.319 implies Γ = CL/2 ≈ 0.16. The PINN's lift is about 8× too small.
+That is a result to report, not a defect these changes fix.
+
+**Evidence probe on the production code** (first 3,000 Adam steps of the S3 `pure` run on
+test_in-0022: `PinnConfig()` defaults, the production lr schedule, resampling and loss, float32 on the
+Apple GPU at 0.19 s per step; wall Cp of the CPU float64 evaluation against SU2's 512 × 193 truth
+sampled `[::2, ::2]`, wall row). Points dropped by the exclusion at the resamples at 0 / 1000 / 2000 /
+3000: 225 / 197 / 212 / 211 of 20,000.
+
+| Adam step | residual | wall | kutta | Γ | wall Cp L2 | max abs ΔCp | Cp_min (SU2 −0.942) |
+|---|---|---|---|---|---|---|---|
+| 0 | 9.12 | 0.901 | 7.3e-2 | 0.0000 | 0.918 | 10.60 | −9.410 |
+| 1000 | 0.0991 | 0.0601 | 1.7e-5 | 0.0123 | 0.410 | 1.193 | −0.158 |
+| 2000 | 4.26 | 0.0556 | 2.8e-3 | 0.0147 | 0.450 | 1.771 | −0.777 |
+| 3000 | 0.0777 | 0.0360 | 2.3e-6 | 0.0177 | 0.387 | 1.163 | −0.773 |
+
+The losses are the step's own batch, taken just after a resample (so the 2000-step residual is the
+first look at fresh points). No collapse to rest (the suction peak reaches −0.77 by step 2000), Kutta
+is met to ~1e-6, and Γ grows slowly (0.0177 at 3,000 steps, against ~0.16 implied by SU2), as in the
+probes.
+
+**S3 plan, by the author's scope decision.** The six showcase cases without artificial viscosity
+(the base variant renamed `euler` → `pure`), `gradnorm` and `nokutta`: 8 runs. The viscous variants
+are not planned (selectable with `--viscous`). `--preflight-file PATH` reuses an uncontended
+preflight's timings, because three shards preflighting at once measured one variant at 0.83 / 1.14 /
+29.3 s per Adam step against 0.75 s uncontended and refused on that noise.

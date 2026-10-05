@@ -327,3 +327,71 @@ cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
   probe was a script outside the repository: it repeated `train`'s Adam loop (`make_pinn`,
   `_points`, `losses`, the same Adam and exponential decay) and printed
   `step k: shoulder ... max|dCp| ... residual ... wall ... total ...` every 500 steps.
+
+## 2026-10-05 — stage S2: POD and FNO trained, predictions written
+
+Commands: `bash runs/run_s2_pod.sh` (`python scripts/s2_operator.py pod`), then `bash runs/run_s2_fno.sh`
+(`python scripts/s2_operator.py tune`, then `final`). Exit codes 0 for all three; logs in
+`results/s2/{pod,tune,final}.log`. Figures below are read from `results/s2/tuning.json`,
+`results/s2/runs.json`, `results/s2/pod.json` and `runs/fno/*/train.json`. **No test scores here**;
+they come in S4.
+
+**Hardware.** The FNO trained on the Apple GPU (`device: mps` in every `train.json`). Its "wall"
+figures are therefore **GPU wall time on this Mac**, shared with other load; the CPU seconds are the
+host process's CPU time while it drove the GPU, not a CPU-training cost. POD ran on the CPU.
+
+**Tuning (8 configurations, n = 896, loss A, 100 epochs, layers 4, lr 1e-3, batch 8).** Selected:
+**`tune-6`, width 48, modes 24 x 8**, validation relative L2 0.02214 (best epoch 96).
+
+| Tag | width | modes (i x j) | best val | epochs | wall s | CPU s |
+|---|---|---|---|---|---|---|
+| tune-0 | 32 | 16 x 8 | 0.03154 | 100 | 419 | 216 |
+| tune-1 | 32 | 16 x 12 | 0.03083 | 100 | 443 | 232 |
+| tune-2 | 32 | 24 x 8 | 0.03101 | 100 | 443 | 224 |
+| tune-3 | 32 | 24 x 12 | 0.03100 | 100 | 488 | 226 |
+| tune-4 | 48 | 16 x 8 | 0.02290 | 100 | 658 | 255 |
+| tune-5 | 48 | 16 x 12 | 0.02225 | 100 | 763 | 309 |
+| **tune-6** | 48 | 24 x 8 | **0.02214** | 100 | 793 | 302 |
+| tune-7 | 48 | 24 x 12 | 0.02345 | 100 | 859 | 315 |
+
+Width separates the configurations (0.031 at 32 against 0.022-0.023 at 48); the mode counts within a
+width differ by less than the seed-to-seed spread seen below (0.0118-0.0127 at 300 epochs), so the
+choice of `tune-6` over `tune-5` (0.5 % apart) is not a strong one.
+
+**Final runs (selected configuration, 300 epochs, patience 30).** Validation is relative L2 on the
+standardised-target validation split.
+
+| Tag | n | loss | best val | best epoch | epochs run | wall s | CPU s |
+|---|---|---|---|---|---|---|---|
+| fno-n896-s0 | 896 | A | 0.012605 | 278 | 300 | 2160 | 849 |
+| fno-n896-s1 | 896 | A | 0.012744 | 293 | 300 | 2242 | 927 |
+| fno-n896-s2 | 896 | A | 0.011775 | 294 | 300 | 2237 | 926 |
+| fno-n896-s0-lossB | 896 | B | 0.46170 | 50 | 81 | 605 | 250 |
+| fno-n64-s0 | 64 | A | 0.08493 | 297 | 300 | 257 | 72 |
+| fno-n128-s0 | 128 | A | 0.05065 | 288 | 300 | 421 | 140 |
+| fno-n256-s0 | 256 | A | 0.03320 | 284 | 300 | 737 | 278 |
+| fno-n512-s0 | 512 | A | 0.017842 | 274 | 300 | 1384 | 562 |
+
+The loss-B validation loss is on a different scale from loss A and must not be compared with it
+directly; it stopped early by patience at epoch 81. The n = 64...512 runs and the seeds still improve
+at or near their final epoch (best epochs 274-297 of 300), so none is clearly converged at 300 epochs.
+
+**128 x 49 to 256 x 97 transfer error.** Not recorded: no `transfer_val_rel_l2` field exists in any
+`train.json` or in `results/s2/*.json`, so no figure is given. (Checked with a key search over
+`runs/fno/*/train.json`.)
+
+**POD (`pod.json`; modes chosen from 8...256, smoothing from 0, 1e-6, 1e-4, 1e-2, on validation).**
+
+| n | cases | modes | smoothing | val rel L2 | wall s | CPU s |
+|---|---|---|---|---|---|---|
+| 64 | 63 | 32 | 0.01 | 0.1135 | 4.8 | 7.2 |
+| 128 | 126 | 64 | 0.01 | 0.0929 | 8.5 | 14.3 |
+| 256 | 252 | 128 | 0.01 | 0.0814 | 22.3 | 49.0 |
+| 512 | 502 | 256 | 0.01 | 0.0711 | 54.8 | 171.4 |
+| 896 | 881 | 256 | 0.01 | 0.0661 | 98.4 | 351.3 |
+
+The chosen smoothing is the largest value in the grid at every n, and the chosen mode count is the
+largest allowed (256) at n = 512 and 896, so both selections sit on the edge of their search grids
+and the POD baseline may be under-tuned. The FNO and POD validation errors are computed by different code paths in different units of account, so they are not compared here; S4 scores both on the test sets with one scorer.
+
+Prediction files for both test sets were written to `runs/predictions/` (not committed).

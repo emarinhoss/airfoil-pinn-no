@@ -376,9 +376,18 @@ The loss-B validation loss is on a different scale from loss A and must not be c
 directly; it stopped early by patience at epoch 81. The n = 64...512 runs and the seeds still improve
 at or near their final epoch (best epochs 274-297 of 300), so none is clearly converged at 300 epochs.
 
-**128 x 49 to 256 x 97 transfer error.** Not recorded: no `transfer_val_rel_l2` field exists in any
-`train.json` or in `results/s2/*.json`, so no figure is given. (Checked with a key search over
-`runs/fno/*/train.json`.)
+**128 x 49 to 256 x 97 transfer error.** Recorded as `transfer_val_rel_l2` in every row of
+`results/s2/runs.json` and `results/s2/tuning.json` (not in `runs/fno/*/train.json`): the relative L2
+error of the FNO trained at 128 x 49 and evaluated on the 256 x 97 validation fields. Produced by
+`python -c "import json; [print(x['tag'], x['transfer_val_rel_l2']) for x in json.load(open('results/s2/runs.json'))]"`
+(and the same over `json.load(open('results/s2/tuning.json'))['rows']`).
+
+| run | transfer_val_rel_l2 |
+|---|---|
+| fno-n896-s0 / s1 / s2 | 0.0348 / 0.0355 / 0.0379 |
+| fno-n896-s0-lossB | 0.0595 |
+| fno-n64 / n128 / n256 / n512 (s0) | 0.0443 / 0.0476 / 0.0474 / 0.0431 |
+| tune-0 ... tune-7 | 0.0637 / 0.0535 / 0.0538 / 0.0458 / 0.0527 / 0.0456 / 0.0436 / 0.0558 |
 
 **POD (`pod.json`; modes chosen from 8...256, smoothing from 0, 1e-6, 1e-4, 1e-2, on validation).**
 

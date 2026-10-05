@@ -18,16 +18,21 @@ import numpy as np  # noqa: E402
 KEYS = ("method", "variant", "grid", "n_train", "seed", "split", "regime")
 SCALARS = ("cl_err", "cd_err_counts", "cm_err", "cp_l2", "cp_max", "near_field_rel_l2")
 PHYSICS = ("entropy_max", "entropy_mean", "enthalpy_max_dev", "wall_normal_rms")
-# The PINN's state is built from the free-stream total enthalpy and its wall velocity is projected
-# tangent (spec 7.3), so these two checks are identities for it, not results.
-BY_CONSTRUCTION = {"pinn": ("enthalpy_max_dev", "wall_normal_rms")}
+# Keyed on (method, formulation): the prediction file's `formulation` attr, default "euler".
+# Euler PINN (spec 7.3): free-stream total enthalpy and a tangent wall velocity make those two
+# checks identities. Potential PINN (spec 7.8): enthalpy and entropy are identities, but wall
+# tangency is soft, so wall_normal_rms is a real result and must print as a value.
+BY_CONSTRUCTION = {
+    ("pinn", "euler"): ("enthalpy_max_dev", "wall_normal_rms"),
+    ("pinn", "potential"): ("enthalpy_max_dev", "entropy_max", "entropy_mean"),
+}
 BY_CONSTRUCTION_CELL = "by construction"
 
 
-def _groups(rows):
+def _groups(rows, extra=()):
     groups = defaultdict(list)
     for r in rows:
-        groups[tuple(r.get(k, "") for k in KEYS)].append(r["score"])
+        groups[tuple(r.get(k, "") for k in KEYS + tuple(extra))].append(r["score"])
     return sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0])))
 
 
@@ -79,11 +84,12 @@ def aggregate_shocks(rows):
 def aggregate_physics(rows):
     """Per group: median and maximum of each physics check, and of |mass flux| per grid line."""
     out = []
-    for key, scores in _groups(rows):
-        g = dict(zip(KEYS, key))
+    for key, scores in _groups(rows, extra=("formulation",)):
+        g = dict(zip(KEYS, key[:-1]))
+        formulation = key[-1] or "euler"
         ok = [s["physics"] for s in scores if s["status"] == "ok"]
         g["n_ok"] = len(ok)
-        skip = BY_CONSTRUCTION.get(g["method"], ())
+        skip = BY_CONSTRUCTION.get((g["method"], formulation), ())
         for m in PHYSICS:
             if m in skip:
                 g[f"{m}_median"] = g[f"{m}_max"] = BY_CONSTRUCTION_CELL

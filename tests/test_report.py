@@ -64,6 +64,20 @@ def test_physics_by_construction_is_labelled_not_scored():
     assert "by construction" in md and md.count("\n") == 3
 
 
+def test_physics_labels_follow_the_pinn_formulation():
+    """Spec 7.8: potential wall tangency is a result; enthalpy and entropy are not."""
+    euler = dict(_sup("pinn", {}, _phys(h=1e-12, un=1e-13)), formulation="euler")
+    pot = dict(_sup("pinn", {}, _phys(h=1e-12, un=2e-3)), formulation="potential")
+    groups = aggregate_physics([euler, pot])
+    e = next(g for g in groups if g["wall_normal_rms_median"] == "by construction")
+    p = next(g for g in groups if g is not e)
+    assert e["wall_normal_rms_median"] == "by construction"
+    assert e["entropy_max_max"] == 1e-3
+    assert p["wall_normal_rms_median"] == 2e-3 and p["wall_normal_rms_max"] == 2e-3
+    for m in ("enthalpy_max_dev", "entropy_max", "entropy_mean"):
+        assert p[f"{m}_median"] == p[f"{m}_max"] == "by construction"
+
+
 def test_markdown_table_formats_and_leaves_missing_cells_empty():
     md = markdown_table(aggregate([_row("fno", -0.2), _row("pod", 0.1, "missing")]))
     lines = md.splitlines()

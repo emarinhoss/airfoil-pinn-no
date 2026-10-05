@@ -479,6 +479,9 @@ S3 scripts) as the documented negative result.
   the wall to well into the far field. A check that a model satisfies
   by construction — total enthalpy and wall tangency for the PINN — is reported as such, not counted
   as a pass.
+  *(2026-10-04: "total enthalpy and wall tangency for the PINN" is the Euler PINN's case; under the
+  potential formulation see 7.8 — enthalpy and entropy are identities, wall tangency is a soft result.
+  The scorer labels by the prediction file's `formulation` attr.)*
 - **Cost**, measured on this machine as wall time and CPU time: SU2 per case; the FNO and the POD
   baseline once (the campaign plus training) and per query; the PINN per case.
 

@@ -131,6 +131,7 @@ def main():
             if gname == "128x49":
                 X, Y, t, flux = X[::2, ::2], Y[::2, ::2], t[::2, ::2], COARSE_FLUX_LINES
             rows.append({"tag": tag, "method": attrs["method"], "variant": attrs.get("variant", ""),
+                         "formulation": attrs.get("formulation", "euler"),
                          "grid": gname, "n_train": int(attrs.get("n_train", 0)),
                          "seed": int(attrs.get("seed", 0)), "split": cid.split("-")[0],
                          "regime": regimes[cid], "case_id": cid,

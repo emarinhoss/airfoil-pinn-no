@@ -130,10 +130,20 @@ def markdown_table(groups, metrics=("n_ok", "n_missing", "n_non-finite", "near_f
     return "\n".join(lines)
 
 
+# FNO and POD share the campaign, so their curves nearly coincide on the log axis: the FNO, drawn
+# first, is wide and translucent and POD narrow and dotted on top of it, so both stay visible
+BREAK_EVEN_STYLE = {"su2": ("--", 1.5), "fno": ("-", 4.0), "pod": (":", 1.5), "pinn": ("-.", 1.5)}
+
+
 def plot_break_even(curves, path):
+    """Plot the curves; returns {method: {"ls", "lw"}} as drawn."""
     fig, ax = plt.subplots(figsize=(7, 4.5))
+    drawn = {}
     for k, y in curves.items():
-        ax.plot(np.arange(len(y)), y / 3600, label=k, ls="--" if k == "su2" else "-")
+        ls, lw = BREAK_EVEN_STYLE.get(k, ("-", 1.5))
+        ax.plot(np.arange(len(y)), y / 3600, label=k, ls=ls, lw=lw,
+                alpha=0.5 if k == "fno" else 1.0)
+        drawn[k] = {"ls": ls, "lw": lw}
     ax.set(xlabel="new cases answered",
            ylabel="cumulative cost, hours (CPU time; GPU training at wall time)", yscale="log",
            title="Cost to answer n new cases")
@@ -141,6 +151,7 @@ def plot_break_even(curves, path):
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
+    return drawn
 
 
 def plot_efficiency(points, floor, path):

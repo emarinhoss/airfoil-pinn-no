@@ -2,6 +2,7 @@ import numpy as np
 
 from apno.score.report import (
     PHYSICS_METRICS, aggregate, aggregate_physics, aggregate_shocks, break_even, markdown_table,
+    plot_break_even,
 )
 
 
@@ -25,6 +26,18 @@ def test_break_even():
     curves = break_even(costs, 200)
     assert curves["su2"][100] == 1000.0
     assert np.argmax(curves["fno"] < curves["su2"]) == 101
+
+
+def test_break_even_plot_keeps_coincident_curves_visible(tmp_path):
+    # FNO and POD share the campaign, so their curves coincide on the log axis; the one drawn first
+    # must stay visible under the other (review 2, M10): distinct line styles, the first wider
+    costs = {"su2": {"fixed": 0.0, "per": 10.0}, "fno": {"fixed": 1000.0, "per": 0.01},
+             "pod": {"fixed": 1000.0, "per": 0.01}, "pinn": {"fixed": 0.0, "per": 1e3}}
+    lines = plot_break_even(break_even(costs, 50), tmp_path / "b.png")
+    assert (tmp_path / "b.png").exists() and set(lines) == set(costs)
+    styles = [(v["ls"], v["lw"]) for v in lines.values()]
+    assert len(set(styles)) == len(styles)
+    assert lines["fno"]["lw"] > lines["pod"]["lw"] and lines["fno"]["ls"] != lines["pod"]["ls"]
 
 
 def _phys(h=1e-3, un=1e-4):

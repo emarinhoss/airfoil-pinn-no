@@ -236,6 +236,7 @@ def train(case, cfg, log=print):
             log(f"adam {step}: {history[-1]}")
     _sync(device)
     adam_wall_s = time.perf_counter() - t0
+    adam_cpu_s = time.process_time() - c0  # the host's CPU time; it cannot see GPU work
     pts = _to_cpu64(pinn, pts)
     lbfgs = torch.optim.LBFGS(pinn.parameters(), lr=1.0, max_iter=cfg.lbfgs_iters,
                               history_size=50, line_search_fn="strong_wolfe",
@@ -252,7 +253,8 @@ def train(case, cfg, log=print):
     history.append({"step": "lbfgs", **final})
     log(f"final: {final}")
     rec = {"wall_s": time.perf_counter() - t0, "cpu_s": time.process_time() - c0,
-           "adam_wall_s": adam_wall_s, "adam_device": device, "lbfgs_device": "cpu",
+           "adam_wall_s": adam_wall_s, "adam_cpu_s": adam_cpu_s, "adam_device": device,
+           "lbfgs_device": "cpu",
            "formulation": cfg.formulation, "history": history, "te_dropped": te_dropped,
            "final": final, "weights": weights}
     return pinn, rec

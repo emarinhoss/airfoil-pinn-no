@@ -74,7 +74,8 @@ def staged(tmp_path_factory):
     for k, s in enumerate(paid):
         d = root / "runs/su2/256x97" / s.case_id
         d.mkdir(parents=True)
-        (d / "result.json").write_text(json.dumps({"case_id": s.case_id, "cpu_s": 100.0 + k}))
+        (d / "result.json").write_text(json.dumps({"case_id": s.case_id, "cpu_s": 100.0 + k,
+                                                   "wall_s": 110.0 + k}))
     with h5py.File(root / "data/hdf5/512x193.h5") as f:
         mach = dict(zip(f["test_in"]["case_id"].asstr()[...], f["test_in"]["max_surface_mach"]))
     (root / "results/s1").mkdir(parents=True)
@@ -125,6 +126,16 @@ def test_s2_then_s4(staged, monkeypatch, capsys):
     assert fno["fixed"] == pytest.approx(campaign + tune_cpu + fno_attrs["train_cpu_s"])
     assert fno["fixed_final_fit_only"] == pytest.approx(campaign + fno_attrs["train_cpu_s"])
     assert fno["per"] == pytest.approx(fno_attrs["query_s"]) and fno["train_cost_basis"] == "cpu"
+    # both bases, beside the one the break-even uses (spec 8.2: wall time and CPU time; review 2 F5)
+    campaign_wall = costs["campaign_wall_s"]["896"]
+    assert campaign_wall == pytest.approx(campaign + 10.0 * 18 + 10.0 * 4)  # wall = cpu + 10 here
+    tune_wall = sum(r["wall_s"] for r in tuning["rows"])
+    assert fno["fixed_cpu"] == pytest.approx(campaign + tune_cpu + fno_attrs["train_cpu_s"])
+    assert fno["fixed_wall"] == pytest.approx(
+        campaign_wall + tune_wall + fno_attrs["train_wall_s"])
+    su2 = costs["costs"]["su2"]
+    assert su2["per_cpu"] == su2["per"] and su2["per_wall"] == pytest.approx(su2["per"] + 10.0)
+    assert su2["basis"] == "cpu"
     pod_attrs = h5py.File("runs/predictions/pod-n896.h5").attrs
     assert costs["costs"]["pod"]["fixed_final_fit_only"] == pytest.approx(
         campaign + pod_attrs["fit_cpu_s"])
@@ -146,17 +157,40 @@ def test_s2_then_s4(staged, monkeypatch, capsys):
         s4.main()
 
 
-def test_s4_costs_the_pure_pinn_runs_only():
+def _pinn(variant, wall_s, cpu_s=1.0, grid="256x97", device="mps", cid="test_in-0022", **extra):
+    attrs = {"method": "pinn", "variant": variant, "train_device": device, "adam_device": device,
+             "lbfgs_device": "cpu", "train_wall_s": wall_s, "train_cpu_s": cpu_s, **extra}
+    return (f"pinn-{variant}-{cid}", grid, attrs, {cid: None})
+
+
+def test_s4_costs_the_pure_pinn_runs_only_and_per_phase():
+    # GPU Adam is costed at its wall time and CPU L-BFGS at its CPU time, the scorer's own rule
+    # applied per phase (review 2, F5): 60 + (50 - 20) = 90 and 200 + (150 - 40) = 310
     s4 = _module("s4_score")
-
-    def pinn(variant, wall_s, grid="256x97", **extra):
-        attrs = {"method": "pinn", "variant": variant, "train_device": "mps",
-                 "train_wall_s": wall_s, "train_cpu_s": 1.0, **extra}
-        return (f"pinn-{variant}", grid, attrs, {})
-
+    phase = dict(train_adam_wall_s=60.0, train_adam_cpu_s=20.0)
     contestants = [("su2-256x97", "256x97", {"method": "su2-256x97"}, {}),
-                   pinn("pure", 100.0), pinn("pure", 300.0), pinn("gradnorm", 1e4),
-                   pinn("nokutta", 1e4), pinn("euler", 1e4), pinn("pure", 1e4, grid="128x49"),
+                   _pinn("pure", 100.0, 50.0, **phase),
+                   _pinn("pure", 300.0, 150.0, train_adam_wall_s=200.0, train_adam_cpu_s=40.0),
+                   _pinn("gradnorm", 1e4, **phase), _pinn("nokutta", 1e4, **phase),
+                   _pinn("euler", 1e4, **phase), _pinn("pure", 1e4, grid="128x49", **phase),
                    ("fno-n896-s0", "256x97", {"method": "fno", "variant": ""}, {})]
-    assert s4.pinn_cost(contestants) == {"fixed": 0.0, "per": 200.0}
+    c = s4.pinn_cost(contestants)
+    assert c["fixed"] == 0.0 and c["per"] == 200.0 and c["n_runs"] == 2
+    assert c["per_wall"] == 200.0 and c["per_cpu"] == 100.0
+    assert c["basis"].startswith("per-phase") and "upper bound" not in c["basis"]
+    assert "per_lower" not in c
     assert s4.pinn_cost(contestants[:1] + contestants[3:5]) is None
+
+
+def test_s4_pinn_cost_without_the_adam_cpu_time_is_a_labelled_bracket():
+    # the S3 runs predate adam_cpu_s: the Adam wall time comes from the committed run record, and
+    # the per-phase cost is bracketed: upper adam_wall + cpu, lower cpu (host CPU <= Adam wall)
+    s4 = _module("s4_score")
+    contestants = [("su2-256x97", "256x97", {"method": "su2-256x97"}, {}),
+                   _pinn("pure", 100.0, 50.0)]
+    with pytest.raises(SystemExit, match="adam_wall_s"):
+        s4.pinn_cost(contestants)
+    c = s4.pinn_cost(contestants, records={"pure/test_in-0022": {"adam_wall_s": 60.0}})
+    assert c["per"] == 110.0 and c["per_lower"] == 50.0 and "upper bound" in c["basis"]
+    cpu_only = s4.pinn_cost([contestants[0], _pinn("pure", 100.0, 70.0, device="cpu")])
+    assert cpu_only["per"] == 70.0 and cpu_only["basis"] == "cpu"

@@ -113,6 +113,15 @@ def test_time_steps_and_training_record_their_devices():
     assert next(pinn.net.parameters()).dtype == torch.float64
 
 
+def test_training_records_the_cpu_time_of_its_adam_phase(monkeypatch):
+    # S4 costs a GPU-Adam run per phase (Adam at wall time, L-BFGS at CPU time), which needs the
+    # Adam phase's own process CPU time beside its wall time (final review 2, F5)
+    clock = iter(range(0, 10_000, 5))  # every process_time() call advances 5 s
+    monkeypatch.setattr("apno.models.train_pinn.time.process_time", lambda: float(next(clock)))
+    _, tr = train(_CASE, _tiny(device="cpu"), log=lambda *a: None)
+    assert tr["adam_cpu_s"] == 5.0 and tr["cpu_s"] == 10.0
+
+
 @MPS
 def test_training_on_mps_runs_adam_on_the_gpu_and_lbfgs_on_the_cpu_in_float64():
     cfg = _tiny(device="mps")

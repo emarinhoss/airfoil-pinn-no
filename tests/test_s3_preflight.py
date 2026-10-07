@@ -173,7 +173,8 @@ def test_a_run_records_its_formulation_in_the_prediction_and_the_run_record(s3, 
     from apno.data.predictions import read_predictions
 
     def fake_train(case, cfg):
-        rec = {"wall_s": 1.0, "cpu_s": 1.0, "adam_wall_s": 0.5, "adam_device": "cpu",
+        rec = {"wall_s": 1.0, "cpu_s": 1.0, "adam_wall_s": 0.5, "adam_cpu_s": 0.25,
+               "adam_device": "cpu",
                "lbfgs_device": "cpu", "formulation": cfg.formulation, "final": {}, "weights": {},
                "history": [], "te_dropped": [{"step": 0, "dropped": 7}]}
         return None, rec
@@ -187,6 +188,9 @@ def test_a_run_records_its_formulation_in_the_prediction_and_the_run_record(s3, 
     assert path.name.endswith("_euler.h5")
     _, attrs = read_predictions(path)
     assert attrs["formulation"] == "euler" and attrs["variant"] == "pure"
+    # the per-phase cost S4 needs travels with the prediction and the run record (review 2, F5)
+    assert attrs["train_adam_wall_s"] == 0.5 and attrs["train_adam_cpu_s"] == 0.25
     rec = json.loads(Path("results/s3/pinn_runs_euler.json").read_text())
     assert [r["formulation"] for r in rec.values()] == ["euler"]
+    assert [r["adam_cpu_s"] for r in rec.values()] == [0.25]
     assert [r["te_dropped"] for r in rec.values()] == [[{"step": 0, "dropped": 7}]]

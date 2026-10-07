@@ -196,10 +196,12 @@ def main(argv=None):
             "formulation": cfg.formulation, "seed": cfg.seed,
             "n_train": 0, "train_wall_s": rec["wall_s"], "train_cpu_s": rec["cpu_s"],
             "query_s": rec["wall_s"], "train_device": rec["adam_device"],
-            "adam_device": rec["adam_device"], "lbfgs_device": rec["lbfgs_device"]})
+            "adam_device": rec["adam_device"], "lbfgs_device": rec["lbfgs_device"],
+            "train_adam_wall_s": rec["adam_wall_s"], "train_adam_cpu_s": rec["adam_cpu_s"]})
         record[f"{variant}/{cid}"] = {"formulation": rec["formulation"],
                                       "wall_s": rec["wall_s"], "cpu_s": rec["cpu_s"],
                                       "adam_wall_s": rec["adam_wall_s"],
+                                      "adam_cpu_s": rec["adam_cpu_s"],
                                       "adam_device": rec["adam_device"],
                                       "lbfgs_device": rec["lbfgs_device"],
                                       "final": rec["final"], "weights": rec["weights"],

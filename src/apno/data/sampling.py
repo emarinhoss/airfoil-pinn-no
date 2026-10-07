@@ -53,3 +53,13 @@ def prefix_indices(case_ids, n):
     the first n survivors: those would reach past point n and be costed as if they were n.
     """
     return np.array([k for k, c in enumerate(case_ids) if sobol_index(c) < n], dtype=int)
+
+
+# S5 design §3.1: Wassing, Langer & Bekemeyer's NACA 0012 cases B, C, A, in the fallback order
+S5_VALIDATION = (("B", 0.72, 3.0), ("C", 0.75, 2.0), ("A", 0.70, 4.0))
+
+
+def s5_validation_specs(shape):
+    """The S5 validation cases (NACA 0012: t 0.12, m 0) at `shape`, in the fallback order."""
+    return [CaseSpec(f"s5-val-{tag}", mach, alpha, 0.12, 0.0, shape)
+            for tag, mach, alpha in S5_VALIDATION]

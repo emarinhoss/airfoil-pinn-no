@@ -2,25 +2,37 @@
   "costs": {
     "su2": {
       "fixed": 0.0,
-      "per": 209.8680205
+      "per": 209.8680205,
+      "basis": "cpu",
+      "per_cpu": 209.8680205,
+      "per_wall": 228.13894043749315
     },
     "fno": {
       "fixed": 236237.43589779036,
       "fixed_final_fit_only": 231370.75391666737,
       "per": 0.05359569026668494,
       "train_cost_basis": "wall",
-      "fixed_is": "campaign + 8 tuning runs + final training (fno-n896-s0)"
+      "fixed_is": "campaign + 8 tuning runs + final training (fno-n896-s0)",
+      "fixed_cpu": 232138.55944600035,
+      "fixed_wall": 271503.8838050462
     },
     "pod": {
       "fixed": 229562.03596500037,
       "fixed_final_fit_only": 229229.75727600037,
       "per": 0.00708807889784664,
       "train_cost_basis": "cpu",
-      "fixed_is": "campaign + mode/smoothing search including the final fit (pod-n896)"
+      "fixed_is": "campaign + mode/smoothing search including the final fit (pod-n896)",
+      "fixed_cpu": 229562.03596500037,
+      "fixed_wall": 264575.5930480482
     },
     "pinn": {
       "fixed": 0.0,
-      "per": 20201.294881277834
+      "per": 46122.12504630566,
+      "basis": "per-phase upper bound: Adam wall time (mps) + the run's whole CPU time (the Adam phase's own CPU time was not recorded); per_lower is the run's CPU time, the per-phase cost if the Adam phase's host CPU time equalled its wall time",
+      "per_wall": 20201.294881277834,
+      "per_cpu": 36464.370685833324,
+      "n_runs": 6,
+      "per_lower": 36464.370685833324
     }
   },
   "campaign_cpu_s": {
@@ -30,5 +42,13 @@
     "512": 144874.10217600013,
     "896": 229210.76342400035
   },
-  "break_even_uses": "fixed: campaign + model search + final training, for FNO and POD"
+  "campaign_wall_s": {
+    "64": 46092.38892912993,
+    "128": 59842.18971100083,
+    "256": 87910.11910012591,
+    "512": 163447.87404849596,
+    "896": 264477.2113312562
+  },
+  "break_even_uses": "fixed: campaign + model search + final training, for FNO and POD; per: SU2 CPU time, the PINN per phase (see its basis)",
+  "bases": "per_cpu / per_wall and fixed_cpu / fixed_wall: the same costs on CPU time alone and on wall time alone (the campaign's wall time is summed over its concurrent workers)"
 }

@@ -1,0 +1,13 @@
+test_in-0022: M 0.3605 alpha 2.190 t 0.1401 m 0.0022; device mps; te_exclusion 0.02 kutta_delta 0.055
+resample at 0: dropped 225 of 20000
+/tmp/t26/probe_task26.py:41: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /Users/runner/miniforge3/conda-bld/libtorch_1786372171945/work/torch/csrc/autograd/generated/python_variable_methods.cpp:823.)
+  print(f"step {step:5d} t={time.time()-t0:5.0f}s res {float(L['residual']):.3e} "
+step     0 t=    1s res 9.122e+00 wall 9.009e-01 kutta 7.30e-02 Gamma +0.0000 | wall Cp L2 0.918 max 10.599 Cp_min -9.410 (SU2 -0.942)
+resample at 1000: dropped 197 of 20000
+step  1000 t=  191s res 9.910e-02 wall 6.012e-02 kutta 1.66e-05 Gamma +0.0123 | wall Cp L2 0.410 max 1.193 Cp_min -0.158 (SU2 -0.942)
+resample at 2000: dropped 212 of 20000
+step  2000 t=  385s res 4.257e+00 wall 5.563e-02 kutta 2.79e-03 Gamma +0.0147 | wall Cp L2 0.450 max 1.771 Cp_min -0.777 (SU2 -0.942)
+resample at 3000: dropped 211 of 20000
+step  3000 t=  580s res 7.771e-02 wall 3.600e-02 kutta 2.31e-06 Gamma +0.0177 | wall Cp L2 0.387 max 1.163 Cp_min -0.773 (SU2 -0.942)
+SENTINEL

@@ -89,12 +89,15 @@ def aggregate_physics(rows):
         formulation = key[-1] or "euler"
         ok = [s["physics"] for s in scores if s["status"] == "ok"]
         g["n_ok"] = len(ok)
+        # entropy is undefined on a case with rho <= 0 or p <= 0 somewhere in the near field: its
+        # statistics are over the cases where it is defined, and this counts the others
+        g["n_nonpositive_state"] = sum(p.get("n_nonpositive", 0) > 0 for p in ok)
         skip = BY_CONSTRUCTION.get((g["method"], formulation), ())
         for m in PHYSICS:
             if m in skip:
                 g[f"{m}_median"] = g[f"{m}_max"] = BY_CONSTRUCTION_CELL
             else:
-                g.update(_stats(m, [p[m] for p in ok]))
+                g.update(_stats(m, [p[m] for p in ok if p[m] is not None]))
         lines = sorted({j for p in ok for j in p["mass_flux"]})
         for k, j in enumerate(lines):
             g.update(_stats(f"mass_flux_line{k}", [abs(p["mass_flux"][j]) for p in ok]))
@@ -111,7 +114,8 @@ def break_even(costs, n_max):
 SHOCK_METRICS = ("n_supercritical", "n_scored", "n_true_shocks", "n_missed", "abs_x_err_median",
                  "abs_x_err_max", "mach_ahead_err_median", "mach_ahead_err_absmax",
                  "overshoot_median", "overshoot_max")
-PHYSICS_METRICS = ("n_ok",) + tuple(f"{m}_{s}" for m in PHYSICS for s in ("median", "max")) + \
+PHYSICS_METRICS = ("n_ok", "n_nonpositive_state") + \
+    tuple(f"{m}_{s}" for m in PHYSICS for s in ("median", "max")) + \
     tuple(f"mass_flux_line{k}_{s}" for k in range(4) for s in ("j", "median", "max"))
 
 

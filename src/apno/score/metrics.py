@@ -72,13 +72,19 @@ def _mass_flux(q, X, Y, j):
 
 
 def physics_checks(q, X, Y, mach, near, flux_lines=FLUX_LINES):
+    """Entropy is undefined where a prediction has rho <= 0 or p <= 0: if any near-field node does,
+    both entropy checks are None (not NaN) and n_nonpositive counts those nodes."""
     w = node_areas(X, Y)[near]
-    s = entropy(q[..., 0], q[..., 3])[near]
+    rho, p = q[..., 0][near], q[..., 3][near]
+    n_bad = int(np.sum((rho <= 0) | (p <= 0)))
+    s = entropy(rho, p) if n_bad == 0 else None
     h = total_enthalpy_ratio(*(q[..., k] for k in range(4)), mach)[near]
     n = vertex_normals(X[:, 0], Y[:, 0])
     n = n / np.linalg.norm(n, axis=1, keepdims=True)
     un = q[:, 0, 1] * n[:, 0] + q[:, 0, 2] * n[:, 1]
-    return {"entropy_max": float(np.max(s)), "entropy_mean": float(np.sum(w * s) / np.sum(w)),
+    return {"entropy_max": None if s is None else float(np.max(s)),
+            "entropy_mean": None if s is None else float(np.sum(w * s) / np.sum(w)),
+            "n_nonpositive": n_bad,
             "enthalpy_max_dev": float(np.max(np.abs(h - 1))),
             "wall_normal_rms": float(np.sqrt(np.mean(un * un))),
             "mass_flux": {j: _mass_flux(q, X, Y, j) for j in flux_lines}}

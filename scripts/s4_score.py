@@ -168,7 +168,9 @@ def main():
         "surface with no supersonic compression.\n\n"
         + markdown_table(shock_groups, SHOCK_METRICS) + "\n\n## Physics checks\n\n"
         "'by construction' marks a check the contestant satisfies identically (spec 8.2): it is "
-        "not counted as a pass. Mass flux is |net flux| through closed grid line j.\n\n"
+        "not counted as a pass. Mass flux is |net flux| through closed grid line j. "
+        "n_nonpositive_state counts cases with rho <= 0 or p <= 0 somewhere in the near field: "
+        "entropy is undefined there, so the entropy columns are over the other cases only.\n\n"
         + markdown_table(physics_groups, PHYSICS_METRICS) + "\n")
 
     # costs, in seconds

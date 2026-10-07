@@ -118,3 +118,18 @@ def test_missing_and_nonfinite_predictions():
     bad = q.copy()
     bad[3, 4, 1] = np.nan
     assert score_case(bad, q, X, Y, 0.6, 2.0, "subcritical") == {"status": "non-finite"}
+
+
+def test_nonpositive_state_leaves_entropy_undefined_and_is_counted():
+    """A prediction with p <= 0 or rho <= 0 has no entropy: undefined (None), never NaN, with the
+    offending near-field nodes counted so the table can say how many cases it could not score."""
+    q = _free()
+    q[10:13, 2:4, 3] = -0.1  # 6 near-field nodes with negative pressure
+    q[20, 2, 0] = -0.05  # and one with negative density
+    with np.errstate(all="raise"):
+        s = score_case(q, _free(), X, Y, 0.6, 2.0, "subcritical")["physics"]
+    assert s["entropy_max"] is None and s["entropy_mean"] is None
+    assert s["n_nonpositive"] == 7
+    assert np.isfinite(s["enthalpy_max_dev"])
+    clean = score_case(_free(), _free(), X, Y, 0.6, 2.0, "subcritical")["physics"]
+    assert clean["n_nonpositive"] == 0 and clean["entropy_max"] is not None

@@ -84,3 +84,15 @@ def test_markdown_table_formats_and_leaves_missing_cells_empty():
     assert lines[0].startswith("| method | variant | grid |") and len(lines) == 4
     assert "| fno |" in lines[2] and "0.2 |" in lines[2]
     assert lines[3].endswith("|  |  |  |  |")  # the pod group has no ok case
+
+
+def test_physics_entropy_skips_undefined_cases_and_counts_them():
+    bad = dict(_phys(), entropy_max=None, entropy_mean=None, n_nonpositive=12)
+    good = dict(_phys(), n_nonpositive=0)
+    (g,) = aggregate_physics([_sup("pod", {}, bad), _sup("pod", {}, good)])
+    assert g["n_ok"] == 2 and g["n_nonpositive_state"] == 1
+    assert g["entropy_max_median"] == g["entropy_max_max"] == 1e-3
+    assert np.isclose(g["enthalpy_max_dev_max"], 1e-3)
+    assert "n_nonpositive_state" in PHYSICS_METRICS
+    md = markdown_table([g], PHYSICS_METRICS)
+    assert "nan" not in md

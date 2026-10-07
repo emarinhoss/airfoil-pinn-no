@@ -1,0 +1,34 @@
+{
+  "costs": {
+    "su2": {
+      "fixed": 0.0,
+      "per": 209.8680205
+    },
+    "fno": {
+      "fixed": 236237.43589779036,
+      "fixed_final_fit_only": 231370.75391666737,
+      "per": 0.05359569026668494,
+      "train_cost_basis": "wall",
+      "fixed_is": "campaign + 8 tuning runs + final training (fno-n896-s0)"
+    },
+    "pod": {
+      "fixed": 229562.03596500037,
+      "fixed_final_fit_only": 229229.75727600037,
+      "per": 0.00708807889784664,
+      "train_cost_basis": "cpu",
+      "fixed_is": "campaign + mode/smoothing search including the final fit (pod-n896)"
+    },
+    "pinn": {
+      "fixed": 0.0,
+      "per": 20201.294881277834
+    }
+  },
+  "campaign_cpu_s": {
+    "64": 41408.062564,
+    "128": 53933.90792900001,
+    "256": 79696.86830100001,
+    "512": 144874.10217600013,
+    "896": 229210.76342400035
+  },
+  "break_even_uses": "fixed: campaign + model search + final training, for FNO and POD"
+}

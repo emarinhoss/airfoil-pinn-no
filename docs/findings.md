@@ -666,8 +666,8 @@ the floor at every n and is still falling at 896:
 
 (The campaign column is `campaign_cpu_s[n] / su2.per`; every n pays for all 128 validation cases.) A
 smaller training set would break even sooner — about 199 cases at n = 64, which is arithmetic on
-these figures, not a measured curve — but at 7.6x the floor rather than 3.4x. Command for the table:
-mean of `score['near_field_rel_l2']` over the `rows` with that `tag`, `grid` 256x97, `split` test_in.
+these figures, not a measured curve — but at 7.6x the floor rather than 3.4x. Command for the table (prints the mean per tag and the case count):
+`python -c "import json,collections as c; R=json.load(open('results/s4/scores.json'))['rows']; d=c.defaultdict(list); [d[r['tag']].append(r['score']['near_field_rel_l2']) for r in R if r['grid']=='256x97' and r['split']=='test_in']; [print(t, sum(v)/len(v), len(v)) for t,v in sorted(d.items())]"`.
 
 **Prediction 3 — "Without the Kutta condition, the PINN's residuals will look acceptable while its
 lift is wrong." PARTLY.** On test_in-0022 (subcritical, SU2 CL 0.3192): `nokutta` final residual loss
@@ -804,8 +804,8 @@ These are the scale against which the contestants' checks below are read.
   worst 5,770; FNO n = 64 worst 543 at 256x97). No method has one in range.
 - **Entropy decrease:** the subcritical near-field mean entropy is **below free stream** on 9-24 of 37
   cases for the FNO (9 for the n = 896 seed-0 run; 16 and 19 for seeds 1 and 2) and 10-23 of 37 for
-  POD, against 0 of 37 for SU2 at either grid. Command: count `rows` with `regime` subcritical,
-  `grid` 256x97 and `score['physics']['entropy_mean'] < 0`, by tag. That is an unphysical entropy
+  POD, against 0 of 37 for SU2 at either grid. Command (counts per tag; tags with no case are absent):
+  `python -c "import json,collections as c; R=json.load(open('results/s4/scores.json'))['rows']; d=c.Counter(r['tag'] for r in R if r['regime']=='subcritical' and r['grid']=='256x97' and (r['score'].get('physics') or {}).get('entropy_mean',0)<0); print(sorted(d.items()))"`. That is an unphysical entropy
   decrease somewhere in the field, but it is **not an expansion-shock test**: the scorer has no
   check for an entropy decrease across a compression, so whether any surrogate predicts an expansion
   shock is **not measured**. For the potential PINN entropy is identically constant, so an expansion

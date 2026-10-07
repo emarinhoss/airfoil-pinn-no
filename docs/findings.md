@@ -560,11 +560,14 @@ subcritical), test_in-0004 (1.206, supercritical), test_in-0031 (1.377, supercri
 test_in-0040 (1.610, supercritical). Three subcritical, three supercritical (`results/s1/showcase.json`).
 
 **Machine sleeps.** The machine entered sleep repeatedly during the campaign; `pmset` shows "Entering
-Sleep state due to 'Dark Wake Thermal Emergency'" (lid closed / dark wake), at least on 2026-10-02 and
+Sleep state due to 'Dark Wake Thermal Emergency'" (a thermal sleep; pmset does not show whether the lid
+was closed, and an earlier "(lid closed / dark wake)" here was the ledger's guess), at least on 2026-10-02 and
 again twice before 05:36 on the same night. Throughput fell from about 120 to about 19 cases per hour
 overnight while per-case wall time was unchanged (median 197 s at that point), so the sleeps paused the
 campaign rather than slowing the solver. The mitigation was `caffeinate -i -s -m -w <run_s1 pid>`,
 which keeps the machine from idle or system sleep; awake throughput was then about 90 cases per hour.
+It cannot override a closed lid or a thermal emergency (controller's ledger): sleeps recurred despite it
+after S1 ended, on 2026-10-05 and 2026-10-06 (controller's ledger).
 The campaign is resumable, so the pauses cost time only.
 *(Commands added 2026-10-06, second final review.)* The sleeps:
 `pmset -g log | grep "Entering Sleep" | awk '$1"T"$2 >= "2026-10-01T22:35" && $1"T"$2 <= "2026-10-02T20:53"'`
@@ -697,10 +700,14 @@ non-finite prediction on any case (`n_missing` and `n_non-finite` are 0 in every
 ### The three predictions
 
 **Prediction 1 — "For a single new case, SU2 beats the PINN on cost by one to two orders of
-magnitude." HELD.** `costs.json`: PINN per case 20,201.3 s (mean wall time of the six `pure` runs,
+magnitude." HELD ON WALL TIME ONLY; NOT HELD on CPU time or per phase** (verdict restated in place
+2026-10-06, controller, after the second final review: the bold "HELD." that stood here rested on
+one cost basis; see the note below and the corrections entry at the end). `costs.json`, key `per_wall`
+(written as `per` by the first S4 run): PINN per case 20,201.3 s (mean wall time of the six `pure` runs,
 5.61 h) against SU2 per case 209.87 s (median CPU time of the 256x97 test cases): **96.3x**, 1.98
 orders. On CPU time instead (mean 36,464 s per `pure` run, from `results/s3/pinn_runs_shard*of2.json`)
-it is 174x, 2.24 orders, just outside the band; the prediction holds on the basis S4 costs it at, and
+it is 174x, 2.24 orders, just outside the band; the first S4 run held the prediction on its own basis
+(superseded: that basis charges the CPU L-BFGS phase at wall time), and
 the mixed hardware of point 4 above is what separates the two figures. The ratio is for an answer of
 very different quality: the PINN's near-field error is 0.52-0.63 against the floor's 0.008-0.024
 (table below). Command (on the re-written `costs.json`, where the PINN's wall time is `per_wall`):
@@ -999,8 +1006,11 @@ projected at 35.2 h serial.
 Spec §8.2 asks for wall time and CPU time. `costs.json` now holds both for every method, and the
 PINN's per-phase cost — its Adam phase on the GPU at wall time, its L-BFGS phase on the CPU at CPU
 time, S4's own rule — is a bracket, because the S3 runs did not record the Adam phase's CPU time:
-the upper bound counts all of a run's CPU time as L-BFGS time, the lower bound (`per_lower`) assumes
-the Adam phase's host CPU time equalled its wall time.
+the upper bound counts all of a run's CPU time as L-BFGS time, and `per_lower` assumes the Adam
+phase's host CPU time equalled its wall time. *(Qualified 2026-10-06, controller: `per_lower` is a
+lower bound only if that host CPU time never exceeds the wall time, which a multithreaded host
+(`OMP_NUM_THREADS=6`) does not guarantee; the measured fraction 0.346 sits inside the bracket, so no
+verdict depends on it. `scripts/s4_score.py` and `costs.json` still call it a lower bound.)*
 
 | basis | PINN per case, s | SU2 per case, s | ratio | orders | prediction (one to two) |
 |---|---|---|---|---|---|
@@ -1008,7 +1018,7 @@ the Adam phase's host CPU time equalled its wall time.
 | PINN wall / SU2 CPU (the S4 entry's) | 20,201.3 | 209.87 (median CPU) | 96.3x | 1.98 | held |
 | CPU / CPU | 36,464.4 | 209.87 | 173.7x | 2.24 | not held |
 | per phase, upper bound | 46,122.1 | 209.87 | 219.8x | 2.34 | not held |
-| per phase, lower bound | 36,464.4 | 209.87 | 173.7x | 2.24 | not held |
+| per phase, host fraction 1 (`per_lower`) | 36,464.4 | 209.87 | 173.7x | 2.24 | not held |
 | per phase, measured host fraction 0.346 | 42,783.4 | 209.87 | 203.9x | 2.31 | not held |
 
 Command: `python -c "import json,glob,math; c=json.load(open('results/s4/costs.json'))['costs']; p,s=c['pinn'],c['su2']; R={}; [R.update(json.load(open(f))) for f in glob.glob('results/s3/pinn_runs_shard*of2.json')]; aw=sum(r['adam_wall_s'] for k,r in R.items() if k.startswith('pure/'))/6; ph=p['per']-0.3457*aw; [print(n, round(a,1), round(b,2), round(a/b,1), round(math.log10(a/b),2)) for n,a,b in [('wall/wall',p['per_wall'],s['per_wall']),('mixed',p['per_wall'],s['per_cpu']),('cpu/cpu',p['per_cpu'],s['per_cpu']),('phase upper',p['per'],s['per_cpu']),('phase lower',p['per_lower'],s['per_cpu']),('phase f=0.346',ph,s['per_cpu'])]]"`.

@@ -70,8 +70,8 @@ al. (their §II and Table VII) except where §2.6 says otherwise.
   column at i = 512 holding the same physical points as i = 0, for the periodicity term. The 256x97
   scoring nodes are every second node, so predictions need no interpolation.
 - **Loss** (their Eqs. 8, 12, 13): L = λ_res L_res + L_∞ + L_af + L_lr, with
-  - L_res = (1/N) Σ_n w_n |R_n + D_n|², the residual R of the four equations plus the viscous term
-    D (§2.4), over the nodes of the current mini-batch; w_n is the node's dual-cell area normalised to
+  - L_res = (1/N) Σ_n w_n |R_n − D_n|², the residual R of the four equations minus the viscous term
+    D (§2.4; the dissipative sign — see the note there), over the nodes of the current mini-batch; w_n is the node's dual-cell area normalised to
     mean 1 over the grid (`apno.score.metrics.node_areas`), the volume weighting they adopt;
     **λ_res = 2·10⁴**;
   - L_∞ = mean over the outer row (j = 192) of |q̂ − w∞|², in primitive variables;
@@ -88,7 +88,10 @@ al. (their §II and Table VII) except where §2.6 says otherwise.
 
 ### 2.4 Artificial viscosity
 
-- D(W) = μ_x ∂²W/∂x² + μ_y ∂²W/∂y² (their Eq. 14), active on the **density and energy equations
+- D(W) = μ_x ∂²W/∂x² + μ_y ∂²W/∂y² (their Eq. 14), entering the residual as ∇·F − D. *(Corrected
+  2026-10-07, while writing the plan: the first version wrote R + D after their Eq. 13, which with
+  their Eq. 14 is anti-dissipative; ∇·F − D is the dissipative steady form ∇·F = ∇·(μ∇W) and is read
+  as their intent.)* D is active on the **density and energy equations
   only** (the selector I_{ρ,ρE} = diag(1, 0, 0, 1)), with **ν = 1.9·10⁻³**:
   - **matrix form** (their model V, the default): μ_x = ν s I_{ρ,ρE} |A|, μ_y = ν s I_{ρ,ρE} |B|, where
     |A| = T|Λ|T⁻¹ of the flux Jacobian ∂F_x/∂W (likewise B), from the closed form of Swanson & Turkel
@@ -175,8 +178,9 @@ If none passes, S5 stops after step 1; all four are recorded as results and the 
 
 ### 3.5 Records and the stated limitation
 
-- `results/s5/gate.json`: per configuration, the metrics, final losses, iteration counts, line-search
-  failures, wall and CPU time, devices, the git commit and the command line.
+- `results/s5/gate.json`: per configuration, the metrics, final losses, function-evaluation counts,
+  stalled outer iterations (whose loss did not fall; PyTorch's L-BFGS does not report line-search
+  failures, so this is the measurable proxy), wall and CPU time, devices, the git commit and the command line.
 - Prediction files go to **`runs/predictions_s5/`**, never `runs/predictions/`: S4's scorer reads
   every file there, so mixing them would change any re-run of S4.
 - **Limitation:** one seed per configuration (they averaged four), because of cost.
@@ -285,8 +289,9 @@ any S5 run**, and never edited afterwards; the author may change them before the
 
 - Before any PINN run, every planned run — T1–T4, A1–A6b, the six step-3 cases — is timed on its own
   case for a few L-BFGS iterations (Adam steps for A3), and its wall time projected as an **upper
-  bound**: epochs × batches × max_iter × measured seconds per iteration — for R, 40 × 20 × 1,000 =
-  800,000 iterations — because L-BFGS often stops well before max_iter; the bound will be large, and
+  bound**: epochs × batches × max_eval × measured seconds per closure — for R, 40 × 20 × 1,250 =
+  1,000,000 closures, max_eval being PyTorch's hard limit per outer iteration — because L-BFGS often
+  stops well before it; the closure is timed with the viscous term forced on everywhere; the bound will be large, and
   is replaced by the re-projection from R's measured run below.
 - Written to `results/s5/preflight.json`; the stage **refuses to start (exit 3)** when the projection
   for the unfinished runs **of the current phase** exceeds `--budget-hours` (default **72**). The check
@@ -309,8 +314,8 @@ any S5 run**, and never edited afterwards; the author may change them before the
 - A non-finite loss stops the run; it is recorded as **diverged** with the outer iteration, the batch
   and the reason, and writes no prediction file; it counts as a gate failure, or as "needed" in the
   ablation.
-- A failed L-BFGS line search ends that outer iteration and moves to the next batch; the count is
-  recorded.
+- An outer iteration whose loss does not fall is counted as **stalled** and training moves to the
+  next batch; the count is recorded.
 - An interrupted run restarts from scratch; finished prediction files are skipped (S3's resume rule).
 - No record is overwritten; file names carry the formulation (`pinn-euler_av-<arm or case>.h5`).
 - SU2 non-convergence on the validation case: the fallback order of §3.1.

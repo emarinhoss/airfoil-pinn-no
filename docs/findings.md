@@ -1193,3 +1193,21 @@ How this bears on what this study found:
 4. **Cost.** Their 30-45 min per non-parametric case is 7-11 times shorter than the 5.6 h mean
    `pure` run here, on unstated, different hardware. Both studies find a per-case PINN slower than
    CFD.
+
+## 2026-10-07 — S5 predictions, recorded before any S5 code or run
+
+Stage S5 (`docs/superpowers/specs/2026-10-07-s5-euler-pinn-av-design.md`, approved by the author
+on 2026-10-07): an Euler PINN built to Wassing, Langer & Bekemeyer's recipe, gated on their NACA 0012
+case B against SU2, ablated one ingredient at a time, and compared with the FNO on three in-range and
+three extrapolation cases. These predictions are recorded before any S5 code exists or any S5 run,
+and are never edited afterwards; outcomes are appended below them.
+
+- **P4.** Recipe R passes the gate (RMAE of Cp and of local Mach each ≤ 1 % against SU2 at 512x193)
+  within the four tuning configurations T1-T4.
+- **P5.** Reverting the residual weighting (A1) breaks R; reverting the input encoding (A4) or the
+  collocation (A5) does not. R on the cylinder at M 0.1 (A6a) fails or collapses: the Mach range is
+  part of why this study's Euler PINN failed.
+- **P6.** On the three extrapolation cases the new PINN degrades less than the FNO (a smaller
+  degradation factor: mean extrapolation near-field ratio to the floor over mean in-range ratio),
+  but its mean in-range near-field ratio to the floor stays above the FNO's at 256x97.
+- **P7.** Per case, the new PINN still costs at least 10x SU2's CPU time.

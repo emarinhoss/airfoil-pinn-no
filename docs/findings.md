@@ -677,7 +677,19 @@ figure below is read from those files; the per-case figures come from `scores.js
    from SU2.
 2. **Its airfoil runs use the trailing-edge fixes of 2026-10-05** (quarter-chord vortex angle,
    0.02-chord residual exclusion, equal-speed Kutta condition), **and its lift is under-predicted**
-   because none of the Kutta formulations tried constrains the circulation (2026-10-05 entry). That
+   and the equal-speed Kutta term is met (~1e-6) at a circulation far below the Kutta value
+   (2026-10-05 entry). *(Corrected in place 2026-10-06, controller, from "because none of the Kutta
+   formulations tried constrains the circulation", which is true of the first, (∂φ/∂ξ)² form and false
+   of the equal-speed one: on an exact incompressible flat-plate (Joukowski) flow at α 2.19°, the
+   equal-speed quantity |u|²(upper) − |u|²(lower) at 0.03 chord upstream of the TE is −0.421 at Γ = 0,
+   −0.277 at Γ = 0.0387 (the `pure`/0022 value) and +0.027 at the Kutta value Γ = π sin α = 0.120, so a
+   wrong-Γ potential flow pays ~100x the penalty of the right one. A network meeting the term at the
+   wrong Γ is therefore not a potential-flow solution near the TE; whether the network's
+   representation, the 0.02-chord exclusion or both is the cause is not isolated here (the 0.005-chord
+   probes, `runs/probe_eqk_excl005_d*.log`, gave Γ ≈ 0.011 at 4,000 steps, no better, but they lost the
+   suction peak altogether, Cp_min ≈ −0.07 against −0.942, so they are a weak comparator). Found by the second final
+   review's verifier; command:
+   `python -c "import numpy as np; al=np.radians(2.19); a=0.25; th=np.arccos(0.94); f=lambda G,t: abs((np.exp(-1j*al)-a*a*np.exp(1j*al)/(a*np.exp(1j*t))**2+1j*G/(2*np.pi*a*np.exp(1j*t)))/(1-np.exp(-2j*t)))**2; [print(G, f(G,th)-f(G,-th)) for G in (0, 0.0387, np.pi*np.sin(al))]"`.)* That
    entry's "about 8x" on test_in-0022 was Γ ≈ 0.02 against CL/2 ≈ 0.16 at 3,000 Adam steps; at the end
    of the run S4 measures CL 0.0732 against SU2's 0.3192, **4.4x too small**. Both are measurements,
    at different points of the run.

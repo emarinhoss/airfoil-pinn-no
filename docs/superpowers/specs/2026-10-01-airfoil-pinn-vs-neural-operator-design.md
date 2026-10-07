@@ -669,3 +669,15 @@ spec is left open. Review them.
   j = 8, 24, 48 and 72; the shock-location and overshoot rules; the integrator's 1 × 10⁻⁶ agreement
   with SU2 (§8).
 - Prediction 3, about the Kutta condition, written as a prediction here for the first time (§8.5).
+
+---
+
+## 12. Stage S5, 2026-10-07: an Euler PINN with localised artificial viscosity
+
+Added by the author's decision of 2026-10-07, after S4 and after reading Wassing, Langer & Bekemeyer
+(`docs/findings.md`, 2026-10-07). Designed in
+`docs/superpowers/specs/2026-10-07-s5-euler-pinn-av-design.md`: a PINN built to their recipe is
+validated against SU2 on one of their NACA 0012 cases, its ingredients are reverted one at a time to
+find which rescues this study's Euler PINN, and it is compared with the FNO on three in-range and
+three extrapolation cases. S0–S4 and their records are unchanged; S5's scoring, truth and floor are
+S4's.

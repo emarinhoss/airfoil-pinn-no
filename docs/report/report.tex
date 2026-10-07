@@ -1301,7 +1301,67 @@ A per-case PINN costs between 88 and 220 SU2 solutions, depending on how GPU and
 counted. At this problem size a forward-mode PINN is a learning exercise, not a solver; its
 strengths lie in inverse problems and sparse data, which this study did not test.
 
-\paragraph{Limitations.}
+\subsection{What the comparison does and does not show}
+\label{sec:scope}
+
+The results invite the conclusion that neural operators suit aerodynamics better than PINNs. The
+study supports a narrower one. \emph{For many-query prediction inside a well-sampled design space,
+when the CFD campaign can be paid for, a data-trained surrogate is the better tool, and a per-case
+PINN is not competitive even with the CFD it would replace.} On that task the margin is wide:
+\begin{itemize}
+  \item in range, the FNO's near-field error is 1.3--5.3 times the floor, against 26--65 times for
+    the PINN, whose lift is 64--101\,\% low on five of six cases (\cref{tab:results,tab:pinncl});
+  \item a new case costs 0.054\,s with the FNO, against 5.6\,h with the PINN, which is 88--220 SU2
+    runs (\cref{tab:costs}).
+\end{itemize}
+
+Five things keep this from being a general verdict on the two families.
+\begin{enumerate}
+  \item \textbf{The contestants answered different questions.} The FNO learned from 881 SU2
+    solutions, about 64 CPU-hours of CFD. The PINN was given no data at all. A PINN solving one
+    forward case that CFD already solves well is the PINN's least favourable use, which is why P1
+    was predicted.
+  \item \textbf{This study's PINN is not the state of the art.} The Euler PINN of Wassing, Langer and
+    Bekemeyer~\cite{wassing2025} reaches 0.3--0.4\,\% Cp error on transonic NACA\,0012 cases, in
+    30--45\,min per case, with no explicit Kutta condition. The accuracy of the PINN here says more
+    about the formulations tried than about PINNs. Even so, they reach the same conclusion on cost:
+    a PINN does not currently beat CFD for a single forward case.
+  \item \textbf{The operator's win is narrower than it looks.}
+    \begin{itemize}
+      \item It repays its training only after 1,126 new cases; for fewer, running SU2 is cheaper
+        (\cref{fig:breakeven}).
+      \item POD, a linear baseline, beats it on in-range subcritical cases at $256\times97$. The FNO
+        clearly earns its complexity only on supercritical cases, where shocks move with the inputs.
+      \item Outside the training range it fails: 3.6 times the floor, with drag errors up to 181
+        counts, biased rather than scattered.
+      \item Its shocks are smeared, and its subcritical near-field entropy falls below free stream on
+        9--24 of 37 cases, which SU2's never does.
+    \end{itemize}
+  \item \textbf{This is the easy end of aerodynamics.} The problem is two-dimensional, steady and
+    inviscid, one family of sections with four inputs, on one structured grid. Practical
+    aerodynamics is three-dimensional, viscous and turbulent, over varied geometry. There each
+    training solution costs hours, a thousand of them is a real expense, and an operator must
+    generalise across shapes and meshes. None of that was tested.
+  \item \textbf{The settings where PINNs are argued to be strong were not tested.} These are
+    inverse problems, sparse measurements such as surface pressure taps, and parametric PINNs: one
+    network trained across a range of inputs from the equations alone. The parametric network of
+    Wassing et al.\ answers in 35\,ms after 1.5--2.75\,h of training. It amortises its cost the way
+    an operator does, without needing a CFD campaign. Physics-informed neural operators, which add
+    the equation residual to an operator's training, were left as an extension.
+\end{enumerate}
+
+Which approach suits a given aerodynamic task therefore depends on three questions that this study
+answers for only one setting:
+\begin{itemize}
+  \item how many queries are needed (against the break-even of \cref{eq:breakeven});
+  \item whether the queries stay inside the sampled range;
+  \item whether training data can be afforded at all.
+\end{itemize}
+All the accuracy figures are also relative to SU2 at $512\times193$, which on the anchor case is
+itself 6--8\,\% low in lift (\cref{tab:vj}). That leaves the ranking unchanged but limits any claim
+about absolute accuracy.
+
+\subsection{Limitations}
 \begin{itemize}
   \item The costs mix hardware: SU2 and POD on the CPU, the FNO on the Apple GPU, and the PINN on
     both.

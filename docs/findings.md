@@ -258,6 +258,13 @@ cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
   0.004 where potential flow gives 2.0, Cp 0.937 everywhere (stagnation), free stream reached only at
   the outer boundary. Mass and momentum are conserved to 1e-5 for r < 2 but violated in the far
   field: closed-line mass flux −0.13 and x-momentum flux −0.42 at r 25-50.
+  *Correction (2026-10-06, second final review):* the paths cited above now hold the potential
+  formulation's warm-up PASS (2026-10-05; see the 2026-10-06 S3a entry at the end). This Euler
+  record is `results/s3/warmup_euler_2026-10-02.json` and `results/s3/warmup_euler_2026-10-02.log`
+  (exit 1, `max_cp_error` 3.937, `wall_s` 27,550), with its field in
+  `runs/warmup_q_euler_2026-10-02.npy` (renamed by the controller before the potential run). The
+  command that runs this formulation is now `python scripts/s3_warmup.py --formulation euler`; it
+  writes `warmup_euler.json` and `runs/warmup_q_euler.npy`, and refuses to overwrite either.
 - **Five hypotheses, each refuted** by a throwaway probe (scripts in `runs/warmup_probe*.py`, logs
   in `runs/probe*.log`; not committed). Each trained the cylinder warm-up configuration (or the
   showcase airfoil) with Adam for 6,000-8,000 steps from seed 0 and printed the shoulder wall speed
@@ -354,9 +361,14 @@ host process's CPU time while it drove the GPU, not a CPU-training cost. POD ran
 | **tune-6** | 48 | 24 x 8 | **0.02214** | 100 | 793 | 302 |
 | tune-7 | 48 | 24 x 12 | 0.02345 | 100 | 859 | 315 |
 
-Width separates the configurations (0.031 at 32 against 0.022-0.023 at 48); the mode counts within a
-width differ by less than the seed-to-seed spread seen below (0.0118-0.0127 at 300 epochs), so the
-choice of `tune-6` over `tune-5` (0.5 % apart) is not a strong one.
+Width separates the configurations (0.031 at 32 against 0.022-0.023 at 48). Within a width the mode
+counts spread the best validation loss by 0.0007 at width 32 (0.03083-0.03154) and 0.0013 at width 48
+(0.02214-0.02345); the seed-to-seed spread of the final runs below is 0.00097 (0.011775-0.012744), but
+at 300 epochs, and no seed spread was measured at the tuning's 100 epochs. So the mode count moves the
+loss by about as much as a change of seed might, and the choice of `tune-6` over `tune-5` (0.5 %
+apart) is not a strong one. *(Corrected 2026-10-06, second final review: this said the mode counts
+"differ by less than the seed-to-seed spread", which is false at width 48.)* Command:
+`python -c "import json; R=json.load(open('results/s2/tuning.json'))['rows']; F=json.load(open('results/s2/runs.json')); [print(w, min(v:=[r['best_val'] for r in R if r['tag'] in t]), max(v), max(v)-min(v)) for w,t in ((32,('tune-0','tune-1','tune-2','tune-3')),(48,('tune-4','tune-5','tune-6','tune-7')))]; s=[r['best_val'] for r in F if r['tag'] in ('fno-n896-s0','fno-n896-s1','fno-n896-s2')]; print('seeds', min(s), max(s), max(s)-min(s))"`.
 
 **Final runs (selected configuration, 300 epochs, patience 30).** Validation is relative L2 on the
 standardised-target validation split.
@@ -418,9 +430,14 @@ cosine-clustered map has x_ξ = y_ξ = 0 at the TE, so |∇ξ| ~ 1/√r there; t
 with Θ = ξ and 8e-3 with the quarter-chord vortex angle Θ_v. Measured through the map at
 ξ ∈ {1e-4, 1e-3}, η ∈ {0, 1e-4}: |∇ξ| = 11,191 / 4,882 / 993 / 891, against |∇Θ_v| = 0.2122 at all
 four (the analytic 1/(2π · 0.75)). (b) The network term's second derivatives are singular at the sharp
-corner whatever its input features, as the true corner flow is. The S3 shards started on the §7.8
-code thrashed (residual 150-1000, wall loss 5-110 after 11,000 Adam steps) and were stopped
-(`results/s3/shard*_stopped_te_singularity.log`).
+corner whatever its input features, as the true corner flow is. Of the three S3 shards started on
+the §7.8 code (`results/s3/shard*_stopped_te_singularity.log`), two trained and thrashed and were
+stopped: on shard 0 (base variant, test_in-0022) the residual stayed between 67 and 995 and the wall
+loss between 4.7 and 122 from Adam step 500 to step 12,000, the last logged (residual 98.0); on
+shard 2 (test_in-0043) between 26 and 472 and 4.2 and 386 to step 8,500 (residual 165). Shard 1 never
+trained: its preflight projected 1,202.8 h against a 1,000 h budget and it refused, exit 3. Command:
+`python -c "import ast; [print(f, d['step'], round(d['residual'],1), round(d['wall'],2)) for f in ('shard0','shard2') for l in open(f'results/s3/{f}_stopped_te_singularity.log') if l.startswith('adam') for d in [ast.literal_eval(l.split(': ',1)[1])]]"`. *(Corrected 2026-10-06, second final review: this said "residual 150-1000, wall loss
+5-110 after 11,000 Adam steps" for all three shards.)*
 
 **The fix that trains.** Θ_v = 1 − ((atan2(y, x − 0.25)) mod 2π)/(2π) for the circulation term, plus
 dropping the interior points within 0.02 chord of the TE from the residual: in the probes the
@@ -437,9 +454,11 @@ It is replaced by the equal-speed form (|u|²(ξ = δ) − |u|²(ξ = 1 − δ))
 stays ~0.02, where SU2's CL 0.319 implies Γ = CL/2 ≈ 0.16. The PINN's lift is about 8× too small.
 That is a result to report, not a defect these changes fix.
 
-**Evidence probe on the production code** (first 3,000 Adam steps of the S3 `pure` run on
-test_in-0022: `PinnConfig()` defaults, the production lr schedule, resampling and loss, float32 on the
-Apple GPU at 0.19 s per step; wall Cp of the CPU float64 evaluation against SU2's 512 × 193 truth
+**Evidence probe on the production code** (`python scripts/probes/probe_task26.py`, committed
+2026-10-06 from the scratch copy it ran from, on the working tree that became commit 8023caf; its
+output, from which this table is read, is `results/s3/probe_task26.log`): first 3,000 Adam steps of
+the S3 `pure` run on test_in-0022 (`PinnConfig()` defaults, the production lr schedule, resampling
+and loss, float32 on the Apple GPU at 0.19 s per step; wall Cp of the CPU float64 evaluation against SU2's 512 × 193 truth
 sampled `[::2, ::2]`, wall row). Points dropped by the exclusion at the resamples at 0 / 1000 / 2000 /
 3000: 225 / 197 / 212 / 211 of 20,000.
 
@@ -461,7 +480,11 @@ are not planned (selectable with `--viscous`). `--preflight-file PATH` reuses an
 preflight's timings, because three shards preflighting at once measured one variant at 0.83 / 1.14 /
 29.3 s per Adam step against 0.75 s uncontended and refused on that noise.
 
-## 2026-10-06 — stage S1: the data campaign (run 2026-10-01 to 2026-10-04)
+## 2026-10-06 — stage S1: the data campaign (run 2026-10-01 to 2026-10-02)
+
+*(Corrected 2026-10-06, second final review: the heading said "to 2026-10-04". The first and last
+`result.json` were written 2026-10-01 22:37:51 and 2026-10-02 20:52:41 (local time):
+`python -c "import glob,os,datetime as d; T=sorted(os.path.getmtime(p) for p in glob.glob('runs/su2/*/*/result.json')); print(d.datetime.fromtimestamp(T[0]), d.datetime.fromtimestamp(T[-1]))"`.)*
 
 Commands (`runs/run_s1.sh`, train pass then fine pass, both exit 0; logs `results/s1/{train,fine}.log`):
 `SU2_BIN_DIR=$HOME/theLab/bwb-tanker-scratch/bin python scripts/s1_campaign.py train` and the same with `fine`.
@@ -474,9 +497,14 @@ Summaries: `results/s1/campaign_{train,fine}.json`. Dataset: `python scripts/bui
 | fine | 512x193 | 80 | 75 | 5 (4 residual, 1 CL) | 42.3 h | 44.1 h (sum over workers) |
 
 Per case, medians over all finished cases (`runs/su2/*/*/result.json`): 256x97 took 2,057 iterations,
-227.5 s wall and 198.6 s CPU; 512x193 took 3,976.5 iterations, 1,554 s wall and 1,501.7 s CPU.
-The 256x97 pass covers all four splits (train 896, val 128, test_in 64, test_ext 16); the 512x193 pass
-covers the two test splits only (64 and 16).
+227.5 s wall and 198.6 s CPU; 512x193 took 3,976.5 iterations, 1,554 s wall and 1,501.7 s CPU. Over
+the converged cases only they are 2,050 iterations, 225.9 s and 197.9 s (1,084 cases) and 3,720
+iterations, 1,493.8 s and 1,432.3 s (75 cases): the failed cases, which run longer, raise the
+fine-grid medians by 7 %, 4 % and 5 % and the 256x97 ones by under 1 %. The 256x97 pass covers all four splits (train 896, val 128,
+test_in 64, test_ext 16); the 512x193 pass covers the two test splits only (64 and 16). Command for
+the case counts, the summed hours of the table and both sets of medians:
+`python -c "import json,glob,statistics as st; [print(lv, len(R:=[json.load(open(p)) for p in glob.glob(f'runs/su2/{lv}/*/result.json')]), 'cpu_h %.1f wall_h %.1f'%(sum(r['cpu_s'] for r in R)/3600, sum(r['wall_s'] for r in R)/3600), 'all: it %s wall %.1f cpu %.1f'%(st.median(r['iterations'] for r in R), st.median(r['wall_s'] for r in R), st.median(r['cpu_s'] for r in R)), 'converged(%d): it %s wall %.1f cpu %.1f'%(len(C:=[r for r in R if r['converged']]), st.median(r['iterations'] for r in C), st.median(r['wall_s'] for r in C), st.median(r['cpu_s'] for r in C))) for lv in ('256x97','512x193')]"`
+(the converged and failed counts per pass are in `results/s1/campaign_{train,fine}.json`).
 
 **Failure reasons.** Failing means the convergence rule was not met, not that the solver crashed: a
 "residual" failure is a residual drop below 5 orders (1.16 to 4.85 orders at 256x97, 1.25 to 2.87 at
@@ -516,12 +544,16 @@ and 3.98e-06 against the 1e-06 limit. Every failed case has a zero driver exit (
 
 Where they sit: all 25 rows have Mach 0.697 to 0.829 (23 of 25 at 0.73 or above) and alpha 0.78 to 5.94
 degrees (24 of 25 at 2.5 degrees or more), so they are in the transonic, higher-lift part of the box:
-the shock-dominated cases where the Euler solver limit-cycles. The 256x97 failures of the test splits
+shock-dominated cases on which the residual stalls while CL and CD are still moving, i.e. unsteady and
+not converged. No force or residual history was examined for periodicity, so whether the solver
+limit-cycles there is not measured. *(Corrected 2026-10-06, second final review: this said "where the
+Euler solver limit-cycles", a mechanism the data does not show.)* The 256x97 failures of the test splits
 recur at 512x193 (test_in-0024, test_in-0032, test_ext-0014); the fine grid adds test_in-0048 and
 test_ext-0008. Failed cases are excluded from the HDF5 files, not patched.
 
 **Dataset (HDF5).** `256x97.h5`: train 881, val 126, test_in 62, test_ext 15 (1,084 cases).
-`512x193.h5`: test_in 61, test_ext 14 (75 cases). The showcase takes the 61 test_in cases that
+`512x193.h5`: test_in 61, test_ext 14 (75 cases); command:
+`python -c "import h5py; [print(f, {k: len(h[k]['case_id']) for k in h}) for f in ('data/hdf5/256x97.h5','data/hdf5/512x193.h5') for h in [h5py.File(f)]]"`. The showcase takes the 61 test_in cases that
 survive at both levels, sorted by fine-grid maximum surface Mach, index round(p(n-1)):
 test_in-0022 (0.512, subcritical), test_in-0021 (0.684, subcritical), test_in-0043 (0.847,
 subcritical), test_in-0004 (1.206, supercritical), test_in-0031 (1.377, supercritical),
@@ -534,6 +566,18 @@ overnight while per-case wall time was unchanged (median 197 s at that point), s
 campaign rather than slowing the solver. The mitigation was `caffeinate -i -s -m -w <run_s1 pid>`,
 which keeps the machine from idle or system sleep; awake throughput was then about 90 cases per hour.
 The campaign is resumable, so the pauses cost time only.
+*(Commands added 2026-10-06, second final review.)* The sleeps:
+`pmset -g log | grep "Entering Sleep" | awk '$1"T"$2 >= "2026-10-01T22:35" && $1"T"$2 <= "2026-10-02T20:53"'`
+(read 2026-10-06; `pmset`'s log rolls over, so it may not reproduce later) lists 24 sleeps in the
+campaign's window, from 2026-10-01 23:33 to 2026-10-02 05:21: 17 'Dark Wake Thermal Emergency', 4
+'Maintenance Sleep', 2 'Sleep Service Back to Sleep' and 1 'Idle Sleep', and none after 05:21. The
+throughput, as 256x97 cases finished per clock hour:
+`python -c "import glob,os,collections as c,datetime as d; h=c.Counter(d.datetime.fromtimestamp(os.path.getmtime(p)).strftime('%m-%d %H') for p in glob.glob('runs/su2/256x97/*/result.json')); [print(k,v) for k,v in sorted(h.items())]"`
+gives 52 in the first 22 minutes (about 140 per hour), 78 in the 23:00 hour, 6-8 per hour from 00:00 to
+04:59 (19 per hour averaged over 23:00-04:59, the figure above), then 87-112 per hour from 06:00 to
+13:59 (the "about 90" above was a ledger reading taken earlier in that recovery). The median wall time
+of the 166 cases finished before 05:00 is 195.9 s ("197 s" above) against 232.3 s for the rest:
+`python -c "import glob,os,json,statistics as st,datetime as d; R=[(d.datetime.fromtimestamp(os.path.getmtime(p)), json.load(open(p))['wall_s']) for p in glob.glob('runs/su2/256x97/*/result.json')]; c=d.datetime(2026,10,2,5,0); print(len([w for t,w in R if t<c]), st.median(w for t,w in R if t<c), st.median(w for t,w in R if t>=c))"`.
 
 ## 2026-10-06 — stage S3: the PINN showcase runs (potential formulation, non-viscous plan)
 
@@ -557,21 +601,31 @@ the Apple GPU (`mps`), L-BFGS on `cpu`, for all 8 runs. Scores come in S4; none 
 | nokutta / test_in-0022 | 1 | 5.40 | 10.08 | 1.82e-3 | 7.8e-5 | 0 | 2.61e-3 |
 
 Values are the `final` and `wall_s`/`cpu_s` fields of the run records (per-shard wall times overlap:
-the two shards ran concurrently). The learned Gamma is NOT recorded in the run records or logs; it
+the two shards ran concurrently). Command for every row:
+`python -c "import json,glob; [print(p[-14:-5], k, round(r['wall_s']/3600,2), round(r['cpu_s']/3600,2), *('%.3g'%r['final'][x] for x in ('residual','wall','kutta','total'))) for p in sorted(glob.glob('results/s3/pinn_runs_shard*of2.json')) for k,r in json.load(open(p)).items()]"`. The learned Gamma is NOT recorded in the run records or logs; it
 is recovered from the saved predictions in S4, not stated here. The circulation term's loss is 0.0 in
 every run (as recorded). `pure` and `nokutta` use fixed weights 10 / 10; `nokutta` sets the Kutta
 loss to exactly 0.
 
-**Failure-mode result: gradnorm's loss weights ran away.** On test_in-0004 the gradient-norm balancing
-drove `w_kutta` from 1.06e4 at Adam step 0 (fixed runs: 10) to 1.9e6 by step 1,500 and a peak of
-7.0e10 at step 16,500; it was still 5.8e9 at step 29,999 (`w_wall` 7.75e3 there). The Kutta loss
-had fallen to 3.6e-15 and the weights kept growing to compensate, so the weighted total stayed in the
-hundreds to thousands (719 at step 29,999). The Adam phase ended with residual 0.024; L-BFGS then
-ended at residual 9.11 (total 82.2), i.e. the quasi-Newton phase, run against those weights,
-made the PDE residual about 380 times worse than where Adam left it. The result is a run whose
+**Failure-mode result: gradnorm's wall weight left the equation unenforced.** *(Rewritten 2026-10-06,
+second final review: the first version attributed the failure to the Kutta weight; the
+decomposition in the 2026-10-06 corrections entry below shows the wall term carried the total.)*
+On test_in-0004 the gradient-norm balancing drove `w_kutta` from 1.06e4 at Adam step 0 (fixed runs:
+10) to 1.9e6 by step 1,500, a logged peak of 7.0e10 at step 16,500 (the history is sampled every 500
+steps, so the true peak is not known) and 5.8e9 at step 29,999, while the Kutta loss fell to 7e-10
+or below from step 7,000 (1.4e-14 at step 29,999, exactly 0 at steps 8,000 and 9,500);
+the weighted Kutta term was therefore small, at most 3.9 % of the total from step 500 on (616 of
+15,880 at step 6,500) and 8e-5 of 719.5 at step 29,999. The total was the wall term: `w_wall`, at
+692 to 1.3e5 from step 500 on, times a wall loss that stayed at 0.03-0.25 (0.093 at the end of Adam,
+against 0.00285 for fixed-weight `pure` on the same case, about 33 times larger), was at least 96 %
+of the weighted total at every logged step from 500 on, and 719.4 of 719.5 at step 29,999 (`w_wall`
+7.75e3). The weighted total ranged from 67 (step 25,000) to 15,880 (step 6,500). The Adam phase ended
+with residual 0.024 (`pure`: 0.020); L-BFGS, minimising an objective that was 99.99 % wall term,
+cut the wall loss tenfold (0.093 to 0.0094) and the wall term from 719 to 73, and in exchange made
+the PDE residual about 380 times worse (0.024 to 9.11; total 82.2). The result is a run whose
 equation is effectively unenforced: compare `pure` on the same case at 2.98e-3. Reported as a result
-of the method; nothing was tuned. Command: `grep -n "w_kutta" results/s3/shard0.log` (the log's
-`final:` line is the L-BFGS end state).
+of the method; nothing was tuned. Commands: `grep -n "w_kutta" results/s3/shard0.log` (the log's
+`final:` line is the L-BFGS end state) and the decomposition command in the corrections entry.
 
 **nokutta** (test_in-0022, `kutta=False`): final residual 1.82e-3, wall 7.8e-5, total 2.61e-3 — the
 same case under `pure` ended at 2.25e-3 / 1.3e-4 / 3.58e-3. The PDE and wall losses alone converge
@@ -579,8 +633,12 @@ equally well, so the loss does not reveal whether the circulation is pinned; tha
 comparison.
 
 **Attempts that did not run to completion (kept under explicit names in `results/s3`).**
-1. `*_stopped_te_singularity.log` (3 shards, §7.8 code): residual 150-1000 after 11,000 Adam steps
-   on the trailing-edge singularity; stopped; fixed as in the 2026-10-05 entry.
+1. `*_stopped_te_singularity.log` (3 shards, §7.8 code): shards 0 and 2 trained on the
+   trailing-edge singularity with the residual at 67-995 (to Adam step 12,000) and 26-472 (to step
+   8,500) and were stopped; shard 1 refused at its preflight (1,202.8 h against a 1,000 h budget,
+   exit 3) and never trained. Fixed as in the 2026-10-05 entry (commit 8023caf). *(Corrected
+   2026-10-06, second final review: this said "residual 150-1000 after 11,000 Adam steps" for all
+   three.)*
 2. `*_refused_budget60.log` and `preflight_shard*of3_concurrent_refused.json`: three shards
    preflighting at once measured contended timings (e.g. one variant at 29 s per Adam step, projected
    289.8 h for the shard against 60 h), so the budget guard refused with exit 3. Resolved by
@@ -592,13 +650,18 @@ Earlier warm-ups: `warmup.json` (potential formulation, PASSED) and `warmup_eule
 Euler PINN's failure to fluid at rest).
 
 **Dropped.** The four viscous runs (`visc1e-3` x3, `visc3e-4`) were dropped by the author's decision
-of 2026-10-05 (projected 119-271 h for one viscous run); they are not part of S3 and are selectable
-with `--viscous`.
+of 2026-10-05; they are not part of S3 and are selectable with `--viscous`. *(Corrected 2026-10-06,
+second final review: this cited "projected 119-271 h for one viscous run", which are contended
+measurements; the uncontended projection is about a day per run. See the corrections entry below.)*
 
 ## 2026-10-06 — stage S4: head-to-head results, and the three predictions checked
 
 Command: `python scripts/s4_score.py` (commit e06ff06), which wrote `results/s4/scores.md`,
-`scores.json`, `costs.json`, `break_even.png`, `data_efficiency.png` and six `showcase_*.png`. Every
+`scores.json`, `costs.json`, `break_even.png`, `data_efficiency.png` and six `showcase_*.png`.
+*(2026-10-06, second final review: the same command at commit f9878ff re-wrote `costs.json`, now
+with both cost bases per method and the PINN costed per phase, and `break_even.png`, with the FNO's
+curve visible under POD's; every other output came out byte-identical. The cost figures below are
+read from the re-written file through the keys named in each command.)* Every
 figure below is read from those files; the per-case figures come from `scores.json`'s `rows`, e.g.
 `python -c "import json; [print(r['tag'], r['case_id'], r['score']['cl_err'], r['score']['cl_true']) for r in json.load(open('results/s4/scores.json'))['rows'] if r['method']=='pinn']"`.
 
@@ -621,7 +684,9 @@ figure below is read from those files; the per-case figures come from `scores.js
 4. **The costs mix hardware.** SU2 is CPU time on this Mac (one process per case, measured with 8
    concurrent workers). The FNO's training is GPU wall time on this Mac's Apple GPU (MPS). The PINN is
    wall time of Adam on MPS plus L-BFGS on the CPU, two runs at once. POD is CPU time. Every
-   break-even or ratio below inherits that mix.
+   break-even or ratio below inherits that mix. *(2026-10-06: the PINN's L-BFGS phase is CPU work
+   and is charged here at wall time; costed per phase, as the scorer's own rule implies, Prediction 1
+   comes out differently — see the corrections entry at the end.)*
 
 **Test sets.** test_in (62 cases at 256x97, 61 scored: 37 subcritical, 24 supercritical) and
 test_ext (14 scored, **all supercritical**: the extrapolation set has no subcritical case, so no
@@ -638,8 +703,12 @@ orders. On CPU time instead (mean 36,464 s per `pure` run, from `results/s3/pinn
 it is 174x, 2.24 orders, just outside the band; the prediction holds on the basis S4 costs it at, and
 the mixed hardware of point 4 above is what separates the two figures. The ratio is for an answer of
 very different quality: the PINN's near-field error is 0.52-0.63 against the floor's 0.008-0.024
-(table below). Command:
-`python -c "import json; c=json.load(open('results/s4/costs.json'))['costs']; print(c['pinn']['per']/c['su2']['per'])"`.
+(table below). Command (on the re-written `costs.json`, where the PINN's wall time is `per_wall`):
+`python -c "import json; c=json.load(open('results/s4/costs.json'))['costs']; print(c['pinn']['per_wall']/c['su2']['per_cpu'])"`.
+*(Restated 2026-10-06, second final review: 96.3x divides the PINN's wall time by SU2's CPU time.
+On one basis for both it is 88.5x on wall time (HELD) and 174x on CPU time; per phase, the scorer's
+own rule, it is 174-220x, 2.24-2.34 orders, outside the predicted band: **NOT HELD** on that basis,
+SU2 winning by more than predicted. See the corrections entry at the end.)*
 
 **Prediction 2 — "The FNO beats 'just run SU2' only after roughly as many new cases as it took to
 train it, about a thousand, unless the data-efficiency curve shows far fewer training cases are
@@ -715,7 +784,9 @@ What this says:
 - **Extrapolation is where every surrogate fails**: the FNO is 3.6x the floor on the near field and
   its CD error reaches 181 counts (5.6x the floor's 32); POD is 7.9x and 530 counts. The FNO's CD
   errors on test_ext are biased, not scattered: median −78 counts at 256x97.
-- **The PINN is not competitive on any column**: 0.52-0.63 near field, 64x and 26x the floor.
+- **The PINN is not competitive on any column**: 0.52-0.63 near field, 65x and 26x the floor
+  (0.5155 / 0.007953 = 64.8 and 0.6273 / 0.02413 = 26.0; corrected 2026-10-06 from "64x"; command:
+  `python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; f=lambda m,v: {(x['split'],x['regime']): x['near_field_rel_l2_mean'] for x in G if x['method']==m and x['variant']==v and x['grid']=='256x97' and x['split']=='test_in'}; fl,pi=f('su2-256x97','floor'),f('pinn','pure'); [print(k, pi[k], fl[k], pi[k]/fl[k]) for k in pi]"`).
 
 **The PINN per case (all eight runs, test_in, 256x97).** CL true → predicted, and the error:
 
@@ -749,8 +820,12 @@ The near-field spread is a few per cent of its value; the extrapolation CL maxim
 between seeds, so a single-seed extrapolation CL figure is not reliable to better than that.
 
 **Loss A against loss B (n = 896, seed 0).** Loss B (A plus the wall row weighted 10) is **worse than
-loss A on the near field, CL and CD in every set and regime at both grids**, and most at the
-supercritical lift: test_in
+loss A on the near field and CD in every set and regime at both grids, and on CL in every one except
+in-range subcritical at 256x97**, where its CL maximum is 0.0239 against loss A's 0.0312, 23 % better
+*(corrected 2026-10-06, second final review: this
+said worse on CL "in every set and regime"; command:
+`python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; f=lambda v,g: {(x['split'],x['regime']): x['cl_err_absmax'] for x in G if x['method']=='fno' and x['n_train']==896 and x['seed']==0 and x['variant']==v and x['grid']==g}; [print(g, k, a, f('lossB',g)[k]) for g in ('256x97','128x49') for k,a in f('',g).items()]"`)*.
+It is worse most at the supercritical lift: test_in
 supercritical CL max 0.2489 against 0.0431 (256x97) and 0.2633 against 0.0314 (128x49), CD max 256
 against 40 counts; near field 0.1660 against 0.0575 (supercritical), 0.0694 against 0.0423
 (subcritical) and 0.4506 against 0.2318 (test_ext) at 256x97. Its wall-Cp RMS is marginally better
@@ -826,3 +901,143 @@ These are the scale against which the contestants' checks below are read.
   (`results/s4/showcase_*.png`) are the only view of it.
 - **Not measured at all:** the viscous PINN (dropped), and the Vassberg & Jameson comparison (still
   open from S0).
+
+## 2026-10-06 — corrections from the second final review, and the S3a warm-up pass
+
+Each correction below is also marked where the corrected text sits, in the entry it belongs to.
+
+**S3a warm-up: the potential formulation PASSED** (the record the 2026-10-04 entry's paths now
+hold). `results/s3/warmup.json`: `passed` true, max|ΔCp| 0.0272 against the 0.1 bound (the Euler
+PINN: 3.94), CL −3.9e-4 and CD −1.0e-3 against 1e-2 (CM −9.7e-5), final residual 3.4e-6, wall loss
+6.0e-9, total 3.5e-6; 28,628.7 s wall (7.95 h) and 130,246.6 s CPU (36.2 CPU-h); `WARMUP_EXIT=0`
+at the end of `results/s3/warmup.log`. Commands:
+`python -c "import json; print(json.load(open('results/s3/warmup.json')))"` and
+`tail -1 results/s3/warmup.log`. It ran **Adam on the CPU**, not on the Apple GPU (which S2's FNO
+training held), and L-BFGS on the CPU in float64, with `OMP_NUM_THREADS=8`, through this launcher
+(`runs/run_s3_warmup_potential.sh`, not committed; `runs/` is ignored), whose process-local override
+makes `device="auto"` resolve to the CPU:
+
+```bash
+#!/bin/bash
+# S3a warm-up, potential formulation (Task 25), on the CPU: S2's FNO training holds the GPU and its wall time is a
+# recorded cost. Process-local override: torch.backends.mps.is_available -> False (device 'auto' resolves to cpu).
+cd /Users/esousa/theLab/airfoil-pinn-no
+export PATH=/Users/esousa/miniforge3/envs/airfoil-ml/bin:$PATH
+export OMP_NUM_THREADS=8
+python -u -c "
+import runpy, sys, torch
+torch.backends.mps.is_available = lambda: False
+sys.argv = ['s3_warmup.py', '--formulation', 'potential']
+runpy.run_path('scripts/s3_warmup.py', run_name='__main__')
+" > results/s3/warmup.log 2>&1
+echo "WARMUP_EXIT=$?" >> results/s3/warmup.log
+```
+
+The code was commit **0893de4** (the Task 25 PINN code of 2954e1c; the record does not say so, the
+dates do): the launcher was written 2026-10-04 23:07, after 0893de4 (23:00:03), and the record
+finished 2026-10-05 11:57:31, while the next commit touching the PINN, 8023caf (the trailing-edge
+fixes), is from 16:49:50 that day and the two between (781e16d, c834166) touched only S2's files and
+this document (`git log --format='%h %ad %s' --date=iso --until='2026-10-05 11:57' -1`, then
+`git diff --stat 0893de4 c834166`). 8023caf does not change the cylinder configuration (Γ fixed at 0,
+Kutta off, no trailing edge to exclude: spec §7.9), but the warm-up was not re-run on it. The CPU was
+shared with S2's FNO training for part of the run (controller's ledger), so its times are not an
+uncontended cost. `scripts/s3_warmup.py` now records `adam_device`, `lbfgs_device`,
+`omp_num_threads`, `argv`, `git_commit` and `git_dirty`, takes `--device`, and refuses to overwrite
+an existing `warmup*.json` or `warmup_q*.npy`; the same hardware without the override is
+`OMP_NUM_THREADS=8 python scripts/s3_warmup.py --device cpu --tag <name>`.
+
+**The gradnorm run, decomposed** (correcting the S3 entry, which blamed the Kutta weight). The
+weighted total is residual + `w_wall`·wall + `w_kutta`·kutta. Per logged Adam step and at the end of
+L-BFGS (`results/s3/pinn_runs_shard0of2.json`, `gradnorm/test_in-0004`):
+
+| step | residual | `w_wall` | wall | `w_wall`·wall | `w_kutta` | `w_kutta`·kutta | total |
+|---|---|---|---|---|---|---|---|
+| 0 | 9.0 | 1.44e3 | 1.70 | 2,458 | 1.06e4 | 2,400 | 4,867 |
+| 1,500 | 2.09 | 4.73e4 | 0.0509 | 2,408 | 1.92e6 | 15.9 | 2,426 |
+| 6,500 | 0.43 | 9.02e4 | 0.169 | 15,260 | 4.14e8 | 616 | 15,880 |
+| 16,500 | 0.065 | 1.25e4 | 0.114 | 1,425 | 7.04e10 | 0.0040 | 1,425 |
+| 25,000 | 0.0087 | 692 | 0.0968 | 67.0 | 7.84e8 | 4.5e-5 | 67.0 |
+| 29,999 | 0.024 | 7.75e3 | 0.0928 | 719.4 | 5.76e9 | 8.2e-5 | 719.5 |
+| L-BFGS end | 9.11 | 7.75e3 | 0.00943 | 73.1 | 5.76e9 | 1.1e-3 | 82.2 |
+
+From step 500 on the wall term is at least 96.1 % of the total at every one of the 60 logged steps,
+the Kutta term at most 3.9 % (step 6,500) and the residual at most 0.5 %. So the balanced `w_wall`
+(692 to 1.3e5) held a wall loss of 0.03-0.25 that fixed-weight `pure` on the same case had brought
+to 0.00285 by the end of Adam (gradnorm: 0.0928, 33x), and L-BFGS started on an objective that was
+99.99 % wall term: it cut the wall loss tenfold (0.0928 to 0.00943) and the wall term from 719 to
+73, and traded the residual for it, 0.024 to 9.11 (380x). The runaway `w_kutta` (logged peak 7.04e10
+at step 16,500; the history is sampled every 500 steps) multiplied a Kutta loss of 7e-10 or less
+from step 7,000 and moved the total little; the controller's in-run note of "2.6e10 at step 8000"
+is the logged value at that step (2.58e10), taken while the run was in progress, not a peak. The
+weighted total ran from 67 to 15,880 over the Adam phase from step 500, so "tens to tens of
+thousands", not the "hundreds to thousands" first written. Command (prints every logged step):
+`python -c "import json; r=json.load(open('results/s3/pinn_runs_shard0of2.json'))['gradnorm/test_in-0004']; [print(h['step'], '%.3g'%h['residual'], '%.3g'%h['w_wall'], '%.3g'%h['wall'], '%.4g'%(h['w_wall']*h['wall']), '%.3g'%h['w_kutta'], '%.3g'%(h['w_kutta']*h['kutta']), '%.4g'%h['total']) for h in r['history'][:-1]]; f,w=r['final'],r['weights']; print('lbfgs', '%.3g'%f['residual'], '%.3g'%w['wall'], '%.3g'%f['wall'], '%.4g'%(w['wall']*f['wall']), '%.3g'%w['kutta'], '%.3g'%(w['kutta']*f['kutta']), '%.4g'%f['total'])"`;
+the shares: `python -c "import json; r=json.load(open('results/s3/pinn_runs_shard0of2.json'))['gradnorm/test_in-0004']; A=[h for h in r['history'] if h['step']!='lbfgs' and h['step']>=500]; print(len(A), min(h['w_wall']*h['wall']/h['total'] for h in A), max(h['w_kutta']*h['kutta']/h['total'] for h in A), max(h['residual']/h['total'] for h in A))"`;
+`pure`'s wall loss at the end of Adam:
+`python -c "import json; print([h for h in json.load(open('results/s3/pinn_runs_shard1of2.json'))['pure/test_in-0004']['history'] if h['step']!='lbfgs'][-1]['wall'])"`.
+
+**What the viscous runs would have cost** (correcting the S3 entry's "projected 119-271 h for one
+viscous run"). Those two figures are line 7 of `results/s3/shard0_stopped_te_singularity.log` and of
+`results/s3/shard0_refused_budget60.log`, preflights taken with three shards timing at once, the
+contention the 2026-10-05 entry and spec §7.9 call noise: across the six logs of those two attempts
+one viscous run was projected at anywhere from 50.5 to 840.7 h
+(`grep -h "visc.* h$" results/s3/shard*_refused_budget60.log results/s3/shard*_stopped_te_singularity.log`). The
+uncontended preflight of the 12-run plan on the Task 25 code, `results/s3/preflight_12run_task25code.json`,
+projects **23.3 h per `visc1e-3` run and 22.1 h for `visc3e-4`, 91.8 h for the four**, and 125.3 h
+for the whole 12-run plan against the 48 h budget, which it refused (`within_budget` false). The
+projection is a lower bound (one closure per L-BFGS iteration): the six `pure` runs took 1.04-1.35
+times their uncontended 4.78 h (`results/s3/preflight.json`), so about a day to a day and a half per
+viscous run, not five to eleven. Command:
+`python -c "import json; d=json.load(open('results/s3/preflight_12run_task25code.json')); v=[r for r in d['runs'] if r['variant'].startswith('visc')]; [print(r) for r in v]; print(sum(r['hours'] for r in v), d['projected_total_hours'], d['budget_hours'], d['within_budget'])"`
+and `awk 'FNR==7{print FILENAME": "$0}' results/s3/shard0_stopped_te_singularity.log results/s3/shard0_refused_budget60.log`.
+The recorded reasons for the cut are the author's scope decision of 2026-10-05 ("Fix + non-viscous
+runs", spec §7.9) and the machine: three concurrent shards thrash its 16 GB of memory, so S3 ran as
+two shards, and on two shards the four viscous runs add about 46 h of wall time to a plan already
+projected at 35.2 h serial.
+
+**Prediction 1 on each cost basis** (correcting the S4 entry's "HELD", which rests on one basis).
+Spec §8.2 asks for wall time and CPU time. `costs.json` now holds both for every method, and the
+PINN's per-phase cost — its Adam phase on the GPU at wall time, its L-BFGS phase on the CPU at CPU
+time, S4's own rule — is a bracket, because the S3 runs did not record the Adam phase's CPU time:
+the upper bound counts all of a run's CPU time as L-BFGS time, the lower bound (`per_lower`) assumes
+the Adam phase's host CPU time equalled its wall time.
+
+| basis | PINN per case, s | SU2 per case, s | ratio | orders | prediction (one to two) |
+|---|---|---|---|---|---|
+| wall / wall | 20,201.3 | 228.1 (median wall) | 88.5x | 1.95 | held |
+| PINN wall / SU2 CPU (the S4 entry's) | 20,201.3 | 209.87 (median CPU) | 96.3x | 1.98 | held |
+| CPU / CPU | 36,464.4 | 209.87 | 173.7x | 2.24 | not held |
+| per phase, upper bound | 46,122.1 | 209.87 | 219.8x | 2.34 | not held |
+| per phase, lower bound | 36,464.4 | 209.87 | 173.7x | 2.24 | not held |
+| per phase, measured host fraction 0.346 | 42,783.4 | 209.87 | 203.9x | 2.31 | not held |
+
+Command: `python -c "import json,glob,math; c=json.load(open('results/s4/costs.json'))['costs']; p,s=c['pinn'],c['su2']; R={}; [R.update(json.load(open(f))) for f in glob.glob('results/s3/pinn_runs_shard*of2.json')]; aw=sum(r['adam_wall_s'] for k,r in R.items() if k.startswith('pure/'))/6; ph=p['per']-0.3457*aw; [print(n, round(a,1), round(b,2), round(a/b,1), round(math.log10(a/b),2)) for n,a,b in [('wall/wall',p['per_wall'],s['per_wall']),('mixed',p['per_wall'],s['per_cpu']),('cpu/cpu',p['per_cpu'],s['per_cpu']),('phase upper',p['per'],s['per_cpu']),('phase lower',p['per_lower'],s['per_cpu']),('phase f=0.346',ph,s['per_cpu'])]]"`.
+The host fraction is a measurement taken now, not during S3: 1,000 Adam steps of the production
+configuration on test_in-0022 on the Apple GPU, uncontended, `OMP_NUM_THREADS=6`, at commit f9878ff
+took 190.6 s wall and 65.9 s CPU (0.346), command
+`OMP_NUM_THREADS=6 python -c "from apno.data.sampling import case_specs; from apno.geometry.ogrid import TRAIN, Section; from apno.models.pinn import PinnCase; from apno.models.train_pinn import PinnConfig, train; s={c.case_id: c for c in case_specs('test_in',TRAIN)}['test_in-0022']; _,r=train(PinnCase(s.mach,s.alpha_deg,Section(s.t,s.m)), PinnConfig(adam_steps=1000, lbfgs_iters=1), log=lambda *a: None); print(r['adam_device'], r['adam_wall_s'], r['adam_cpu_s'], r['adam_cpu_s']/r['adam_wall_s'])"`;
+any fraction from 0 to 1 gives 174-220x. The mean `pure` run spent 9,658 s of wall time in Adam and
+10,544 s in L-BFGS, so charging the CPU L-BFGS phase at wall time, as the S4 entry's 96.3x does,
+contradicts the rule the scorer states for itself. The wall figures are also inflated by the two
+shards sharing the GPU and the CPU, by at most about 1.2x on the mean (above), which moves no row
+across the band's edge. **Restated: Prediction 1 holds on wall time alone (88.5x, 1.95 orders) and
+fails on CPU time and on the per-phase basis (174-220x, 2.24-2.34 orders): SU2 beats the PINN by
+more than predicted on every basis that charges CPU work as CPU time.** The prediction text above is
+unchanged; this is its outcome.
+
+**The break-even plot** (`results/s4/break_even.png`) is redrawn: the FNO's curve, which POD's hid
+exactly, is now wide and translucent under a dotted POD, and the PINN's line is its per-phase upper
+bound. The FNO and POD break-even points are unchanged, 1,126 and 1,094 new cases (the S4 entry's
+command, on the re-written `costs.json`).
+
+**Corrected in place** (each marked there): the S2 tuning paragraph's mode-count-against-seed claim
+(false at width 48); the S1 heading's dates (the campaign ran 2026-10-01 to 2026-10-02), its
+"limit-cycles" (not measured), and commands for its medians (with converged-only medians), summed
+hours, HDF5 counts, sleeps and throughput; the 2026-10-05 entry's and the S3 entry's
+"residual 150-1000 after 11,000 Adam steps" (two shards trained to steps 12,000 and 8,500, and the
+third refused at its preflight), and the 2026-10-05 probe's script and log, now committed as
+`scripts/probes/probe_task26.py` and `results/s3/probe_task26.log`; the S3 entry's gradnorm
+paragraph, its viscous-cost sentence and a command for its run table; the S4 entry's Prediction 1
+command and verdict, "64x" (65x) and the loss-B sentence (loss B is better on CL in one cell: test_in
+subcritical at 256x97, 0.0239 against 0.0312); and a pointer from the 2026-10-04 entry to the Euler
+warm-up record's current paths.

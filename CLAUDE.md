@@ -14,8 +14,10 @@ record.
 - Plan, task by task: `docs/superpowers/plans/2026-10-01-airfoil-pinn-vs-neural-operator.md`.
 - Every measured result: `docs/findings.md`.
 
-Stages S0–S4 have all run (to 2026-10-06), on branch `implement`. The repository is local only and
-is never pushed (spec §9.1).
+Stages S0–S4 have all run (to 2026-10-06), on branch `implement`. The remote is `origin`,
+`git@github.com:emarinhoss/airfoil-pinn-no.git`, a public repository (pushed by the author's
+decision of 2026-10-07). `references/` holds copyrighted papers: it is git-ignored and must never be
+committed.
 
 ## Commands
 

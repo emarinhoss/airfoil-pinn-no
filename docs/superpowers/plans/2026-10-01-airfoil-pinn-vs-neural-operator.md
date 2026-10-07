@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- Repository `~/theLab/airfoil-pinn-no`, local only, never pushed. Package `apno` under `src/`.
+- Repository `~/theLab/airfoil-pinn-no`, local only, never pushed. *(2026-10-07: superseded by the
+  author's decision to push to GitHub; spec §9.1.)* Package `apno` under `src/`.
 - Conda environment `airfoil-ml`, Python 3.11; install with `pip install -e . --no-deps`.
 - SU2 found **only** through `SU2_BIN_DIR`; tests that need it carry `@pytest.mark.su2` and skip when it is unset.
 - Input box, verbatim from §4.1: M ∈ [0.30, 0.80]; α ∈ [−2°, 6°]; t ∈ [0.08, 0.16]; m ∈ [0, 0.04]; p = 0.4 fixed. Extrapolation set: M ∈ [0.80, 0.85].

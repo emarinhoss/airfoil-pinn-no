@@ -567,7 +567,9 @@ this replaces it.
 
 ### 9.1 Repository
 
-- A local git repository at `~/theLab/airfoil-pinn-no`, not pushed anywhere. Its first commit is this
+- A local git repository at `~/theLab/airfoil-pinn-no`, not pushed anywhere. *(2026-10-07, the
+  author's decision: pushed to `git@github.com:emarinhoss/airfoil-pinn-no.git`; `references/`, which
+  holds copyrighted papers, is git-ignored.)* Its first commit is this
   spec.
 - Its own conda environment, `airfoil-ml`: PyTorch, NumPy, SciPy, h5py, Matplotlib, SymPy (for the
   manufactured-solution test), pytest and ruff.

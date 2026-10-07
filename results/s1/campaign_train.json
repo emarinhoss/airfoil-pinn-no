@@ -1,0 +1,236 @@
+{
+  "which": "train",
+  "requested": 1104,
+  "finished": 1104,
+  "converged": 1084,
+  "failures": [
+    {
+      "case_id": "train-0022",
+      "level": "256x97",
+      "reason": "residual dropped 4.85 orders < 5.0; CL varied 1.30e-04 > 1e-06 over the last 500; CD varied 1.94e-05 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7474763395264745,
+        "alpha_deg": 2.6127730011940002,
+        "t": 0.1400999341905117,
+        "m": 0.035702020339667795
+      }
+    },
+    {
+      "case_id": "train-0102",
+      "level": "256x97",
+      "reason": "residual dropped 2.96 orders < 5.0; CL varied 2.87e-03 > 1e-06 over the last 500; CD varied 4.87e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7740319862030447,
+        "alpha_deg": 5.512005120515823,
+        "t": 0.14547962449491025,
+        "m": 0.018027582988142967
+      }
+    },
+    {
+      "case_id": "train-0150",
+      "level": "256x97",
+      "reason": "residual dropped 1.80 orders < 5.0; CL varied 5.27e-02 > 1e-06 over the last 500; CD varied 9.86e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7514378402382136,
+        "alpha_deg": 5.9433072954416275,
+        "t": 0.1367701880633831,
+        "m": 0.0322302670404315
+      }
+    },
+    {
+      "case_id": "train-0246",
+      "level": "256x97",
+      "reason": "residual dropped 2.77 orders < 5.0; CL varied 2.59e-02 > 1e-06 over the last 500; CD varied 4.22e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7628642848692835,
+        "alpha_deg": 4.227334141731262,
+        "t": 0.1560813132673502,
+        "m": 0.02761088076978922
+      }
+    },
+    {
+      "case_id": "train-0281",
+      "level": "256x97",
+      "reason": "residual dropped 3.70 orders < 5.0; CL varied 1.86e-03 > 1e-06 over the last 500; CD varied 2.50e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.769648159109056,
+        "alpha_deg": 0.7791593670845032,
+        "t": 0.153044675514102,
+        "m": 0.03931228917092085
+      }
+    },
+    {
+      "case_id": "train-0286",
+      "level": "256x97",
+      "reason": "CL varied 1.55e-05 > 1e-06 over the last 500; CD varied 2.15e-06 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7328555753454566,
+        "alpha_deg": 3.239871561527252,
+        "t": 0.1334180624783039,
+        "m": 0.031141773015260697
+      }
+    },
+    {
+      "case_id": "train-0326",
+      "level": "256x97",
+      "reason": "residual dropped 2.03 orders < 5.0; CL varied 8.84e-02 > 1e-06 over the last 500; CD varied 1.58e-02 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7947019810788334,
+        "alpha_deg": 4.789196282625198,
+        "t": 0.1414763407409191,
+        "m": 0.0313597109541297
+      }
+    },
+    {
+      "case_id": "train-0374",
+      "level": "256x97",
+      "reason": "residual dropped 1.16 orders < 5.0; CL varied 2.42e-01 > 1e-06 over the last 500; CD varied 4.70e-02 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.76727230027318,
+        "alpha_deg": 5.741861790418625,
+        "t": 0.11770027570426464,
+        "m": 0.037874325402081015
+      }
+    },
+    {
+      "case_id": "train-0454",
+      "level": "256x97",
+      "reason": "residual dropped 2.12 orders < 5.0; CL varied 3.14e-02 > 1e-06 over the last 500; CD varied 5.42e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7989076186902822,
+        "alpha_deg": 3.6549513190984726,
+        "t": 0.1353937815129757,
+        "m": 0.03539787646383047
+      }
+    },
+    {
+      "case_id": "train-0470",
+      "level": "256x97",
+      "reason": "residual dropped 3.47 orders < 5.0; CL varied 2.67e-03 > 1e-06 over the last 500; CD varied 3.74e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.743369324784726,
+        "alpha_deg": 5.449837803840637,
+        "t": 0.15195837140083313,
+        "m": 0.0017810404300689698
+      }
+    },
+    {
+      "case_id": "train-0622",
+      "level": "256x97",
+      "reason": "residual dropped 3.26 orders < 5.0; CL varied 6.91e-03 > 1e-06 over the last 500; CD varied 1.02e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.697319766227156,
+        "alpha_deg": 5.2549769282341,
+        "t": 0.14749341502785684,
+        "m": 0.025212200284004213
+      }
+    },
+    {
+      "case_id": "train-0694",
+      "level": "256x97",
+      "reason": "residual dropped 2.51 orders < 5.0; CL varied 1.41e-02 > 1e-06 over the last 500; CD varied 2.43e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7560742424800992,
+        "alpha_deg": 5.8574973195791245,
+        "t": 0.1438380305469036,
+        "m": 0.020721980147063734
+      }
+    },
+    {
+      "case_id": "train-0726",
+      "level": "256x97",
+      "reason": "residual dropped 2.18 orders < 5.0; CL varied 1.59e-02 > 1e-06 over the last 500; CD varied 2.74e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7421138861216605,
+        "alpha_deg": 4.065596908330917,
+        "t": 0.123310479298234,
+        "m": 0.03912925574928522
+      }
+    },
+    {
+      "case_id": "train-0774",
+      "level": "256x97",
+      "reason": "residual dropped 1.47 orders < 5.0; CL varied 1.30e-01 > 1e-06 over the last 500; CD varied 2.70e-02 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.78479890730232,
+        "alpha_deg": 5.170877888798714,
+        "t": 0.1585995177179575,
+        "m": 0.03946811366826296
+      }
+    },
+    {
+      "case_id": "train-0870",
+      "level": "256x97",
+      "reason": "residual dropped 2.52 orders < 5.0; CL varied 5.26e-03 > 1e-06 over the last 500; CD varied 8.93e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7763936852104962,
+        "alpha_deg": 4.878671824932098,
+        "t": 0.1391739897429943,
+        "m": 0.020377935729920863
+      }
+    },
+    {
+      "case_id": "val-0094",
+      "level": "256x97",
+      "reason": "residual dropped 2.76 orders < 5.0; CL varied 6.87e-03 > 1e-06 over the last 500; CD varied 1.20e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7274320830591023,
+        "alpha_deg": 5.693305820226669,
+        "t": 0.15006622202694417,
+        "m": 0.033963474258780484
+      }
+    },
+    {
+      "case_id": "val-0102",
+      "level": "256x97",
+      "reason": "residual dropped 2.90 orders < 5.0; CL varied 6.88e-03 > 1e-06 over the last 500; CD varied 1.07e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7722947399131954,
+        "alpha_deg": 3.5520403534173965,
+        "t": 0.14269613251090052,
+        "m": 0.026300708912312985
+      }
+    },
+    {
+      "case_id": "test_in-0024",
+      "level": "256x97",
+      "reason": "residual dropped 2.93 orders < 5.0; CL varied 4.18e-03 > 1e-06 over the last 500; CD varied 6.65e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7334539263509214,
+        "alpha_deg": 4.609039142727852,
+        "t": 0.1470907498151064,
+        "m": 0.024556264132261276
+      }
+    },
+    {
+      "case_id": "test_in-0032",
+      "level": "256x97",
+      "reason": "residual dropped 1.78 orders < 5.0; CL varied 4.91e-02 > 1e-06 over the last 500; CD varied 7.90e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.781057379860431,
+        "alpha_deg": 2.7199281081557274,
+        "t": 0.15274944849312305,
+        "m": 0.039353095553815366
+      }
+    },
+    {
+      "case_id": "test_ext-0014",
+      "level": "256x97",
+      "reason": "residual dropped 1.93 orders < 5.0; CL varied 1.24e-01 > 1e-06 over the last 500; CD varied 2.14e-02 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.8176306162495166,
+        "alpha_deg": 4.320958741009235,
+        "t": 0.15954576335847379,
+        "m": 0.03881980188190937
+      }
+    }
+  ],
+  "failure_reasons": {
+    "residual": 19,
+    "CL": 1
+  },
+  "wall_s_sum": 284913.33492492494,
+  "cpu_s_sum": 248314.6067820001,
+  "max_abs_cl": 1.524275315,
+  "cl_bound": 1.86
+}

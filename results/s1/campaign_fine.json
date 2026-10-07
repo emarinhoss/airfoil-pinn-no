@@ -1,0 +1,71 @@
+{
+  "which": "fine",
+  "requested": 80,
+  "finished": 80,
+  "converged": 75,
+  "failures": [
+    {
+      "case_id": "test_in-0024",
+      "level": "512x193",
+      "reason": "residual dropped 2.87 orders < 5.0; CL varied 1.13e-02 > 1e-06 over the last 500; CD varied 1.73e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7334539263509214,
+        "alpha_deg": 4.609039142727852,
+        "t": 0.1470907498151064,
+        "m": 0.024556264132261276
+      }
+    },
+    {
+      "case_id": "test_in-0032",
+      "level": "512x193",
+      "reason": "residual dropped 2.05 orders < 5.0; CL varied 2.40e-02 > 1e-06 over the last 500; CD varied 3.94e-03 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.781057379860431,
+        "alpha_deg": 2.7199281081557274,
+        "t": 0.15274944849312305,
+        "m": 0.039353095553815366
+      }
+    },
+    {
+      "case_id": "test_in-0048",
+      "level": "512x193",
+      "reason": "residual dropped 2.55 orders < 5.0; CL varied 5.17e-03 > 1e-06 over the last 500; CD varied 6.76e-04 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.7533845488913358,
+        "alpha_deg": 4.307265549898148,
+        "t": 0.13683638162910938,
+        "m": 0.009136149659752846
+      }
+    },
+    {
+      "case_id": "test_ext-0008",
+      "level": "512x193",
+      "reason": "CL varied 3.98e-06 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.8287832082714885,
+        "alpha_deg": 5.616571597754955,
+        "t": 0.11888926282525063,
+        "m": 0.0091076385602355
+      }
+    },
+    {
+      "case_id": "test_ext-0014",
+      "level": "512x193",
+      "reason": "residual dropped 1.25 orders < 5.0; CL varied 8.91e-02 > 1e-06 over the last 500; CD varied 1.67e-02 > 1e-06 over the last 500",
+      "inputs": {
+        "mach": 0.8176306162495166,
+        "alpha_deg": 4.320958741009235,
+        "t": 0.15954576335847379,
+        "m": 0.03881980188190937
+      }
+    }
+  ],
+  "failure_reasons": {
+    "residual": 4,
+    "CL": 1
+  },
+  "wall_s_sum": 158745.1020865019,
+  "cpu_s_sum": 152459.54543200004,
+  "max_abs_cl": 1.388662856,
+  "cl_bound": 1.86
+}

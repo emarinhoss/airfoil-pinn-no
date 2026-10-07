@@ -460,3 +460,77 @@ probes.
 are not planned (selectable with `--viscous`). `--preflight-file PATH` reuses an uncontended
 preflight's timings, because three shards preflighting at once measured one variant at 0.83 / 1.14 /
 29.3 s per Adam step against 0.75 s uncontended and refused on that noise.
+
+## 2026-10-06 — stage S1: the data campaign (run 2026-10-01 to 2026-10-04)
+
+Commands (`runs/run_s1.sh`, train pass then fine pass, both exit 0; logs `results/s1/{train,fine}.log`):
+`SU2_BIN_DIR=$HOME/theLab/bwb-tanker-scratch/bin python scripts/s1_campaign.py train` and the same with `fine`.
+Summaries: `results/s1/campaign_{train,fine}.json`. Dataset: `python scripts/build_dataset.py`
+(`results/s1/build.log`, `failures_{256x97,512x193}.json`, `showcase.json`; HDF5 under `data/hdf5/`).
+
+| Pass | Level | Requested | Converged | Failed | Summed CPU | Summed wall |
+|---|---|---|---|---|---|---|
+| train | 256x97 | 1,104 | 1,084 | 20 (19 residual, 1 CL) | 69.0 h | 79.1 h (sum over workers) |
+| fine | 512x193 | 80 | 75 | 5 (4 residual, 1 CL) | 42.3 h | 44.1 h (sum over workers) |
+
+Per case, medians over all finished cases (`runs/su2/*/*/result.json`): 256x97 took 2,057 iterations,
+227.5 s wall and 198.6 s CPU; 512x193 took 3,976.5 iterations, 1,554 s wall and 1,501.7 s CPU.
+The 256x97 pass covers all four splits (train 896, val 128, test_in 64, test_ext 16); the 512x193 pass
+covers the two test splits only (64 and 16).
+
+**Failure reasons.** Failing means the convergence rule was not met, not that the solver crashed: a
+"residual" failure is a residual drop below 5 orders (1.16 to 4.85 orders at 256x97, 1.25 to 2.87 at
+512x193), always with CL and CD still moving over the last 500 iterations; the two "CL" failures
+(train-0286 at 256x97, test_ext-0008 at 512x193) dropped the residual enough but CL varied by 1.55e-05
+and 3.98e-06 against the 1e-06 limit. Every failed case has a zero driver exit (no driver errors).
+
+**Inputs of every failed case** (Mach, alpha deg, t, m):
+
+| Case | Level | Mach | alpha | t | m |
+|---|---|---|---|---|---|
+| train-0022 | 256x97 | 0.7475 | 2.613 | 0.1401 | 0.0357 |
+| train-0102 | 256x97 | 0.7740 | 5.512 | 0.1455 | 0.0180 |
+| train-0150 | 256x97 | 0.7514 | 5.943 | 0.1368 | 0.0322 |
+| train-0246 | 256x97 | 0.7629 | 4.227 | 0.1561 | 0.0276 |
+| train-0281 | 256x97 | 0.7696 | 0.779 | 0.1530 | 0.0393 |
+| train-0286 | 256x97 | 0.7329 | 3.240 | 0.1334 | 0.0311 |
+| train-0326 | 256x97 | 0.7947 | 4.789 | 0.1415 | 0.0314 |
+| train-0374 | 256x97 | 0.7673 | 5.742 | 0.1177 | 0.0379 |
+| train-0454 | 256x97 | 0.7989 | 3.655 | 0.1354 | 0.0354 |
+| train-0470 | 256x97 | 0.7434 | 5.450 | 0.1520 | 0.0018 |
+| train-0622 | 256x97 | 0.6973 | 5.255 | 0.1475 | 0.0252 |
+| train-0694 | 256x97 | 0.7561 | 5.857 | 0.1438 | 0.0207 |
+| train-0726 | 256x97 | 0.7421 | 4.066 | 0.1233 | 0.0391 |
+| train-0774 | 256x97 | 0.7848 | 5.171 | 0.1586 | 0.0395 |
+| train-0870 | 256x97 | 0.7764 | 4.879 | 0.1392 | 0.0204 |
+| val-0094 | 256x97 | 0.7274 | 5.693 | 0.1501 | 0.0340 |
+| val-0102 | 256x97 | 0.7723 | 3.552 | 0.1427 | 0.0263 |
+| test_in-0024 | 256x97 | 0.7335 | 4.609 | 0.1471 | 0.0246 |
+| test_in-0032 | 256x97 | 0.7811 | 2.720 | 0.1527 | 0.0394 |
+| test_ext-0014 | 256x97 | 0.8176 | 4.321 | 0.1595 | 0.0388 |
+| test_in-0024 | 512x193 | 0.7335 | 4.609 | 0.1471 | 0.0246 |
+| test_in-0032 | 512x193 | 0.7811 | 2.720 | 0.1527 | 0.0394 |
+| test_in-0048 | 512x193 | 0.7534 | 4.307 | 0.1368 | 0.0091 |
+| test_ext-0008 | 512x193 | 0.8288 | 5.617 | 0.1189 | 0.0091 |
+| test_ext-0014 | 512x193 | 0.8176 | 4.321 | 0.1595 | 0.0388 |
+
+Where they sit: all 25 rows have Mach 0.697 to 0.829 (23 of 25 at 0.73 or above) and alpha 0.78 to 5.94
+degrees (24 of 25 at 2.5 degrees or more), so they are in the transonic, higher-lift part of the box:
+the shock-dominated cases where the Euler solver limit-cycles. The 256x97 failures of the test splits
+recur at 512x193 (test_in-0024, test_in-0032, test_ext-0014); the fine grid adds test_in-0048 and
+test_ext-0008. Failed cases are excluded from the HDF5 files, not patched.
+
+**Dataset (HDF5).** `256x97.h5`: train 881, val 126, test_in 62, test_ext 15 (1,084 cases).
+`512x193.h5`: test_in 61, test_ext 14 (75 cases). The showcase takes the 61 test_in cases that
+survive at both levels, sorted by fine-grid maximum surface Mach, index round(p(n-1)):
+test_in-0022 (0.512, subcritical), test_in-0021 (0.684, subcritical), test_in-0043 (0.847,
+subcritical), test_in-0004 (1.206, supercritical), test_in-0031 (1.377, supercritical),
+test_in-0040 (1.610, supercritical). Three subcritical, three supercritical (`results/s1/showcase.json`).
+
+**Machine sleeps.** The machine entered sleep repeatedly during the campaign; `pmset` shows "Entering
+Sleep state due to 'Dark Wake Thermal Emergency'" (lid closed / dark wake), at least on 2026-10-02 and
+again twice before 05:36 on the same night. Throughput fell from about 120 to about 19 cases per hour
+overnight while per-case wall time was unchanged (median 197 s at that point), so the sleeps paused the
+campaign rather than slowing the solver. The mitigation was `caffeinate -i -s -m -w <run_s1 pid>`,
+which keeps the machine from idle or system sleep; awake throughput was then about 90 cases per hour.
+The campaign is resumable, so the pauses cost time only.

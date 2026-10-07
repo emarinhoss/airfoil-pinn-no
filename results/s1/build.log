@@ -1,0 +1,38 @@
+256x97 {'train': 15, 'val': 2, 'test_in': 2, 'test_ext': 1} failures
+512x193 {'test_in': 3, 'test_ext': 2} failures
+{
+  "rule": "sorted by fine-grid max surface Mach; index round(p*(n-1))",
+  "n_survivors": 61,
+  "cases": [
+    {
+      "case_id": "test_in-0022",
+      "max_surface_mach": 0.5122916136217472,
+      "regime": "subcritical"
+    },
+    {
+      "case_id": "test_in-0021",
+      "max_surface_mach": 0.6836614356666919,
+      "regime": "subcritical"
+    },
+    {
+      "case_id": "test_in-0043",
+      "max_surface_mach": 0.8469763684278644,
+      "regime": "subcritical"
+    },
+    {
+      "case_id": "test_in-0004",
+      "max_surface_mach": 1.2064478166952186,
+      "regime": "supercritical"
+    },
+    {
+      "case_id": "test_in-0031",
+      "max_surface_mach": 1.3770856821804018,
+      "regime": "supercritical"
+    },
+    {
+      "case_id": "test_in-0040",
+      "max_surface_mach": 1.6102014220225471,
+      "regime": "supercritical"
+    }
+  ]
+}

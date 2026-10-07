@@ -431,7 +431,8 @@ S3 scripts) as the documented negative result.
   place of the zero-circulation penalty.
 - **Unchanged.** Points, the Adam/L-BFGS schedule, the devices, sharding, gradient-norm balancing
   (on the wall and Kutta terms) and the variants and their order (the base variant keeps its name
-  "euler", meaning the inviscid run). An Adam step costs more (third rather than second derivatives
+  "euler", meaning the inviscid run). *(2026-10-06: superseded by §7.9, which renames the base
+  variant `pure` and drops the viscous variants from the plan.)* An Adam step costs more (third rather than second derivatives
   of the network): on the CPU at the spec sizes on the cylinder, 0.88 s against the Euler PINN's
   0.60 s (load average ~17).
 - **Consequence for scoring (§8.2), not changed here:** under this formulation the wall-normal
@@ -450,7 +451,9 @@ this replaces it.
   and |∇ξ| ~ 1/√r (Γ-only residual 1.2e4; 8e-3 with the vortex angle below); (b) the network term's
   second derivatives are singular at the sharp corner whatever its input features, as the true corner
   flow is. The S3 shards started on the §7.8 code thrashed (residual 150-1000, wall loss 5-110 after
-  11,000 Adam steps) and were stopped.
+  11,000 Adam steps) and were stopped. *(2026-10-06, corrected from the logs: two of the three
+  trained, residual 67-995 to Adam step 12,000 and 26-472 to step 8,500, wall loss 4.2-386, and were
+  stopped; the third refused at its preflight and never trained. `docs/findings.md`, 2026-10-05.)*
 - **Circulation term.** Γξ is replaced by Γ·Θ_v, the angle of a clockwise point vortex at the
   quarter chord, Θ_v(x, y) = 1 − ((atan2(y, x − 0.25)) mod 2π)/(2π). Its unit jump lies on the ray
   y = 0, x > 0.25, which in the domain is exactly the O-grid's ξ = 0 line (the wake cut); ∇Θ_v is
@@ -488,7 +491,9 @@ this replaces it.
 ### 8.1 Contestants, truth and the one force integrator
 
 - **Columns:** SU2 on the training grid (the floor); the POD baseline; the FNO; the PINN; the PINN with
-  artificial viscosity (supercritical cases only).
+  artificial viscosity (supercritical cases only). *(2026-10-06: the last column was not run. §7.9
+  dropped the viscous variants by the author's scope decision of 2026-10-05, so S4 scores four
+  columns, and the PINN column is the full-potential PINN of §7.8-7.9.)*
 - **Truth:** SU2 on the fine grid, read at the training grid's nodes, which is exact because the grids
   nest. The PINN is evaluated at those same nodes.
 - **One force integrator** (`score/forces.py`): vertex-lumped integration of (p − p∞) over the wall (each node carries half of each adjacent edge's outward normal; measured to reproduce SU2 on the spike to 5 × 10⁻¹¹, where the edge-midpoint trapezoid misses CMz by 1.6 × 10⁻⁵), reference length 1, moments about (0.25, 0). **Before it scores anything, it must reproduce

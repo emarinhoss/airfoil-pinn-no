@@ -1,0 +1,1434 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+\graphicspath{{figures/}}
+\setlength{\emergencystretch}{2em}
+\setlist{itemsep=2pt,topsep=4pt}
+
+\newcommand{\Ma}{M_\infty}
+\newcommand{\Cp}{C_p}
+\newcommand{\CL}{C_L}
+\newcommand{\CD}{C_D}
+\newcommand{\CM}{C_M}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\cmd}[1]{\texttt{\small #1}}
+
+\title{A physics-informed neural network and a Fourier neural operator, head to head:\\
+\large steady inviscid flow over a family of NACA four-digit airfoils, scored against SU2}
+\author{Eder Sousa}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+Three learned models are compared with SU2, on steady two-dimensional inviscid compressible flow
+around NACA four-digit sections. The models are a Fourier neural operator (FNO), a proper
+orthogonal decomposition (POD) baseline and a physics-informed neural network (PINN).
+The input space is Mach number $0.30$--$0.80$, angle of attack $-2^\circ$ to $6^\circ$, thickness
+$0.08$--$0.16$ and camber $0$--$0.04$, with an extrapolation set at Mach $0.80$--$0.85$.
+SU2 ran 1,184 Euler cases on a structured O-grid. The FNO and POD are trained on up to 896 of
+them; the PINN is trained on each test case separately, from the equations alone.
+Every contestant is scored on the same nodes against SU2 on a $512\times193$ grid, with one force
+integrator. Each error is shown beside \emph{the floor}: SU2's own $256\times97$ solution scored
+the same way.
+In range, the FNO's near-field error is 1.3 times the floor at its $128\times49$ training
+resolution and 5.3 times at $256\times97$ on subcritical cases, and 2.4 times on supercritical
+cases. In extrapolation every surrogate fails: the FNO is 3.6 times the floor and POD 7.9 times.
+The PINN was first built on the Euler equations, and that version converged to fluid at rest. It
+was replaced by a full-potential PINN, which is 26--65 times the floor and under-predicts lift
+on five of six cases.
+On cost, the PINN is 88--220 times SU2 per case, depending on how GPU and CPU time are counted.
+The FNO repays its training only after 1,126 new cases.
+Three predictions were recorded before any model ran. The first held on wall time only; the
+second held; the third held in part.
+All of this is relative to SU2 at $512\times193$. On the NACA\,0012 anchor, that truth is itself
+6--8\,\% below the grid-converged lift of Vassberg and Jameson.
+\end{abstract}
+
+\tableofcontents
+
+%===================================================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The two families of learned flow solvers make opposite bets.
+\begin{itemize}
+  \item A \emph{neural operator} learns a map from problem parameters to solution fields across a
+    whole family of cases~\cite{li2021fno}. It pays a large data and training cost once and then
+    answers new cases almost for free.
+  \item A \emph{physics-informed neural network}~\cite{raissi2019pinn} needs no data. It is trained
+    on one case by minimising the residual of the governing equations at collocation points, and
+    it pays the full training cost again for every case.
+\end{itemize}
+This study measures both bets on one aerodynamic problem, against one truth, with one scorer and a
+cost record for every method.
+
+\paragraph{The problem.}
+The problem is steady inviscid compressible flow (the Euler equations) around NACA four-digit
+sections~\cite{abbott1959}, over a box of four inputs: free-stream Mach number $\Ma$, angle of
+attack $\alpha$, thickness $t$ and maximum camber $m$. The range runs from fully subcritical flow
+to transonic flow with strong shocks. It is cheap enough that a laptop can generate a thousand
+reference solutions with SU2~\cite{economon2016su2}, and hard enough to exercise everything that
+makes compressible aerodynamics difficult for learned models:
+\begin{itemize}
+  \item shocks that move with the inputs;
+  \item lift fixed by a condition at a sharp trailing edge;
+  \item forces that depend only on the pressure along the wall.
+\end{itemize}
+
+\paragraph{The contestants.}
+\begin{enumerate}
+  \item \textbf{SU2} on the $256\times97$ training grid. This is the reference method, and scored
+    against the fine grid it defines \emph{the floor}: the error any $256\times97$ answer carries
+    by being on that grid.
+  \item \textbf{POD}: a linear basis of training fields, with mode weights interpolated over the
+    inputs.
+  \item \textbf{FNO}: a Fourier neural operator in the O-grid's index space.
+  \item \textbf{PINN}: trained on each test case from the equations, boundary conditions and that
+    case's inputs only.
+\end{enumerate}
+Both networks are written from scratch in PyTorch.
+
+\paragraph{Predictions recorded before any model ran.}
+\begin{enumerate}[label=P\arabic*.]
+  \item For a single new case, SU2 beats the PINN on cost by one to two orders of magnitude.
+  \item The FNO beats ``just run SU2'' only after roughly as many new cases as it took to train it,
+    about a thousand, unless the data-efficiency curve shows far fewer training cases suffice.
+  \item Without the Kutta condition, the PINN's residuals will look acceptable while its lift is
+    wrong.
+\end{enumerate}
+These are checked in \cref{sec:predictions}.
+
+\paragraph{For readers new to the methods.}
+\Cref{app:basics,app:fno,app:pinn,app:compare} explain the learned models in detail, for
+teaching. They cover the network building blocks and their training, the FNO as implemented,
+the PINN as implemented, and the three models side by side.
+
+\paragraph{How the work ran.}
+The work ran in five stages (\cref{fig:pipeline}):
+\begin{itemize}
+  \item S0 checked SU2's accuracy and cost, and froze its settings;
+  \item S1 ran the data campaign;
+  \item S2 trained the operator models;
+  \item S3 ran the PINN;
+  \item S4 scored everything.
+\end{itemize}
+Every figure quoted here comes from a committed record in \texttt{results/}. The dated log
+\texttt{docs/findings.md} gives the command behind each figure.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=5mm and 6mm,
+  box/.style={draw=black!55, rounded corners=2pt, align=center, font=\footnotesize,
+              inner sep=4pt, minimum height=11mm, text width=24mm, fill=black!3},
+  model/.style={box, fill=blue!6},
+  arr/.style={-{Stealth[length=2mm]}, black!65, thick}]
+\node[box] (geo) {NACA section\\$(\Ma,\alpha,t,m)$};
+\node[box, right=of geo] (grid) {O-grid map\\$(\xi,\eta)\mapsto(x,y)$\\three nested levels};
+\node[box, right=of grid] (su2) {SU2 Euler\\one directory per case\\8 at a time};
+\node[box, right=of su2] (data) {convergence rule\\$\to$ HDF5 dataset\\per grid level};
+\node[model, below=9mm of data] (fno) {FNO and POD\\trained on the family};
+\node[model, below=9mm of grid] (pinn) {PINN\\one case at a time,\\equations only};
+\node[box, below=9mm of su2, text width=26mm] (score) {one scorer\\same nodes, one force\\integrator, cost record};
+\draw[arr] (geo) -- (grid);
+\draw[arr] (grid) -- (su2);
+\draw[arr] (su2) -- (data);
+\draw[arr] (data) -- (fno);
+\draw[arr] (grid) -- (pinn);
+\draw[arr] (fno) -- (score);
+\draw[arr] (pinn) -- (score);
+\draw[arr] ([xshift=-4mm]data.south) -- node[font=\scriptsize, black!70, left=1pt, pos=0.45] {truth} (score.north east);
+\node[font=\scriptsize, black!60, above=1mm of geo.north west, anchor=south west] {S0, S1};
+\node[font=\scriptsize, black!60, below=1mm of pinn.south west, anchor=north west] {S3};
+\node[font=\scriptsize, black!60, below=1mm of fno.south west, anchor=north west] {S2};
+\node[font=\scriptsize, black!60, below=1mm of score.south west, anchor=north west] {S4};
+\end{tikzpicture}
+\caption{The pipeline. One function defines the geometry: the mesh generator samples the O-grid map
+and the PINN uses it continuously. The models never see the truth, which only the scorer reads.}
+\label{fig:pipeline}
+\end{figure}
+
+%===================================================================================================
+\section{Problem formulation}
+\label{sec:problem}
+
+\subsection{Governing equations}
+
+The flow obeys the steady two-dimensional Euler equations in conservation form,
+\begin{equation}
+  \frac{\partial \bm F}{\partial x} + \frac{\partial \bm G}{\partial y} = 0,\qquad
+  \bm F = \begin{pmatrix}\rho u\\ \rho u^2 + p\\ \rho u v\\ \rho u H\end{pmatrix},\quad
+  \bm G = \begin{pmatrix}\rho v\\ \rho u v\\ \rho v^2 + p\\ \rho v H\end{pmatrix},
+  \label{eq:euler}
+\end{equation}
+for a perfect gas with $\gamma = 1.4$, where
+\begin{equation}
+  p = (\gamma-1)\bigl(\rho E - \tfrac12\rho|\vu|^2\bigr),\qquad H = E + p/\rho .
+\end{equation}
+
+\paragraph{Boundary conditions.}
+On the wall the flow is tangent to the surface, $\vu\cdot\hat{\bm n} = 0$. On a circle of radius
+100 chords it meets a uniform free stream at Mach $\Ma$ and angle $\alpha$. SU2 runs dimensionally,
+with $p_\infty = 101{,}325$\,Pa, $T_\infty = 288.15$\,K and $R = 287.058$\,J/(kg\,K).
+
+\paragraph{Non-dimensional state.}
+Every array a model sees is non-dimensional,
+\begin{equation}
+  \bm q = (\hat\rho,\ \hat u,\ \hat v,\ \hat p) = (\rho/\rho_\infty,\ u/U_\infty,\ v/U_\infty,\ p/p_\infty).
+\end{equation}
+The derived quantities used throughout come from one tested module:
+\begin{align}
+  \Cp &= \frac{\hat p - 1}{\tfrac12\gamma\Ma^2}, &
+  M &= \Ma\,\frac{|\hat{\vu}|}{\sqrt{\hat p/\hat\rho}}, \label{eq:cp}\\
+  \frac{s - s_\infty}{c_v} &= \ln\frac{\hat p}{\hat\rho^{\,\gamma}}, &
+  \frac{H}{H_\infty} &= \frac{\hat p/\bigl(\hat\rho(\gamma-1)\Ma^2\bigr) + \tfrac12|\hat{\vu}|^2}
+                            {1/\bigl((\gamma-1)\Ma^2\bigr) + \tfrac12}. \label{eq:entropy}
+\end{align}
+Two identities make these useful checks:
+\begin{itemize}
+  \item In shock-free inviscid flow the entropy must stay at its free-stream value, so any rise is
+    numerical error.
+  \item In steady inviscid flow from a uniform stream the total enthalpy $H$ is constant
+    everywhere, through shocks included.
+\end{itemize}
+
+\subsection{Geometry}
+
+A NACA four-digit section of unit chord is parameterised as one closed curve of $\xi\in[0,1)$:
+$\xi = 0$ is the trailing edge, $\xi\in[0,\tfrac12]$ runs along the lower surface to the leading
+edge, and $\xi\in[\tfrac12,1)$ runs back along the upper surface.
+
+\paragraph{Thickness.}
+With $s = \cos\pi\xi$, the chord station is $x = s^2$, so $\sqrt{x} = |s|$ and the curve has no
+square-root singularity at the leading edge. The signed half-thickness is
+\begin{equation}
+  y_s(\xi) = -\operatorname{sign}(s)\,5t\left(0.2969\sqrt{x} - 0.1260x - 0.3516x^2 + 0.2843x^3 - 0.1036x^4\right),
+  \label{eq:naca}
+\end{equation}
+where the $x^4$ coefficient closes the trailing edge.
+
+\paragraph{Camber.}
+The camber line, with $p = 0.4$ fixed, is
+\begin{equation}
+  y_c = \begin{cases}\dfrac{m}{p^2}\left(2px - x^2\right), & x < p,\\[2mm]
+  \dfrac{m}{(1-p)^2}\left(1 - 2p + 2px - x^2\right), & x \ge p.\end{cases}
+\end{equation}
+The thickness is applied normal to it: the wall point is
+$(x - y_s\sin\theta_c,\; y_c + y_s\cos\theta_c)$, with $\tan\theta_c = \mathrm{d}y_c/\mathrm{d}x$.
+
+The same function runs on NumPy arrays and on PyTorch tensors, so the mesh and the PINN share one
+geometry.
+
+\begin{table}[t]
+\centering\small
+\caption{The input box, the sets and the grids, all fixed before any model was trained.}
+\label{tab:box}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\multicolumn{3}{@{}l}{\textbf{Inputs}}\\
+Mach number $\Ma$ & $[0.30,\ 0.80]$ & extrapolation set: $[0.80,\ 0.85]$\\
+Angle of attack $\alpha$ & $[-2^\circ,\ 6^\circ]$ & \\
+Thickness $t$ & $[0.08,\ 0.16]$ & \\
+Maximum camber $m$ & $[0,\ 0.04]$ & camber position $p = 0.4$ fixed\\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{Sets} (scrambled Sobol designs, seeds fixed)}\\
+Training & Sobol points 1--896 & $256\times97$\\
+Validation & Sobol points 897--1,024 & $256\times97$; tuning and early stopping only\\
+Test, in range & 64 points, another seed & $512\times193$ (truth) and $256\times97$ (floor)\\
+Test, extrapolation & 16 points, $\Ma\in[0.80,0.85]$ & $512\times193$ and $256\times97$\\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{Grids} (nested exactly: each level is every second node of the next)}\\
+Fine & $512\times193$ & truth\\
+Training & $256\times97$ & data, evaluation, the floor\\
+Coarse & $128\times49$ & FNO training\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{The O-grid}
+
+All data live on one structured O-grid, defined as a continuous map
+$(\xi,\eta)\in[0,1)\times[0,1]\mapsto(x,y)$:
+\begin{equation}
+  \bm x(\xi,\eta) = \bm x_w(\xi) + \sigma(\eta)\,\bigl(\bm x_f(\xi) - \bm x_w(\xi)\bigr),\qquad
+  \bm x_f(\xi) = \bigl(\tfrac12 + R\cos(-2\pi\xi),\ R\sin(-2\pi\xi)\bigr),
+  \label{eq:ogrid}
+\end{equation}
+with $R = 100$ chords. The radial distribution is geometric,
+\begin{equation}
+  \sigma(\eta) = \frac{r^{N\eta} - 1}{r^{N} - 1},\qquad N = 192,
+\end{equation}
+where the ratio $r$ is chosen so that the first wall spacing of the $256\times97$ grid is
+$2\times10^{-3}$ chords.
+
+\paragraph{Nested levels.}
+The grids sample the map at $\xi_i = i/N_I$ and $\eta_j = j/(N_J - 1)$. Each coarser level is
+therefore exactly every second node of the next, which lets the truth be read at the training
+grid's nodes without interpolation. Node $(i,j)$ has SU2 id $jN_I + i$, so every output maps
+straight back onto an $(i,j)$ array.
+
+\paragraph{The outer point.}
+The outer point sits at the uniform polar angle $-2\pi\xi$. The first construction instead placed
+it at the same angle about mid-chord as the wall point. That version folded the mesh: 9,792
+inverted cells at $t = 0.08$, $m = 0.04$. The uniform angle has no inverted cell at any corner of
+the box (\cref{fig:grid}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{grid.pdf}
+\caption{The $256\times97$ O-grid around a $t = 0.12$, $m = 0.02$ section.
+(a) The whole domain, every eighth line around and every fourth outward. (b) Near the section.
+(c) The trailing edge, where the section's cosine clustering crowds the lines and makes
+$\partial\bm x/\partial\xi$ vanish at the edge itself: $x_\xi = y_\xi = 0$, so the map is
+degenerate there ($J = 0$). That point matters for the PINN (\cref{sec:potential}).}
+\label{fig:grid}
+\end{figure}
+
+%===================================================================================================
+\section{Reference data: SU2}
+\label{sec:su2}
+
+\subsection{Solver settings and the convergence rule}
+
+\paragraph{Settings.}
+SU2 8.5.0 solves \cref{eq:euler} on each case's own mesh, one serial process per case:
+\begin{itemize}
+  \item a JST scheme~\cite{jameson1981jst} with sensor coefficients $(0.5, 0.02)$;
+  \item implicit Euler pseudo-time stepping with an adaptive CFL;
+  \item an FGMRES linear solver with ILU preconditioning;
+  \item weighted-least-squares gradients.
+\end{itemize}
+
+\paragraph{The convergence rule.}
+Convergence is judged by a rule of our own, read from the history file, not by SU2's flag. A case
+is \emph{converged} if and only if both hold:
+\begin{equation}
+  \log_{10}\frac{\mathrm{rms}(R_\rho)_{1}}{\mathrm{rms}(R_\rho)_{N}} \ge 5
+  \quad\text{and}\quad
+  \max_{k\in\mathcal W}C_\bullet^{(k)} - \min_{k\in\mathcal W}C_\bullet^{(k)} \le 10^{-6}
+  \ \text{ for } C_\bullet\in\{\CL,\CD\}.
+  \label{eq:conv}
+\end{equation}
+Here $\mathcal W$ is the last 500 iterations. The caps are 10,000 iterations on the training grid
+and 20,000 on the fine grid.
+
+\paragraph{Consistency with SU2's own stop.}
+SU2 stops when the mean relative change of $\CL$ and $\CD$ over $n_c$ iterations falls below
+$\varepsilon_c$. At that stop $\CL$ can still vary by up to $\varepsilon_c n_c|\CL|$ over the
+window. The frozen setting therefore has to satisfy
+\begin{equation}
+  \varepsilon_c\, n_c\, |\CL|_{\max} = 10^{-9}\times500\times1.86 = 9.3\times10^{-7} < 10^{-6},
+\end{equation}
+where $|\CL|_{\max} = 1.86$ is a thin-airfoil bound at the box's highest-lift corner. Stage S0 found
+this the hard way:
+\begin{itemize}
+  \item with $\varepsilon_c = 10^{-7}$, none of 24 runs met \cref{eq:conv};
+  \item with $10^{-8}$, 9 of 23 did;
+  \item with $10^{-9}$, all 24 did.
+\end{itemize}
+
+\subsection{Stage S0: accuracy and cost}
+
+Five cases were each solved on all three grids:
+\begin{itemize}
+  \item a symmetric section at $\alpha = 0$;
+  \item two subcritical lifting cases;
+  \item a supercritical case at $\Ma = 0.75$;
+  \item the NACA\,0012 anchor at $\Ma = 0.8$, $\alpha = 1.25^\circ$.
+\end{itemize}
+
+\paragraph{Multigrid.}
+Three multigrid levels converged every case and agreed on $\CL$ to $3\times10^{-9}$. They cost more
+wall time on all five cases (median 239.8\,s against 132.6\,s), so the campaign runs without
+multigrid.
+
+\paragraph{Mesh error.}
+Writing $f_c$, $f_t$ and $f_f$ for the coarse, training-grid and fine values, the observed order is
+\begin{equation}
+  \hat p = \log_2\frac{|f_c - f_t|}{|f_t - f_f|}.
+\end{equation}
+It was negative or non-monotone for $\CL$ on every lifting case. The three grids are therefore not
+in the asymptotic range, and the error is reported as the plain difference from the fine grid
+(\cref{tab:s0}), not as a Richardson extrapolation.
+
+\paragraph{Outer boundary.}
+Moving the outer boundary from 100 to 200 chords changed $\CL$ by $1.3\times10^{-3}$ and
+$2.1\times10^{-3}$. The radius was kept at 100 chords, so all methods share that far-field
+truncation.
+
+\paragraph{Known answers.}
+\begin{itemize}
+  \item The symmetric case gives $|\CL| = 2\times10^{-15}$.
+  \item Subcritical drag, ideally zero, is $-0.74$ to $+1.23$ counts.
+  \item The lift slope is 1.129 times the Prandtl--Glauert thin-airfoil value, above it as a 12\,\%
+    thick section should be.
+  \item The NACA\,0012 anchor gives $\CL = 0.3260$ at $512\times193$, which is compared with the
+    grid-converged reference in \cref{tab:vj}.
+\end{itemize}
+
+\paragraph{The anchor against a grid-converged reference.}
+Vassberg and Jameson~\cite{vassberg2010} solved this case on aspect-ratio-one O-meshes up to
+$4096\times4096$ cells, about 150 chords deep, with three solvers. Their Richardson continuum
+estimates are $\CL = 0.3482$--$0.3562$ across the solvers (\cref{tab:vj}). Their section is the
+NACA\,0012 equation with its standard $x^4$ coefficient, extended to a sharp trailing edge at
+$x = 1.0089$; ours closes the edge at $x = 1$. Our grids give coefficients below that range on every
+quantity:
+\begin{itemize}
+  \item at $512\times193$, $\CL$ is 6--8\,\% low, $\CD$ 12--15 counts low, and $|\CM|$
+    17--20\,\% low;
+  \item the lift is still rising with refinement, from below, while their FLO82 sequence descends
+    to the continuum from above.
+\end{itemize}
+So the truth used for scoring carries its own discretisation error on transonic lifting flow. On
+this case it is about 2.6 times the floor's grid difference in $\CL$. The comparison among
+contestants is unaffected, because all of them meet the same truth. Statements such as ``near the
+floor'' measure agreement with SU2 at $512\times193$, not with the exact Euler solution. The
+differences in section, far field (100 against about 150 chords, and no point-vortex correction
+here), grid and scheme are not separated.
+
+\begin{table}[t]
+\centering\small
+\caption{The NACA\,0012 anchor ($\Ma = 0.8$, $\alpha = 1.25^\circ$): this study's SU2 grids
+against the four continuum estimates of Vassberg and Jameson~\cite{vassberg2010} (their
+Table~11). $\CM$ is compared in magnitude; both are nose-down.}
+\label{tab:vj}
+\begin{tabular}{@{}lrrrcc@{}}
+\toprule
+& \multicolumn{3}{c}{This study, SU2} & \multicolumn{2}{c@{}}{Vassberg \& Jameson continuum}\\
+\cmidrule(r){2-4}\cmidrule(l){5-6}
+& $128\times49$ & $256\times97$ & $512\times193$ & min & max\\
+\midrule
+$\CL$ & 0.3118 & 0.3174 & 0.3260 & 0.3482 & 0.3562\\
+$\CD$ (counts) & 215.2 & 208.8 & 212.3 & 224.5 & 226.8\\
+$|\CM|$ & 0.0278 & 0.0288 & 0.0311 & 0.0374 & 0.0388\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The scorer check.}
+The scorer's own force integrator (\cref{sec:scoring}) reproduced SU2's reported $\CL$, $\CD$ and
+$\CM$ on all 24 S0 solutions to $4.9\times10^{-11}$, against the required $10^{-6}$.
+
+\begin{table}[t]
+\centering\small
+\caption{S0: the training grid minus the fine grid (the floor, on the S0 cases), and the cost per
+case. $\CD$ is in counts ($10^{-4}$); $\Cp$ is compared at the fine grid's every second wall
+point. All five cases have $t = 0.12$. Cost per case, median over the five cases with six concurrent
+workers, in seconds of wall / CPU time: 23.7 / 18.0 at $128\times49$, 132.6 / 127.0 at
+$256\times97$, and 1,248.6 / 1,124.2 at $512\times193$.}
+\label{tab:s0}
+\begin{tabular}{@{}lccc@{\hspace{5mm}}rrrrr@{}}
+\toprule
+Case & $\Ma$ & $\alpha$ & $m$ & $\Delta\CL$ & $\Delta\CD$ (counts) & $\Delta\CM$ & $\Cp$ L2 & $\Cp$ max\\
+\midrule
+sym & 0.50 & $0^\circ$ & 0 & $1.2\times10^{-14}$ & $-0.13$ & $1.5\times10^{-15}$ & 0.0346 & 0.301\\
+sub0 & 0.50 & $0^\circ$ & 0.02 & $-2.45\times10^{-3}$ & $-0.03$ & $-5.80\times10^{-4}$ & 0.0340 & 0.300\\
+sub2 & 0.50 & $2^\circ$ & 0.02 & $-3.36\times10^{-3}$ & $+0.12$ & $-7.23\times10^{-4}$ & 0.0337 & 0.295\\
+super & 0.75 & $2^\circ$ & 0.02 & $-1.19\times10^{-2}$ & $-8.92$ & $-3.78\times10^{-3}$ & 0.0328 & 0.429\\
+anchor & 0.80 & $1.25^\circ$ & 0 & $-8.67\times10^{-3}$ & $-3.53$ & $-2.35\times10^{-3}$ & 0.0335 & 0.320\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Stage S1: the data campaign}
+
+\paragraph{The runs.}
+The campaign ran from 1 to 2 October 2026 with eight concurrent SU2 processes. It ran 1,104 cases
+at $256\times97$ (69.0 CPU-hours) and the 80 test cases again at $512\times193$ (42.3 CPU-hours).
+The median case took 198.6\,s of CPU time at $256\times97$ and 1,501.7\,s at $512\times193$.
+A case is done if and only if its \texttt{result.json} exists, and that file is written last and
+atomically. The campaign could therefore be resumed after every interruption, including 24
+sleeps of the machine, most of them thermal.
+
+\paragraph{Failures.}
+Twenty cases at $256\times97$ and five at $512\times193$ failed \cref{eq:conv}; three of the
+failures appear at both levels. Of these 25 failures, 23 had a residual that stalled below 5 orders
+while $\CL$ and $\CD$ were still moving. In the other two the residual dropped far enough,
+but $\CL$ still varied by $1.6\times10^{-5}$ and $4.0\times10^{-6}$. All of them sit in the
+transonic, higher-lift corner of the box (\cref{fig:design}). They are excluded from the dataset
+and listed with their reasons, not patched.
+
+\paragraph{The dataset.}
+The final dataset holds 881 training, 126 validation, 62 in-range and 15 extrapolation cases at
+$256\times97$, and 61 and 14 test cases at $512\times193$. Scoring uses the 61 in-range and 14
+extrapolation cases that converged at both levels.
+
+\paragraph{Regime.}
+A case is \emph{supercritical} if its maximum surface Mach number in the truth exceeds 1, and
+\emph{subcritical} otherwise. The 61 in-range cases split 37 subcritical and 24 supercritical. All
+14 extrapolation cases are supercritical, so no subcritical extrapolation figure exists.
+
+\paragraph{Showcase cases.}
+Six cases are picked by rule, so that nobody picks flattering ones. The surviving in-range cases
+are sorted by maximum surface Mach number, and the cases at sorted index $\mathrm{round}(p(n-1))$
+are taken for $p = 0.10$, 0.30, 0.50, 0.70, 0.85 and 0.95. This gives three subcritical cases
+(\texttt{test\_in-0022}, \texttt{-0021}, \texttt{-0043}) and three supercritical ones
+(\texttt{-0004}, \texttt{-0031}, \texttt{-0040}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{design.pdf}
+\caption{The case design, projected onto two pairs of inputs. Crosses mark the 22 distinct cases
+that failed the convergence rule at either grid level. All have $\Ma\ge0.697$, and 21 of the 22
+have $\alpha\ge2.6^\circ$: shock-dominated cases on which the residual stalls while the forces
+still move. The vertical line marks the edge of the training range, $\Ma = 0.80$.}
+\label{fig:design}
+\end{figure}
+
+%===================================================================================================
+\section{The learned models}
+\label{sec:models}
+
+\subsection{POD baseline}
+
+POD needs no change of representation, because every case is the same array shape.
+
+\paragraph{The basis.}
+Stack the $N$ standardised training fields as rows of $\bm Y\in\mathbb R^{N\times D}$, with mean
+$\bar{\bm y}$. The snapshot method~\cite{sirovich1987} gives the eigenpairs
+$(\lambda_k,\bm v_k)$ of $(\bm Y - \bar{\bm y})(\bm Y - \bar{\bm y})^{\mathsf T}$, and from them the
+orthonormal modes
+\begin{equation}
+  \bm\phi_k = \lambda_k^{-1/2}(\bm Y - \bar{\bm y})^{\mathsf T}\bm v_k .
+\end{equation}
+
+\paragraph{The prediction.}
+A new case with inputs $\bm\mu = (\Ma,\alpha,t,m)$ is predicted as
+\begin{equation}
+  \hat{\bm y}(\bm\mu) = \bar{\bm y} + \sum_{k=1}^{K} a_k(\bm\mu)\,\bm\phi_k ,
+\end{equation}
+where each weight $a_k$ is interpolated over the inputs (scaled to the unit box) by a
+thin-plate-spline radial basis function.
+
+\paragraph{Selection.}
+$K$ and the RBF smoothing were chosen on the validation set. The chosen values (256 modes,
+smoothing $10^{-2}$) lie on the edges of the search grids, so the baseline may be under-tuned.
+
+\subsection{Fourier neural operator}
+
+\Cref{app:fno} explains the network in detail, with its tensor shapes and parameter counts.
+The FNO works in the O-grid's index space. Around the airfoil the grid is periodic, so a Fourier
+transform along $i$ is exact and a learned mode means the same physical wavenumber at every
+resolution.
+
+\paragraph{Inputs and outputs.}
+The FNO takes six channels per node:
+\begin{itemize}
+  \item the radially compressed position $(x - \tfrac12,\, y)\,\ln(1+r)/r$, where $r$ is the
+    distance from mid-chord;
+  \item the ring index $j/(N_J-1)$;
+  \item $\Ma$, $\cos\alpha$ and $\sin\alpha$, the same at every node.
+\end{itemize}
+The shape therefore reaches the model only through the node positions.
+
+It predicts four channels, each of order one across the Mach range:
+\begin{equation}
+  \bm y = \Bigl(\hat u - \cos\alpha,\ \ \hat v - \sin\alpha,\ \ \Cp,\ \
+  \frac{\hat\rho - 1}{\tfrac12\Ma^2}\Bigr).
+  \label{eq:targets}
+\end{equation}
+Each channel is then standardised over the training set. Without this scaling, $\hat p - 1$ would
+shrink like $\Ma^2$ and low-Mach cases would barely register in the loss.
+
+\paragraph{Architecture.}
+A pointwise layer lifts the six inputs to $w$ channels. Four Fourier layers follow, each
+\begin{equation}
+  \bm h \leftarrow \sigma\!\left(\mathcal F^{-1}\!\bigl[\bm R\cdot(\mathcal F\bm h)_{|k_i|<k_I,\ k_j<k_J}\bigr]
+  + \bm W\bm h\right),
+\end{equation}
+with learned complex weights $\bm R$ on the retained modes, a pointwise linear path $\bm W$ and GELU
+activations $\sigma$ (none after the last layer). A projection $w\to128\to4$ gives the output.
+
+\paragraph{Radial padding.}
+Radially the field is not periodic, so it is zero-padded by
+\begin{equation}
+  P(N_J) = \mathrm{round}\bigl(3(N_J-1)/16\bigr) - 1
+\end{equation}
+rows before the transform: 8 rows at $128\times49$ and 17 at $256\times97$. The discrete Fourier
+period, $(N_J+P)/(N_J-1) = 19/16$ in $\eta$, is then the same at both resolutions. An earlier
+padding of $(N_J-1)/6$ matched the padded span instead of the period, and one spectral layer then
+differed by 4--71\,\% between the two resolutions.
+
+\paragraph{Loss and training.}
+Loss A is the per-sample relative L2 error of each output channel, averaged over channels; loss B
+adds the same term on the wall row, weighted 10:
+\begin{equation}
+  \mathcal L_A = \frac{1}{BC}\sum_{b,c}\frac{\|\hat{\bm y}_{bc} - \bm y_{bc}\|_2}{\|\bm y_{bc}\|_2 + \epsilon},
+  \qquad
+  \mathcal L_B = \mathcal L_A + 10\,\mathcal L_A\big|_{j=0}.
+  \label{eq:fnoloss}
+\end{equation}
+Training used AdamW~\cite{loshchilov2019adamw} with learning rate $10^{-3}$, cosine decay, weight
+decay $10^{-4}$ and batch 8, for at most 300 epochs with early stopping at a patience of 30. It
+ran on the $128\times49$ subgrid (every second node of the $256\times97$ fields), and the model is
+evaluated at $256\times97$. That resolution transfer is scored separately.
+
+\paragraph{Tuning.}
+Eight configurations were trained for 100 epochs and selected on validation loss
+(\cref{tab:tuning}). Width separates them; the mode counts move the loss by about as much as a
+change of seed would.
+
+\begin{table}[t]
+\centering\small
+\caption{FNO tuning ($n = 896$, loss A, 4 layers, 100 epochs, on the Apple GPU), and the final runs
+of the selected configuration (300 epochs). Validation is relative L2 on standardised targets.}
+\label{tab:tuning}
+\begin{tabular}{@{}lccrr@{\hspace{8mm}}lcrrr@{}}
+\toprule
+\multicolumn{5}{@{}c}{Tuning} & \multicolumn{5}{c@{}}{Final runs (width 48, modes $24\times8$)}\\
+\cmidrule(r{6mm}){1-5}\cmidrule{6-10}
+Tag & width & modes & best val & wall s & Run & loss & best val & epoch & wall s\\
+\midrule
+tune-0 & 32 & $16\times8$ & 0.0315 & 419 & $n$ 896, seed 0 & A & 0.01261 & 278 & 2,160\\
+tune-1 & 32 & $16\times12$ & 0.0308 & 443 & $n$ 896, seed 1 & A & 0.01274 & 293 & 2,242\\
+tune-2 & 32 & $24\times8$ & 0.0310 & 443 & $n$ 896, seed 2 & A & 0.01178 & 294 & 2,237\\
+tune-3 & 32 & $24\times12$ & 0.0310 & 488 & $n$ 896, seed 0 & B & 0.4617 & 50 & 605\\
+tune-4 & 48 & $16\times8$ & 0.0229 & 658 & $n$ 64 & A & 0.0849 & 297 & 257\\
+tune-5 & 48 & $16\times12$ & 0.0223 & 763 & $n$ 128 & A & 0.0507 & 288 & 421\\
+\textbf{tune-6} & 48 & $24\times8$ & \textbf{0.0221} & 793 & $n$ 256 & A & 0.0332 & 284 & 737\\
+tune-7 & 48 & $24\times12$ & 0.0235 & 859 & $n$ 512 & A & 0.0178 & 274 & 1,384\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PINN}
+\label{sec:pinn}
+
+The PINN solves one test case at a time, on the same domain as SU2. It is given that case's inputs
+and the O-grid map, and never any of SU2's field values. Two formulations were built. The first,
+on the Euler equations, failed in a way worth recording. The second, on the full-potential
+equation, is the one scored. \Cref{app:pinn} explains both in detail.
+
+\subsubsection{The Euler PINN, and why it converges to fluid at rest}
+
+\paragraph{Formulation.}
+A fully connected tanh network takes $(\cos2\pi\xi,\ \sin2\pi\xi,\ \eta)$, which makes it periodic
+around the airfoil. It outputs $\ln\rho$ and a raw velocity $\tilde{\vu}$, and two constraints are
+built in:
+\begin{itemize}
+  \item \emph{Wall tangency}, exact by construction:
+    $\vu = \tilde{\vu} - (1-\eta)^4(\tilde{\vu}\cdot\hat{\bm n}_w)\hat{\bm n}_w$.
+  \item \emph{Constant total enthalpy}, so the pressure is algebraic,
+    $p = \tfrac{\gamma-1}{\gamma}\rho(H_\infty - \tfrac12|\vu|^2)$ with
+    $H_\infty = 1/((\gamma-1)\Ma^2) + \tfrac12$ (in $\rho_\infty U_\infty^2$ units).
+\end{itemize}
+The residuals of continuity and the two momentum equations are written in strong conservation form
+in grid coordinates,
+\begin{equation}
+  \mathcal R = \frac1J\left[\frac{\partial}{\partial\xi}\bigl(y_\eta F - x_\eta G\bigr)
+  + \frac{\partial}{\partial\eta}\bigl(-y_\xi F + x_\xi G\bigr)\right],\qquad
+  J = x_\xi y_\eta - x_\eta y_\xi ,
+  \label{eq:strongform}
+\end{equation}
+with the metric terms from automatic differentiation of \cref{eq:ogrid}. The free stream is a soft
+penalty on the outer circle, and the Kutta condition a soft penalty on the velocity at the
+trailing edge.
+
+\paragraph{The failure.}
+The warm-up is a circular cylinder at $\Ma = 0.1$, with the circulation held at zero. It must
+reproduce $\Cp = 1 - 4\sin^2\theta$ to within 0.1. It failed with a largest error of 3.94: the
+network had converged to \emph{fluid at rest} around the body. The wall speed was 0.004 where
+potential flow gives 2.0, and $\Cp = 0.937$ everywhere (\cref{fig:warmup}).
+
+\paragraph{Refuted hypotheses.}
+Five hypotheses were each refuted by a probe:
+\begin{itemize}
+  \item weighting the residual by $J^p$ for $p = 0$, 0.5 and 1;
+  \item an exact reparameterisation against low-Mach stiffness;
+  \item a 10-chord outer boundary;
+  \item a homentropic closure;
+  \item the real showcase case in place of the cylinder.
+\end{itemize}
+
+\paragraph{The decisive probe.}
+A network was fitted, by supervision, to the analytic potential flow. It would pass the warm-up
+(shoulder speed 1.995, $\max|\Delta\Cp| = 0.030$). Yet its PINN loss is 0.31, about 1,000 times
+the rest state's $\sim10^{-4}$, because small fitting errors are large derivative errors. A further
+1,000 PINN-only steps from that fit drive it away from the answer.
+
+\paragraph{Root cause.}
+Fluid at rest near the body satisfies the strong-form equations and the wall condition exactly; it
+violates only the weakly enforced far field. Every nearly correct flow costs more, so descent
+leaves even the true solution. Within the configuration tested here the fault was in the
+formulation, not in a parameter. It is not a property of Euler PINNs in general: Wassing, Langer
+and Bekemeyer~\cite{wassing2025} train an Euler PINN with a soft far field to within 1\,\% of a
+finite-volume reference on transonic NACA\,0012 cases (\cref{sec:discussion}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{warmup.pdf}
+\caption{The cylinder warm-up at $\Ma = 0.1$ (pass: $\max|\Delta\Cp|\le0.1$). The Euler PINN
+reaches $\Cp\approx0.94$ all round the wall, the stagnation value: fluid at rest. The
+full-potential PINN lies on the analytic curve (largest error 0.027), with $\CL$ and $\CD$ of
+$-4\times10^{-4}$ and $-1\times10^{-3}$.}
+\label{fig:warmup}
+\end{figure}
+
+\subsubsection{The full-potential PINN}
+\label{sec:potential}
+
+\paragraph{Formulation.}
+For the full-potential equation in subcritical flow, the residual loss is (nearly) convex in the
+potential, with no rest attractor, and a Dirichlet far field makes rest inadmissible. One scalar
+network $\psi(\xi,\eta)$ and a learned circulation $\Gamma$ give the velocity potential, in units
+of $U_\infty c$:
+\begin{equation}
+  \phi = x\cos\alpha + y\sin\alpha + \Gamma\,\Theta_v(x,y) + \psi(\xi,\eta)\,(1-\eta),\qquad
+  \Theta_v = 1 - \frac{\operatorname{atan2}(y,\ x - \tfrac14)\bmod 2\pi}{2\pi}.
+  \label{eq:phi}
+\end{equation}
+\begin{itemize}
+  \item The factor $(1-\eta)$ vanishes on the 100-chord circle, so the far field is exact (the
+    neglected doublet is $\sim10^{-3}$ there).
+  \item $\Theta_v$ is the angle of a clockwise point vortex at the quarter chord. Its unit jump lies
+    on the ray $y = 0$, $x > \tfrac14$, which in the domain is exactly the grid line $\xi = 0$, the
+    wake cut. Its gradient, $1/(2\pi r)$, is continuous across the cut and regular at the trailing
+    edge.
+\end{itemize}
+
+\paragraph{The state.}
+The state follows algebraically. The velocity is $\vu = \nabla\phi$ through the metric terms,
+\begin{equation}
+  u = \frac{\phi_\xi y_\eta - \phi_\eta y_\xi}{J},\qquad v = \frac{-\phi_\xi x_\eta + \phi_\eta x_\xi}{J},
+\end{equation}
+and the density and pressure come from isentropic Bernoulli at the free-stream total enthalpy:
+\begin{equation}
+  \hat\rho = \Bigl[1 + \tfrac{\gamma-1}{2}\Ma^2\bigl(1 - |\vu|^2\bigr)\Bigr]^{1/(\gamma-1)},
+  \qquad \hat p = \hat\rho^{\,\gamma}.
+  \label{eq:bernoulli}
+\end{equation}
+
+\paragraph{The equation.}
+The only equation left is steady continuity,
+\begin{equation}
+  \nabla\cdot(\rho\nabla\phi) = 0,
+  \label{eq:fullpot}
+\end{equation}
+written in the strong conservation form \cref{eq:strongform} with $(F,G) = \rho(u,v)$. Momentum
+holds by construction, because the flow is irrotational, isentropic and at constant $H$.
+\Cref{eq:fullpot} is exact for shock-free inviscid flow and only an \emph{isentropic approximation}
+at shocks. On supercritical cases it therefore solves a different equation from SU2's: there is no
+entropy jump, so its shocks are those of isentropic flow.
+
+\paragraph{Loss.}
+The loss has three terms:
+\begin{equation}
+  \mathcal L = \underbrace{\frac{1}{N_r}\sum_{n}\mathcal R_n^2}_{\text{continuity}}
+  + w_{\mathrm{wall}}\underbrace{\frac{1}{N_w}\sum_{n}(\vu\cdot\hat{\bm n}_w)^2_n}_{\partial\phi/\partial n = 0}
+  + w_K\underbrace{\Bigl(|\vu|^2_{(\delta,0)} - |\vu|^2_{(1-\delta,0)}\Bigr)^2}_{\text{equal-speed Kutta}},
+  \qquad w_{\mathrm{wall}} = w_K = 10.
+  \label{eq:pinnloss}
+\end{equation}
+
+\paragraph{Two trailing-edge fixes.}
+Both fixes were found on the first showcase case. There, the initial residual was $\sim10^5$, with
+99.9\,\% of it carried by the 10 collocation points nearest the trailing edge.
+\begin{enumerate}
+  \item \emph{The circulation term.} It was first $\Gamma\xi$, and $|\nabla\xi|\sim r^{-1/2}$ at
+    the trailing edge, where $x_\xi = y_\xi = 0$. With $\Theta_v$ the circulation-only residual
+    fell from $1.2\times10^4$ to $8\times10^{-3}$.
+  \item \emph{The residual near the edge.} The network term's second derivatives are singular at
+    the sharp corner, as the true corner flow is. Collocation points within 0.02 chord of the
+    trailing edge are therefore dropped from the residual: 197--225 of 20,000 at each resample.
+\end{enumerate}
+
+\paragraph{The Kutta condition.}
+The first Kutta form, $(\partial\phi/\partial\xi)^2$ at the trailing-edge point, was degenerate.
+There $x_\xi = y_\xi = 0$, so the free-stream and circulation terms contribute nothing to it, and
+it could not constrain $\Gamma$. The equal-speed form in \cref{eq:pinnloss} replaces it. It
+compares $|\vu|^2$ on the two surfaces at $\xi = \delta$ and $1-\delta$, with $\delta = 0.055$,
+about 0.03 chord upstream of the edge.
+
+\paragraph{Training.}
+\begin{itemize}
+  \item \emph{Network}: 7 hidden layers of 96 tanh units.
+  \item \emph{Collocation}: 20,000 points uniform in $(\xi,\eta)$, which the map clusters near the
+    wall, redrawn every 1,000 steps; 512 wall points.
+  \item \emph{Adam}~\cite{kingma2015adam}: 30,000 steps in float32 on the Apple GPU, with the
+    learning rate decaying exponentially from $10^{-3}$ to $10^{-4}$.
+  \item \emph{L-BFGS}~\cite{liu1989lbfgs}: up to 5,000 iterations in float64 on the CPU, which has
+    the float64 that the Apple GPU lacks.
+\end{itemize}
+One variant balances the weights by gradient norms~\cite{wang2021gradient}, every 100 steps:
+\begin{equation}
+  \lambda_k \leftarrow (1-a)\lambda_k + a\,\frac{\max_\theta|\nabla_\theta\mathcal L_{\mathrm{res}}|}{\overline{|\nabla_\theta\mathcal L_k|}},\qquad a = 0.9 .
+  \label{eq:gradnorm}
+\end{equation}
+
+\paragraph{The runs.}
+Before S3 started, every planned run was timed for a few steps. The stage refuses to start if the
+projected total exceeds its budget.
+
+Eight runs were made (\cref{tab:pinnruns}):
+\begin{itemize}
+  \item the six showcase cases with fixed weights (\texttt{pure});
+  \item gradient-norm balancing on the median-Mach case (\texttt{gradnorm});
+  \item one run without the Kutta term (\texttt{nokutta}), for prediction P3.
+\end{itemize}
+
+The specification also called for runs with an artificial viscosity at shocks, $\nu = 10^{-3}$ and
+$3\times10^{-4}$. They were dropped by the author's decision of 5 October 2026: at about a day each,
+the four of them would have added roughly 46 hours on two shards.
+
+\begin{table}[t]
+\centering\small
+\caption{The eight PINN runs (stage S3). Two runs shared the machine at a time, which inflates the
+mean wall time by at most about 1.2 times. Losses are the final values after L-BFGS.}
+\label{tab:pinnruns}
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+Variant & Case (regime) & Wall h & CPU h & Residual & Wall & Kutta & Total\\
+\midrule
+pure & 0022 (sub) & 5.45 & 9.74 & $2.25\times10^{-3}$ & $1.3\times10^{-4}$ & $1.2\times10^{-7}$ & $3.58\times10^{-3}$\\
+pure & 0021 (sub) & 5.33 & 9.27 & $4.91\times10^{-3}$ & $3.9\times10^{-4}$ & $5.9\times10^{-6}$ & $8.92\times10^{-3}$\\
+pure & 0043 (sub) & 4.97 & 9.23 & $1.10\times10^{-3}$ & $4.9\times10^{-5}$ & $8.8\times10^{-8}$ & $1.59\times10^{-3}$\\
+pure & 0004 (super) & 5.01 & 9.40 & $2.98\times10^{-3}$ & $2.2\times10^{-4}$ & $1.2\times10^{-7}$ & $5.15\times10^{-3}$\\
+pure & 0031 (super) & 6.47 & 11.57 & $5.31\times10^{-3}$ & $4.2\times10^{-4}$ & $4.5\times10^{-7}$ & $9.50\times10^{-3}$\\
+pure & 0040 (super) & 6.44 & 11.56 & $2.38\times10^{-2}$ & $2.1\times10^{-3}$ & $5.7\times10^{-6}$ & $4.51\times10^{-2}$\\
+nokutta & 0022 (sub) & 5.40 & 10.08 & $1.82\times10^{-3}$ & $7.8\times10^{-5}$ & 0 & $2.61\times10^{-3}$\\
+gradnorm & 0004 (super) & 4.96 & 7.20 & 9.11 & $9.4\times10^{-3}$ & $1.9\times10^{-13}$ & 82.2\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%===================================================================================================
+\section{Scoring}
+\label{sec:scoring}
+
+\paragraph{Truth and the floor.}
+The truth is SU2 on the $512\times193$ grid, read at every second node. Because the grids nest,
+those nodes are exactly the $256\times97$ nodes, and every contestant is evaluated on them. The
+floor is SU2's $256\times97$ solution scored against that truth. It is the error that being on the
+evaluation grid already costs, so a surrogate at the floor is as good as SU2 on that grid.
+
+\paragraph{One force integrator.}
+The integration is vertex-lumped: each wall node carries half of each adjacent edge's outward
+normal,
+$\bm n_i = \tfrac12(\bm n_{e,i-1} + \bm n_{e,i})$. With $\bm f = -\sum_i \Cp{}_{,i}\,\bm n_i$, the
+coefficients are
+\begin{equation}
+  \CD = f_x\cos\alpha + f_y\sin\alpha,\qquad
+  \CL = -f_x\sin\alpha + f_y\cos\alpha,\qquad
+  \CM = \sum_i\bigl[(x_i - \tfrac14)f_{y,i} - y_i f_{x,i}\bigr].
+  \label{eq:forces}
+\end{equation}
+On SU2's own solutions this reproduces SU2's reported coefficients to $5\times10^{-11}$. The
+edge-midpoint trapezoid matched $\CL$ and $\CD$ but missed $\CM$ by $1.6\times10^{-5}$, which fails
+the $10^{-6}$ check.
+
+\paragraph{Errors.}
+Force errors are absolute, with $\CD$ in counts, because percentages of near-zero inviscid drag mean
+nothing. The wall-pressure error is the RMS of $\Delta\Cp$ over the wall nodes. The near-field
+error is the area-weighted relative L2 error over the nodes within 2.5 chords of mid-chord:
+\begin{equation}
+  e_{\mathrm{nf}} = \left(\frac{\sum_{i}w_i\,|\hat{\bm q}_i - \bm q_i|^2}{\sum_i w_i\,|\bm q_i - \bm q_\infty|^2}\right)^{1/2},
+  \qquad |\bm x_i - (\tfrac12,0)|\le2.5,
+  \label{eq:nearfield}
+\end{equation}
+where $w_i$ is the dual-cell area.
+
+\paragraph{Shocks.}
+On each surface that goes supersonic, the shock is the steepest pressure rise downstream of the
+suction peak, among segments whose upstream node is supersonic. Without that restriction the rule
+finds the trailing-edge recompression on every real solution. The overshoot is the largest
+$|\Delta\Cp|$ within 0.05 chord of the true shock.
+
+\paragraph{Physics checks.}
+These run on every column, SU2 included:
+\begin{itemize}
+  \item the entropy in subcritical cases;
+  \item $|H/H_\infty - 1|$;
+  \item the RMS velocity through the wall;
+  \item the net mass flux through the closed grid lines $j = 8$, 24, 48 and 72.
+\end{itemize}
+A check that a contestant satisfies by construction is labelled as such. For the potential PINN,
+entropy and enthalpy are identities, and wall tangency is a result.
+
+\paragraph{Cost.}
+Each method's cost is a fixed part plus a part per new case,
+\begin{equation}
+  C_m(n) = C_m^{\mathrm{fixed}} + n\,c_m,\qquad
+  n^\ast_m = \min\{n : C_m(n) < n\,c_{\mathrm{SU2}}\}.
+  \label{eq:breakeven}
+\end{equation}
+\begin{itemize}
+  \item SU2's cost per case is its median CPU time on the test cases.
+  \item The fixed cost of the FNO and of POD is the whole campaign, every validation case included,
+    plus model search and final training.
+  \item GPU work is charged at wall time, because process CPU time cannot see it; CPU work is
+    charged at CPU time. The PINN is charged per phase: Adam (GPU) at wall time, L-BFGS (CPU) at
+    CPU time.
+\end{itemize}
+
+%===================================================================================================
+\section{Results}
+\label{sec:results}
+
+\subsection{The three predictions}
+\label{sec:predictions}
+
+\begin{table}[t]
+\centering\small
+\caption{The predictions recorded before any model ran, and their outcomes.}
+\label{tab:predictions}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.35\textwidth}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Prediction & Outcome\\
+\midrule
+P1. For a single new case, SU2 beats the PINN on cost by one to two orders of magnitude. &
+\textbf{Held on wall time only} (88.5$\times$, 1.95 orders). \textbf{Not held} on CPU time or
+per phase (174--220$\times$, 2.24--2.34 orders): SU2 wins by more than predicted.\\
+\addlinespace
+P2. The FNO beats ``just run SU2'' only after about as many new cases as trained it ($\sim$1,000). &
+\textbf{Held.} Break-even at $n^\ast = 1{,}126$ new cases. The data-efficiency curve is still
+3.4$\times$ the floor at $n = 896$, so the ``unless'' clause does not fire.\\
+\addlinespace
+P3. Without the Kutta condition the PINN's residuals look acceptable while its lift is wrong. &
+\textbf{Partly.} Without the condition the residual is as small as with it ($1.8\times10^{-3}$
+against $2.3\times10^{-3}$) and the lift is 84\,\% low. But with the condition it is still 77\,\%
+low: the Kutta term made no material difference to the circulation.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\Cref{tab:predictions} gives the verdicts. The costs behind P1 are in \cref{tab:costs}.
+
+\paragraph{P1 depends on the cost basis.}
+The mean \texttt{pure} run took 20,201\,s of wall time and 36,464\,s of CPU time, because L-BFGS
+ran multithreaded on the CPU. SU2 took a median 228.1\,s of wall time and 209.9\,s of CPU time per
+case.
+\begin{itemize}
+  \item Wall time against wall time gives 88.5$\times$, inside the predicted band.
+  \item The per-phase rule, which the scorer applies to every other method, gives 174--220$\times$,
+    outside it.
+\end{itemize}
+The per-phase cost is a bracket, not a single figure, because the S3 runs did not record the Adam
+phase's own CPU time. A later measurement of that fraction (0.346) gives 204$\times$.
+
+\begin{table}[t]
+\centering\small
+\caption{Costs, in seconds. SU2 per case is the median over the 80 test cases at $256\times97$.
+The FNO and POD fixed costs include the full campaign (229,211\,s of CPU time). The PINN has no
+fixed cost.}
+\label{tab:costs}
+\begin{tabularx}{\textwidth}{@{}lrrr>{\raggedright\arraybackslash}X@{}}
+\toprule
+Method & Fixed & Per case (wall) & Per case (CPU) & Basis used for break-even\\
+\midrule
+SU2 $256\times97$ & 0 & 228.1 & 209.9 & CPU, 209.9\\
+FNO & 236,237 & \multicolumn{2}{c}{0.054 per query} & campaign + 8 tuning runs (4,867) + training (2,160)\\
+POD & 229,562 & \multicolumn{2}{c}{0.007 per query} & campaign + mode and smoothing search\\
+PINN (\texttt{pure}, mean of 6) & 0 & 20,201 & 36,464 & per phase: 36,464--46,122\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Accuracy by regime and set}
+
+\Cref{tab:results} and \cref{fig:nearfield} give the main result, with the floor beside every error.
+
+\begin{table}[t]
+\centering\small
+\caption{Errors by set and regime, with the floor first. Near field: mean of
+\cref{eq:nearfield}; $\CL$ and $\CD$: largest absolute error in the group; $\Cp$: mean RMS wall
+error. FNO rows are seed 0, $n = 896$, loss A, scored on its $256\times97$ evaluation grid and on
+its $128\times49$ training grid (against the truth at every fourth fine node). PINN rows cover the
+three showcase cases of each regime.}
+\label{tab:results}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Set / regime & Method & Near field & $\CL$ max & $\CD$ max (counts) & $\Cp$ RMS\\
+\midrule
+\multirow{5}{*}{\shortstack[l]{in range\\subcritical (37)}}
+ & \textbf{floor} & \textbf{0.0080} & \textbf{0.0073} & \textbf{6.9} & \textbf{0.0357}\\
+ & FNO $256\times97$ & 0.0423 & 0.0312 & 31.3 & 0.0358\\
+ & FNO $128\times49$ & 0.0102 & 0.0095 & 7.5 & 0.0334\\
+ & POD & 0.0168 & 0.0097 & 14.2 & 0.0371\\
+ & PINN (3) & 0.5155 & 0.2461 & 41.1 & 0.1603\\
+\midrule
+\multirow{5}{*}{\shortstack[l]{in range\\supercritical (24)}}
+ & \textbf{floor} & \textbf{0.0241} & \textbf{0.0140} & \textbf{17.2} & \textbf{0.0341}\\
+ & FNO $256\times97$ & 0.0575 & 0.0431 & 40.4 & 0.0521\\
+ & FNO $128\times49$ & 0.0374 & 0.0314 & 46.6 & 0.0470\\
+ & POD & 0.1462 & 0.0750 & 122.2 & 0.1190\\
+ & PINN (3) & 0.6273 & 1.4028 & 776.5 & 0.4045\\
+\midrule
+\multirow{4}{*}{\shortstack[l]{extrapolation\\supercritical (14)}}
+ & \textbf{floor} & \textbf{0.0651} & \textbf{0.0247} & \textbf{32.4} & \textbf{0.0598}\\
+ & FNO $256\times97$ & 0.2318 & 0.1847 & 180.6 & 0.2038\\
+ & FNO $128\times49$ & 0.2320 & 0.1876 & 178.3 & 0.1966\\
+ & POD & 0.5151 & 0.3483 & 530.2 & 0.3512\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{nearfield.pdf}
+\caption{Near-field error against the floor (vertical line); each label is the ratio to the floor.
+The FNO at $128\times49$ is scored on its own training grid, so its comparison grid is coarser
+than the floor's.}
+\label{fig:nearfield}
+\end{figure}
+
+What the table says:
+\begin{itemize}
+  \item \textbf{In range and subcritical, the FNO at its own resolution is near the floor}: 1.3
+    times on the near field, 1.3 times on $\CL$ and 1.1 times on $\CD$. Evaluated at
+    $256\times97$ it is 5.3 times the floor, and POD beats it there on the near field, $\CL$ and
+    $\CD$. The resolution transfer costs the FNO more than any other single factor in range.
+  \item \textbf{In range and supercritical, the FNO beats POD by 2.5 times} on the near field and 3
+    times on $\CD$, at 2.4 times the floor. Shocks that move with the inputs are exactly where a
+    fixed linear basis struggles.
+  \item \textbf{Extrapolation is where every surrogate fails.} The FNO is 3.6 times the floor, and
+    its $\CD$ error reaches 181 counts, biased rather than scattered (median $-78$ counts); POD is
+    7.9 times the floor. Here the FNO is equally wrong at both resolutions.
+  \item \textbf{The PINN is not competitive in any column}: 65 and 26 times the floor on the near
+    field.
+\end{itemize}
+
+\subsection{Fields and wall pressure}
+
+\Cref{fig:fields} shows the Mach field of one subcritical and one supercritical case from each
+method.
+\begin{itemize}
+  \item On the subcritical case the FNO and POD are close to the truth at this scale. The PINN's
+    field is nearly symmetric about the chord: the faster flow over the upper surface, which
+    carries the lift, is missing.
+  \item On the strongest supercritical showcase case (\texttt{test\_in-0040}, maximum surface
+    Mach 1.61) the FNO places the supersonic pocket and its terminating shock well. POD shrinks the
+    pocket and moves the shock forward. The PINN has no supersonic region at all: its lift on this
+    case is $-0.015$, against SU2's 1.388.
+\end{itemize}
+\Cref{fig:showcase} gives the wall pressure on all six showcase cases.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{fields.pdf}
+\caption{Local Mach number near the section: the truth and each contestant. Thin white lines are
+iso-Mach contours (every 0.05 in the top row, 0.1 in the bottom); the black line is the sonic line.
+Each row has its own colour scale.}
+\label{fig:fields}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{showcase.pdf}
+\caption{Wall pressure on the six showcase cases, in order of maximum surface Mach number
+($\Cp$ axis inverted). The floor lies under the truth everywhere. The FNO follows the truth closely
+and smears the shocks a little. POD's shocks are displaced and broken into steps. The PINN's
+suction peaks are too weak, the signature of a circulation far below the Kutta value.}
+\label{fig:showcase}
+\end{figure}
+
+\subsection{Lift}
+
+The PINN's lift error is the clearest failure (\cref{fig:clparity}, \cref{tab:pinncl}). Five of the
+six \texttt{pure} runs under-predict lift, three of them to roughly zero. By Kutta--Joukowski,
+$L' = \rho_\infty U_\infty\Gamma$, so $\Gamma = \CL/2$ in units of $U_\infty c$; a lift 4.4 times
+too small on \texttt{test\_in-0022} is a circulation 4.4 times too small.
+
+\paragraph{The Kutta term can pin $\Gamma$.}
+The equal-speed term does pin the circulation of a true potential flow. On the exact
+incompressible flat-plate (Joukowski) flow at $\alpha = 2.19^\circ$, evaluated 0.03 chord upstream
+of the trailing edge, the quantity $|\vu|^2_{\mathrm{upper}} - |\vu|^2_{\mathrm{lower}}$ is:
+\begin{itemize}
+  \item $-0.421$ at $\Gamma = 0$;
+  \item $-0.277$ at $\Gamma = 0.0387$, the value recovered for the \texttt{pure} run;
+  \item $+0.027$ at the Kutta value $\Gamma = \pi\sin\alpha = 0.120$.
+\end{itemize}
+
+\paragraph{So the network is not a potential flow near the edge.}
+A wrong-$\Gamma$ potential flow would pay about 100 times the penalty of the right one. A network
+that meets the term to $10^{-7}$ at the wrong $\Gamma$ is therefore not a potential-flow solution
+near the trailing edge. Whether the network's representation, the 0.02-chord exclusion or both is
+responsible is not isolated here.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{cl_parity.pdf}
+\caption{Predicted against true $\CL$ at $256\times97$. Filled markers: in range; hollow:
+extrapolation. In extrapolation the FNO's lift errors reach $+0.18$ and POD's $+0.35$, and POD
+over-predicts at the median ($+0.06$). The PINN's points lie well below it, except \texttt{pure} on
+\texttt{test\_in-0004}. The \texttt{gradnorm} run on that case is at $(1.01,\,-0.33)$.}
+\label{fig:clparity}
+\end{figure}
+
+\begin{table}[t]
+\centering\small
+\caption{The PINN per case (test\_in, $256\times97$). The floor's $\CL$ errors on these cases are
+0.0003--0.0086.}
+\label{tab:pinncl}
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+Run & Regime & SU2 $\CL$ & PINN $\CL$ & $\CL$ error & $\CD$ error (counts) & Near field\\
+\midrule
+pure / 0022 & sub & 0.3192 & 0.0732 & $-0.2461$ & $+41.1$ & 0.559\\
+nokutta / 0022 & sub & 0.3192 & 0.0526 & $-0.2667$ & $+30.0$ & 0.569\\
+pure / 0021 & sub & 0.0922 & $-0.0012$ & $-0.0934$ & $-5.6$ & 0.629\\
+pure / 0043 & sub & 0.2799 & 0.1008 & $-0.1790$ & $+15.1$ & 0.359\\
+pure / 0004 & super & 1.0139 & 1.0662 & $+0.0523$ & $+88.6$ & 0.218\\
+pure / 0031 & super & 0.2949 & 0.0007 & $-0.2942$ & $-9.9$ & 0.584\\
+pure / 0040 & super & 1.3879 & $-0.0149$ & $-1.4028$ & $-776.5$ & 1.080\\
+gradnorm / 0004 & super & 1.0139 & $-0.3272$ & $-1.3411$ & $+724.8$ & 1.273\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PINN training}
+
+\paragraph{The loss does not reveal the circulation.}
+\Cref{fig:pinnhistory}(a) shows that the residual loss converges equally well with and without the
+Kutta term.
+
+\paragraph{The gradnorm run.}
+Gradient-norm balancing failed in a specific way (\cref{fig:pinnhistory}(b)):
+\begin{itemize}
+  \item From step 500 on, the weighted wall term was at least 96\,\% of the total at every logged
+    step, while the balanced wall weight ranged from 692 to $1.3\times10^5$.
+  \item The wall loss itself stayed at 0.03--0.25, 33 times the fixed-weight run's at the end of
+    Adam.
+  \item L-BFGS then minimised an objective that was 99.99\,\% wall term. It cut the wall loss
+    tenfold and made the equation residual 380 times worse, from 0.024 to 9.11.
+\end{itemize}
+The run's lift has the wrong sign. The Kutta weight also ran away, to a logged peak of
+$7\times10^{10}$, but it multiplied a Kutta loss below $10^{-9}$ and barely moved the total.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{pinn_history.pdf}
+\caption{PINN training histories (logged every 500 Adam steps; markers right of the line: after
+L-BFGS). (a) With and without the Kutta term on the same case: indistinguishable losses, both with
+lift far too low. (b) The \texttt{gradnorm} run: the balanced wall term dominates the objective,
+and L-BFGS trades the residual for it.}
+\label{fig:pinnhistory}
+\end{figure}
+
+\subsection{FNO: seeds, loss B and shocks}
+
+\paragraph{Seeds.}
+Across the three seeds at $n = 896$, the near field varies by a few per cent of its value. The
+extrapolation $\CL$ maximum, however, varies by 40\,\% (0.173--0.243), so a single-seed
+extrapolation lift figure is not reliable to better than that.
+
+\paragraph{Loss B.}
+Loss B is worse than loss A on the near field and $\CD$ in every set and regime, at both grids. It
+is worse on $\CL$ in every cell but one: in-range subcritical at $256\times97$, where it is 23\,\%
+better. It is worst on supercritical lift ($\CL$ maximum 0.249 against 0.043). It stopped early, at
+epoch 81, so this compares the runs as made, not converged runs.
+
+\paragraph{Shocks.}
+\Cref{tab:shocks} gives the shock scores.
+\begin{itemize}
+  \item In range, the FNO places shocks at the floor's median accuracy but misses 1--2 of 27 and
+    smears them, with twice the floor's median overshoot.
+  \item POD never misses a shock but places them 0.06--0.11 chord off at the median.
+  \item Out of range, the FNO's position errors reach 0.21 chord.
+\end{itemize}
+
+\begin{table}[t]
+\centering\small
+\caption{Shocks: 27 true shocks on the 24 in-range supercritical cases and 21 on the 14
+extrapolation cases. Position error in chords; overshoot is the largest $|\Delta\Cp|$ within 0.05
+chord of the true shock.}
+\label{tab:shocks}
+\begin{tabular}{@{}llrcc@{}}
+\toprule
+Set & Method & Missed & $|\Delta x|$ median / max & Overshoot median / max\\
+\midrule
+in range & \textbf{floor} & \textbf{0} & \textbf{0 / 0.019} & \textbf{0.19 / 0.54}\\
+ & FNO $256\times97$ & 2 & 0 / 0.058 & 0.42 / 1.05\\
+ & FNO $128\times49$ & 1 & 0 / 0.069 & 0.29 / 0.92\\
+ & POD & 0 & 0.061 / 0.135 & 0.65 / 1.34\\
+ & FNO loss B & 2 & 0.012 / 0.068 & 0.59 / 1.29\\
+ & PINN \texttt{pure} (3 cases, 4 shocks) & 1 & 0.046 / 0.181 & 0.74 / 1.67\\
+\midrule
+extrapolation & \textbf{floor} & \textbf{0} & \textbf{0.008 / 0.012} & \textbf{0.69 / 1.00}\\
+ & FNO $256\times97$ & 0 & 0.042 / 0.213 & 1.13 / 1.58\\
+ & POD & 0 & 0.106 / 0.250 & 1.28 / 1.60\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data efficiency and break-even}
+
+\Cref{fig:efficiency} and \cref{tab:efficiency} show the test error against the number of SU2 cases
+paid for. Both models are still improving at $n = 896$, and neither approaches the floor. A smaller
+training set would break even sooner, at about 199 cases for $n = 64$, but its answers would be 7.6
+times the floor rather than 3.4. \Cref{fig:breakeven} draws \cref{eq:breakeven}: the FNO and POD
+lines cross SU2's at 1,126 and 1,094 new cases.
+
+\begin{table}[t]
+\centering\small
+\caption{Data efficiency: mean near-field error over the 61 in-range test cases at $256\times97$
+(floor 0.0143), with the SU2 cost paid for each training set (every validation case included).}
+\label{tab:efficiency}
+\begin{tabular}{@{}rrrrrr@{}}
+\toprule
+$n$ & FNO (seed 0) & FNO / floor & POD & POD / floor & Campaign, SU2-case equivalents\\
+\midrule
+64 & 0.1088 & 7.6$\times$ & 0.1379 & 9.6$\times$ & 197\\
+128 & 0.0858 & 6.0$\times$ & 0.1044 & 7.3$\times$ & 257\\
+256 & 0.0698 & 4.9$\times$ & 0.0883 & 6.2$\times$ & 380\\
+512 & 0.0561 & 3.9$\times$ & 0.0753 & 5.3$\times$ & 690\\
+896 & 0.0483 & 3.4$\times$ & 0.0677 & 4.7$\times$ & 1,092\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.66\textwidth]{efficiency.pdf}
+\caption{Data efficiency. Open markers at $n = 896$ are the FNO's seeds 1 and 2.}
+\label{fig:efficiency}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{break_even.pdf}
+\caption{Cumulative cost of answering $n$ new cases. (a) The FNO and POD each pay roughly a whole
+campaign up front (65.6 and 63.8 hours) and break even after about as many new cases as the
+campaign held. (b) The PINN, at 12.8 hours per case (per-phase upper bound), is above SU2 at every
+$n$, above POD from the fifth case and above the FNO from the sixth.}
+\label{fig:breakeven}
+\end{figure}
+
+\subsection{Physics checks and failures}
+
+\paragraph{SU2 itself.}
+SU2 is not free of numerical artefacts:
+\begin{itemize}
+  \item \emph{Entropy.} In subcritical cases, where it should be zero, the truth's near-field
+    maximum entropy has median 0.020, and the floor's 0.033, so SU2 generates spurious entropy, and
+    more of it on the coarser grid. Its area-weighted mean is small and non-negative on every case
+    at both grids.
+  \item \emph{Total enthalpy} is constant to $1.2\times10^{-5}$.
+  \item \emph{No} non-positive density or pressure appears anywhere.
+\end{itemize}
+
+\paragraph{Failures, stated as results.}
+\begin{itemize}
+  \item \emph{Non-physical states in extrapolation.} POD predicts non-positive density or pressure
+    on 2 to 7 of the 14 extrapolation cases, and more as the training set grows. The FNO does so on
+    4--5 cases at $n\le128$ and on none at $n\ge256$.
+  \item \emph{Entropy decrease.} The subcritical near-field mean entropy falls below free stream on
+    9--24 of 37 cases for the FNO and 10--23 for POD, against none for SU2. Whether any surrogate
+    predicts an expansion shock is not measured: the scorer has no test for an entropy decrease
+    across a compression.
+  \item \emph{PINN wall tangency and mass.} The potential PINN enforces both only softly: its RMS
+    wall-normal velocity has median 0.011 (subcritical) and 0.020 (supercritical), against SU2's
+    $10^{-8}$. Its mass flux through the closed lines is one to two orders above the FNO's.
+  \item \emph{Not measured}: FNO ringing (only the plots show it), and the viscous PINN (dropped).
+\end{itemize}
+
+%===================================================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\paragraph{The operator.}
+The FNO does what operators promise: it learns the family well enough to beat a strong linear
+baseline exactly where that baseline is weak, at moving shocks. But it reaches the floor only on
+its own training grid and only in range. Its resolution transfer is $O(h)$, not exact: the padded
+field jumps to zero at the wrap, and that jump aliases differently at each resolution. In
+extrapolation its errors are biased in a way no in-range score would reveal. Economically it
+repays its training only after about as many new cases as the campaign that trained it, as
+predicted.
+
+\paragraph{The PINN.}
+The PINN's difficulties come from the formulation more than from the optimiser.
+\begin{itemize}
+  \item The Euler PINN, as configured here, has a degenerate minimiser: fluid at rest, which its
+    soft far-field condition did not exclude.
+  \item The full-potential PINN removes that minimiser and passes the cylinder warm-up. It still
+    under-predicts the circulation on lifting sections, while the equal-speed Kutta term is met at
+    the wrong circulation.
+  \item The sharp trailing edge is the crux: there the map is degenerate, the corner flow is
+    singular, and the condition that fixes the lift lives.
+  \item Gradient-norm balancing, a standard remedy, made one run worse by handing the objective to
+    the wall term.
+\end{itemize}
+
+\paragraph{A working transonic PINN in the literature.}
+Wassing, Langer and Bekemeyer~\cite{wassing2025} solve the Euler equations, energy equation
+included, for transonic NACA\,0012 flow with a PINN. Their method:
+\begin{itemize}
+  \item collocation at the points of a $400\times200$ elliptic O-grid, with Fourier features of
+    the grid indices;
+  \item soft far-field, wall and periodicity terms, and a volume-weighted residual scaled by
+    $2\times10^4$;
+  \item L-BFGS alone, in mini-batches;
+  \item artificial viscosity localised by an analytic shock sensor times a stagnation-point
+    sensor.
+\end{itemize}
+They report Cp errors of 0.3--0.4\,\% at $\Ma = 0.70$--$0.75$, and 3\,\% at 0.78. Without
+viscosity, or with global viscosity and no sensors, they capture no shock. They impose no explicit
+Kutta condition, yet their parametric network's lift agrees with the reference over
+$\alpha\in(0,4)^\circ$ at $\Ma = 0.72$.
+They train for 30--45\,min per case, against 5.6\,h for the \texttt{pure} runs here, on different
+hardware.
+
+Their result bounds this study's conclusions about PINNs. The collapse of the Euler PINN and the
+low circulation of the potential PINN belong to the formulations and training tested here. Which
+of the many differences matters (residual weighting, input encoding, closure, optimiser,
+collocation and Mach range) is not known. The global viscous variants specified in this study's
+plan resemble their failing global form, though on a different formulation. They also conclude
+that PINNs do not currently beat CFD for a single forward case, which agrees with P1.
+
+\paragraph{Cost.}
+A per-case PINN costs between 88 and 220 SU2 solutions, depending on how GPU and CPU time are
+counted. At this problem size a forward-mode PINN is a learning exercise, not a solver; its
+strengths lie in inverse problems and sparse data, which this study did not test.
+
+\paragraph{Limitations.}
+\begin{itemize}
+  \item The costs mix hardware: SU2 and POD on the CPU, the FNO on the Apple GPU, and the PINN on
+    both.
+  \item The PINN results are single runs on three cases per regime.
+  \item The POD selection sits on the edge of its search grid.
+  \item The three SU2 grids are not in the asymptotic range, so the floor is a grid difference,
+    not an extrapolated error. On the transonic anchor the truth itself is 6--8\,\% low in lift
+    against a grid-converged reference (\cref{tab:vj}).
+  \item The 100-chord outer boundary truncates $\CL$ at the $10^{-3}$ level, equally for every
+    method.
+  \item The PINN's learned $\Gamma$ was not recorded during training; it is inferred from the
+    scored lift.
+\end{itemize}
+
+%===================================================================================================
+\section{Open items and reproducibility}
+\label{sec:repro}
+
+\paragraph{Still open.}
+\begin{itemize}
+  \item Which differences from Wassing, Langer and Bekemeyer's Euler PINN~\cite{wassing2025}
+    would rescue this study's Euler PINN, and whether a localised viscosity would fix the
+    potential PINN's circulation.
+  \item Why this study's SU2 grids fall short of the grid-converged anchor values: section, far
+    field, grid and scheme are not separated.
+  \item The artificially viscous PINN runs, the expansion-shock test and an FNO ringing metric were
+    not made.
+\end{itemize}
+
+\paragraph{Reproducing the work.}
+Every stage is one resumable script, run from the repository root (\cref{tab:repro}). The
+committed records under \texttt{results/} are what every number here is read from. The SU2 cases,
+datasets and predictions (about 8\,GB) are not committed but can be regenerated with those scripts.
+\Cref{fig:fields,fig:warmup,fig:showcase} read those regenerated files.
+
+\begin{table}[h]
+\centering\small
+\caption{The stage commands (SU2 found through \texttt{SU2\_BIN\_DIR}).}
+\label{tab:repro}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Stage & Command & Writes\\
+\midrule
+S0 & \cmd{python scripts/s0\_check.py} & \cmd{results/s0/}\\
+S1 & \cmd{python scripts/s1\_campaign.py train} (then \cmd{fine}) & \cmd{runs/su2/}\\
+ & \cmd{python scripts/build\_dataset.py} & \cmd{data/hdf5/}, \cmd{results/s1/}\\
+S2 & \cmd{python scripts/s2\_operator.py tune | final | pod} & \cmd{runs/predictions/}, \cmd{results/s2/}\\
+S3a & \cmd{python scripts/s3\_warmup.py} & \cmd{results/s3/warmup.json}\\
+S3 & \cmd{python scripts/s3\_pinn.py --shard K/N} & \cmd{runs/predictions/}, \cmd{results/s3/}\\
+S4 & \cmd{python scripts/s4\_score.py} & \cmd{results/s4/}\\
+Figures & \cmd{python docs/report/make\_figures.py} & \cmd{docs/report/figures/}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%===================================================================================================
+\appendix
+\input{appendices}
+
+%===================================================================================================
+\begin{thebibliography}{99}
+\small
+
+\bibitem{abbott1959}
+I.~H. Abbott and A.~E. von Doenhoff.
+\newblock \emph{Theory of Wing Sections}.
+\newblock Dover, New York, 1959.
+
+\bibitem{economon2016su2}
+T.~D. Economon, F.~Palacios, S.~R. Copeland, T.~W. Lukaczyk, and J.~J. Alonso.
+\newblock {SU2}: An open-source suite for multiphysics simulation and design.
+\newblock \emph{AIAA Journal}, 54(3):828--846, 2016.
+
+\bibitem{jameson1981jst}
+A.~Jameson, W.~Schmidt, and E.~Turkel.
+\newblock Numerical solution of the {Euler} equations by finite volume methods using
+  {Runge--Kutta} time-stepping schemes.
+\newblock AIAA Paper 81-1259, 1981.
+
+\bibitem{kingma2015adam}
+D.~P. Kingma and J.~Ba.
+\newblock Adam: A method for stochastic optimization.
+\newblock In \emph{International Conference on Learning Representations}, 2015.
+
+\bibitem{li2021fno}
+Z.~Li, N.~Kovachki, K.~Azizzadenesheli, B.~Liu, K.~Bhattacharya, A.~Stuart, and A.~Anandkumar.
+\newblock Fourier neural operator for parametric partial differential equations.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem{liu1989lbfgs}
+D.~C. Liu and J.~Nocedal.
+\newblock On the limited memory {BFGS} method for large scale optimization.
+\newblock \emph{Mathematical Programming}, 45:503--528, 1989.
+
+\bibitem{loshchilov2019adamw}
+I.~Loshchilov and F.~Hutter.
+\newblock Decoupled weight decay regularization.
+\newblock In \emph{International Conference on Learning Representations}, 2019.
+
+\bibitem{raissi2019pinn}
+M.~Raissi, P.~Perdikaris, and G.~E. Karniadakis.
+\newblock Physics-informed neural networks: A deep learning framework for solving forward and
+  inverse problems involving nonlinear partial differential equations.
+\newblock \emph{Journal of Computational Physics}, 378:686--707, 2019.
+
+\bibitem{sirovich1987}
+L.~Sirovich.
+\newblock Turbulence and the dynamics of coherent structures.
+\newblock \emph{Quarterly of Applied Mathematics}, 45(3):561--571, 1987.
+
+\bibitem{vassberg2010}
+J.~C. Vassberg and A.~Jameson.
+\newblock In pursuit of grid convergence for two-dimensional {Euler} solutions.
+\newblock \emph{Journal of Aircraft}, 47(4):1152--1166, 2010.
+\newblock doi:10.2514/1.46737.
+
+\bibitem{wassing2025}
+S.~Wassing, S.~Langer, and P.~Bekemeyer.
+\newblock Physics-informed neural networks for transonic flows around an airfoil.
+\newblock arXiv:2408.17364v3 [physics.flu-dyn], 2025.
+
+\bibitem{wang2021gradient}
+S.~Wang, Y.~Teng, and P.~Perdikaris.
+\newblock Understanding and mitigating gradient flow pathologies in physics-informed neural
+  networks.
+\newblock \emph{SIAM Journal on Scientific Computing}, 43(5):A3055--A3081, 2021.
+
+\end{thebibliography}
+
+\end{document}

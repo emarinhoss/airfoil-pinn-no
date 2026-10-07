@@ -52,7 +52,9 @@ there): inviscid NACA 0012, Mach 0.8, angle of attack 1.25°, an algebraic O-gri
 
 - **The transonic case is not grid-converged at this size.** Lift rose 9.3 % on one doubling of the
   mesh in each direction and is still below the ≈0.35 that Vassberg & Jameson (2010) report for this
-  case. That value is **quoted from memory and not yet verified** (§10).
+  case. That value is **quoted from memory and not yet verified** (§10). *(2026-10-07: read; the
+  paper's continuum estimates are 0.3482-0.3562, so the memory value is inside them; the comparison
+  is in `docs/findings.md`, 2026-10-07.)*
 - **SU2 8.5.0** ("Harrier") is at `~/theLab/bwb-tanker-scratch/bin/`. It is an x86_64 build, so it
   runs under Rosetta, one serial process per case, and the endpoint security agent did not block it.
 - **SU2's binary restart file layout**, verified byte by byte on the spike's file: five int32 values
@@ -361,7 +363,8 @@ specify the Euler PINN, kept runnable as the documented negative result.)
   before the run. This is reported as **a change to the equations** — the counterpart of the
   dissipation SU2's scheme adds implicitly. One sensitivity run at ν = 3 × 10⁻⁴ is made on the
   strongest-shock case.
-- Precedent, from memory and to be verified (§10): Wassing, Langer & Bekemeyer (DLR, around 2023–24)
+- Precedent, from memory and to be verified (§10) *(2026-10-07: verified, arXiv:2408.17364; see
+  `docs/findings.md`, 2026-10-07)*: Wassing, Langer & Bekemeyer (DLR, around 2023–24)
   trained PINNs on transonic NACA 0012 flow with artificial viscosity.
 
 ### 7.5 Training
@@ -640,8 +643,8 @@ properly, and S4 needs everything.
 |---|---|
 | Multigrid levels; convergence-rule thresholds; iteration caps | S0 measurement, then frozen before S1 |
 | Outer-boundary distance (100 chords) | S0's outer-boundary study |
-| Vassberg & Jameson (2010) lift for NACA 0012 at Mach 0.8, 1.25° (≈0.35, from memory) | read from the paper before S0's known-answer check |
-| The Wassing, Langer & Bekemeyer reference | verified before S3 |
+| Vassberg & Jameson (2010) lift for NACA 0012 at Mach 0.8, 1.25° (≈0.35, from memory) | read from the paper before S0's known-answer check *(2026-10-07: read after S4; CL 0.3482-0.3562)* |
+| The Wassing, Langer & Bekemeyer reference | verified before S3 *(2026-10-07: verified after S4, arXiv:2408.17364v3)* |
 | Whether the Apple GPU (MPS) is usable | one command in the author's own terminal |
 
 ## 11. Values pinned while writing this spec

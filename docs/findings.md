@@ -168,7 +168,9 @@ reported as the plain train-minus-fine difference above, not as an extrapolated 
   J. Aircraft 47(4):1152-1166, DOI 10.2514/1.46737 (earlier AIAA 2009-4114): the DOI resolves via
   Crossref, but the paper is paywalled at AIAA ARC, no open copy was found, and web search is not
   available in this environment. **The paper was not read, so no comparison is made**; a
-  remembered value is not used as if it had been read. The comparison stays open.
+  remembered value is not used as if it had been read. The comparison stays open. *(2026-10-07: the
+  paper has been read and the comparison is made in the 2026-10-07 entry: the 512x193 anchor CL is
+  6.4-8.5 % below the paper's grid-converged range, 0.3482-0.3562.)*
 
 **Per-case cost** (MGLEVEL 0, radius 100, the final `runs/s0/*/*/result.json`, five cases per
 level, 6 concurrent workers; median (mean) seconds):
@@ -297,7 +299,11 @@ cauchy_elems=500, cauchy_eps=1e-9)`, `FINE_ITER_CAP = 20000`,
 - **Root cause.** Under the strong-form Euler residual with a soft far-field condition, fluid at rest
   satisfies the equations and the wall condition exactly and violates only the weakly enforced far
   field, and every near-correct flow costs more than it: descent leaves even the true solution. It
-  is the formulation, not a parameter. For the full-potential equation in subcritical flow the
+  is the formulation, not a parameter. *(Qualified 2026-10-07, after reading Wassing, Langer &
+  Bekemeyer: they train an Euler PINN with a strong-form residual and a soft far field to within
+  1 % of a finite-volume reference on transonic NACA 0012 cases, so this holds for the configuration
+  and the five probes tested here, not for Euler PINNs in general; the differences are listed in
+  the 2026-10-07 entry, and which of them matters is not known.)* For the full-potential equation in subcritical flow the
   residual loss is (near-)convex in the potential, with no rest attractor, and a Dirichlet far field
   makes rest inadmissible.
 - **The author's decision (2026-10-04): "Full-potential PINN".** Spec §7.8 records the formulation
@@ -919,7 +925,8 @@ These are the scale against which the contestants' checks below are read.
 - **FNO ringing** (spec §8.4) has no metric in the scorer and is not measured; the showcase plots
   (`results/s4/showcase_*.png`) are the only view of it.
 - **Not measured at all:** the viscous PINN (dropped), and the Vassberg & Jameson comparison (still
-  open from S0).
+  open from S0). *(2026-10-07: the Vassberg & Jameson comparison is now made; see the 2026-10-07
+  entry.)*
 
 ## 2026-10-06 — corrections from the second final review, and the S3a warm-up pass
 
@@ -1063,3 +1070,126 @@ paragraph, its viscous-cost sentence and a command for its run table; the S4 ent
 command and verdict, "64x" (65x) and the loss-B sentence (loss B is better on CL in one cell: test_in
 subcritical at 256x97, 0.0239 against 0.0312); and a pointer from the 2026-10-04 entry to the Euler
 warm-up record's current paths.
+
+## 2026-10-07 — the two open references read: Vassberg & Jameson (2010), and Wassing, Langer & Bekemeyer
+
+Both papers were supplied by the author on 2026-10-07 and read in full: `references/in-pursuit-of-grid-convergence-for-two-dimensional-euler-solutions.pdf`
+and `references/2408.17364.pdf` (kept outside git: `references/` is untracked). This closes the two
+literature items of spec §10.
+
+**Vassberg, J. C., and Jameson, A., "In Pursuit of Grid Convergence for Two-Dimensional Euler
+Solutions," Journal of Aircraft 47(4):1152-1166, 2010, DOI 10.2514/1.46737.** What the paper computes:
+- **The geometry is not ours.** It is the NACA 0012 equation with its standard x⁴ coefficient,
+  −0.1015, extended in chord to the equation's root at x = 1.0089304115, so the trailing edge is
+  sharp (included angle 16.15°), with a reference chord of 1. Our section closes the trailing edge at
+  x = 1 with −0.1036.
+- **The grids and solvers are different.** Karman-Trefftz O-meshes of aspect-ratio-one cells,
+  32x32 to 4096x4096, far field about 150 chords away. Three solvers (FLO82 H-CUSP, with a point-vortex
+  far-field correction; OVERFLOW 2.1t central, without one; CFL3D v6 flux splitting, with and
+  without), converged to machine zero in 64-bit arithmetic.
+- **The reference values** are Richardson continuum estimates from the three finest meshes.
+
+At M 0.8, α 1.25° (Table 11, p. 1165) the four continuum estimates are:
+- CL 0.356208937 (FLO82), 0.351662793 (OVERFLOW), 0.348226045 (CFL3D), 0.351596613 (CFL3D +
+  vortex), so **0.3482-0.3562**, a spread of 0.0080;
+- CD 0.022684938, 0.022453440, 0.022501430, 0.022674853, so 224.5-226.8 counts;
+- Cm −0.038774022, −0.037946129, −0.037353559, −0.037838046.
+
+The memory value in spec §2, "≈0.35", is inside the CL range. FLO82's own sequence (Table 3,
+p. 1159) converges **from above**: CL 0.368980 at 256x256, 0.363748 at 512x512, 0.357142 at
+4096x4096, observed order 1.151. The paper calls all three solvers first-order or worse on this
+lifting transonic case.
+
+Our anchor (S0, `results/s0/summary.json` "mesh"/"anchor", MGLEVEL 0, 100 chords) against that
+range. Cm is compared in magnitude: our CM is SU2's CMz, positive nose-down, and the paper's Cm is
+negative nose-down, so both describe the same nose-down moment.
+
+| quantity | ours 256x97 | ours 512x193 | V&J continuum | 512x193 against it |
+|---|---|---|---|---|
+| CL | 0.317363 | 0.326032 | 0.348226-0.356209 | −0.0222 to −0.0302 (−6.4 to −8.5 %) |
+| CD (counts) | 208.76 | 212.28 | 224.53-226.85 | −12.3 to −14.6 counts (−5.5 to −6.4 %) |
+| \|CM\| | 0.028791 | 0.031140 | 0.037354-0.038774 | −16.6 to −19.7 % |
+
+Command:
+`python -c "import json; m=json.load(open('results/s0/summary.json'))['mesh']['anchor']; vj={'cl':(0.348226045,0.356208937),'cd':(0.022453440,0.022684938),'cm':(0.037353559,0.038774022)}; [print(k,g,abs(m[k][g]),round(100*(abs(m[k][g])/lo-1),2),round(100*(abs(m[k][g])/hi-1),2)) for k,(lo,hi) in vj.items() for g in ('256x97','512x193')]"`.
+
+What this says:
+- **The truth is low.** SU2 at 512x193 is low on every coefficient of this case, by 6-8 % in lift,
+  and it is still rising from below on our grids: CL 0.311764 → 0.317363 → 0.326032 at 128x49,
+  256x97 and 512x193 (S0's non-asymptotic sequence).
+- **It is low by more than the floor suggests.** The 512x193 truth's own CL error here, at least
+  0.022, is about 2.6 times the floor's train-minus-fine CL difference on the same case, −0.0087.
+  The 256x97 floor solution is 8.9-10.9 % below the continuum, against the 2.7 % the floor reports.
+- **Every comparison in S4 is relative to SU2 at 512x193, not to the exact Euler solution.** The
+  rankings and the ratios to the floor are unaffected, because every contestant meets the same
+  truth. But the floor understates the error any 256x97 answer carries on transonic lifting flow,
+  and "near the floor" is a statement about agreement with SU2.
+- **The causes are not separated.** Four differences could contribute, none isolated here:
+  - the section (closed trailing edge against the paper's sharp extended one);
+  - the far field: 100 chords with no vortex correction, against about 150 chords. S0 measured CL
+    +2.1e-3 from 100 to 200 chords at 256x97, and the paper's CFL3D moves 0.0034 with the vortex
+    correction;
+  - the grid: 512 by 192 stretched cells, against aspect-ratio-one meshes up to 4096²;
+  - the scheme: JST, against H-CUSP, central and flux splitting.
+  The size and direction of our refinement trend point at resolution first; that is an inference,
+  not a measurement.
+
+**Wassing, S., Langer, S., and Bekemeyer, P., "Physics-Informed Neural Networks for Transonic Flows
+around an Airfoil," arXiv:2408.17364v3 [physics.flu-dyn], 15 April 2025 (DLR; submitted to Physics
+of Fluids).** The spec's memory, "Wassing, Langer & Bekemeyer (DLR, around 2023-24) trained PINNs on
+transonic NACA 0012 flow with artificial viscosity", is correct: v1 is from August 2024.
+
+What they do:
+- **The equations:** the steady 2D Euler equations in primitive variables (ρ, u, v, p) with the
+  energy equation, on a 400x200 elliptic O-grid. The network takes the computational coordinates
+  (ξ, η) of the grid points, and physical derivatives come from inverse metrics by finite
+  differences. Predictions exist only at grid points.
+- **The network:** a random Fourier-feature embedding (128 frequencies, σ = 1), then 5 layers of
+  128 adaptive-tanh units with weight normalisation.
+- **The loss:** soft far field, wall and periodicity terms. The residual is volume-weighted and
+  scaled by λ_res = 2·10⁴. There is **no explicit Kutta condition**.
+- **The optimiser:** L-BFGS only, in mini-batches of 5,000 points, reset after each outer
+  iteration, 40 epochs.
+- **Artificial viscosity:** added to the residual as a scalar μ = ν·s·(c + |q|) or in matrix form;
+  the best variants apply it to the density and energy equations only. Here s is an analytic sensor: a shock sensor, the pressure gradient
+  along the flow, times a stagnation-point sensor that switches viscosity off at stagnation points.
+  The viscosity factor is ν ≈ 1.9e-3.
+
+Results on NACA 0012 against a CODA finite-volume reference (Roe, 400x96, 90 chords):
+- **Cp error:** for the best variant (matrix viscosity, both sensors) the relative mean absolute
+  error of Cp is 0.42, 0.3 and 0.33 % at (M, α) = (0.70, 4°), (0.72, 3°) and (0.75, 2°), and 3 % at
+  (0.78, 3°), where the shock sits upstream of the reference's (their Table III, p. 26).
+- **Without viscosity** the PINN captures no shock at all (their Fig. 11). **Global** scalar
+  viscosity without sensors (their model I) also fails to capture the shock.
+- **Cost:** 30-45 min of training per case on DLR's HPC resources (the hardware is not stated).
+- **Parametric:** one network trained over α ∈ (0, 4)° at M 0.72 gives CL in agreement with the
+  reference (their Fig. 10). It took 1.5-2.75 h to train and 35 ms per prediction.
+- **Their conclusion:** PINNs do not currently outperform CFD in speed and accuracy for
+  non-parametric forward problems, and their case rests on parametric use.
+
+How this bears on what this study found:
+1. **The Euler PINN's collapse to rest is not a property of Euler PINNs in general.** Their Euler
+   PINN, also with a strong-form residual and a soft far field, converges to the right transonic
+   flow. The 2026-10-04 root cause is qualified in place accordingly. The differences from the
+   Euler PINN here are many:
+   - residual weight 2·10⁴ against 1, with volume weighting;
+   - Fourier features of grid indices, against (cos 2πξ, sin 2πξ, η);
+   - primitive outputs with the energy equation, against a constant-enthalpy closure with exact
+     wall tangency;
+   - L-BFGS only, in mini-batches, against Adam then L-BFGS;
+   - collocation at grid points, against random points;
+   - their Mach 0.70-0.78, against our warm-up at Mach 0.1 and showcase case at 0.36.
+   The 2026-10-04 probes tested J-weighting (J¹ is close to volume weighting: it did not collapse
+   but stayed at its initial state) and a low-Mach reparameterisation, but not the others. Which
+   difference rescues the Euler PINN is open.
+2. **Lift without an explicit Kutta condition.** Their circulation comes out right with no Kutta
+   term, while ours came out 64-101 % low on five of six cases with one. Their sensor is active near the trailing edge
+   (their Fig. 7), which may supply the dissipation that selects the circulation, as SU2's
+   numerical dissipation does. This is a possibility, not tested here.
+3. **The dropped viscous variants.** The viscosity specified here (spec §7.4: constant ν times the
+   Laplacian, everywhere) is a global form, like their failing model I, though on a different
+   formulation, so this does not predict how those runs would have done. Their working viscosity
+   is localised and scaled by the spectral radius.
+4. **Cost.** Their 30-45 min per non-parametric case is 7-11 times shorter than the 5.6 h mean
+   `pure` run here, on unstated, different hardware. Both studies find a per-case PINN slower than
+   CFD.

@@ -1,0 +1,26 @@
+preflight euler on test_in-0043: {'case_id': 'test_in-0043', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.5358017499966081, 'closure_s': 4.017565792000823}
+preflight visc1e-3 on test_in-0031: {'case_id': 'test_in-0031', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 92.95000995800365, 'closure_s': 47.54195047900066}
+preflight nokutta on test_in-0022: {'case_id': 'test_in-0022', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.3279300419962965, 'closure_s': 3.966391146001115}
+  euler     test_in-0043: 10.0 h
+  euler     test_in-0040: 10.0 h
+  visc1e-3  test_in-0031: 840.6 h
+  nokutta   test_in-0022: 8.2 h
+projected total 868.9 h for 4 runs against a budget of 1000.0 h
+adam 0: {'step': 0, 'residual': 164570.71875, 'wall': 0.8658643960952759, 'kutta': 0.0018552225083112717, 'circulation': 0.0, 'total': 164579.390625, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 500: {'step': 500, 'residual': 472.0741882324219, 'wall': 20.933956146240234, 'kutta': 0.0015010928036645055, 'circulation': 0.0, 'total': 681.4287719726562, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 1000: {'step': 1000, 'residual': 171.2112579345703, 'wall': 24.619665145874023, 'kutta': 0.0014063350390642881, 'circulation': 0.0, 'total': 417.4219665527344, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 1500: {'step': 1500, 'residual': 217.72279357910156, 'wall': 22.042633056640625, 'kutta': 0.0006447515916079283, 'circulation': 0.0, 'total': 438.1555480957031, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 2000: {'step': 2000, 'residual': 216.09527587890625, 'wall': 18.27103042602539, 'kutta': 2.5012261176016182e-05, 'circulation': 0.0, 'total': 398.8058166503906, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 2500: {'step': 2500, 'residual': 298.452392578125, 'wall': 22.734779357910156, 'kutta': 4.528101271716878e-05, 'circulation': 0.0, 'total': 525.8005981445312, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 3000: {'step': 3000, 'residual': 119.09412384033203, 'wall': 21.076250076293945, 'kutta': 1.560605232953094e-05, 'circulation': 0.0, 'total': 329.8567810058594, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 3500: {'step': 3500, 'residual': 187.02442932128906, 'wall': 21.351804733276367, 'kutta': 0.0019346181070432067, 'circulation': 0.0, 'total': 400.56182861328125, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 4000: {'step': 4000, 'residual': 223.69825744628906, 'wall': 22.561023712158203, 'kutta': 0.002490086480975151, 'circulation': 0.0, 'total': 449.3333740234375, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 4500: {'step': 4500, 'residual': 145.59881591796875, 'wall': 386.2750244140625, 'kutta': 0.6604076027870178, 'circulation': 0.0, 'total': 4014.953125, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 5000: {'step': 5000, 'residual': 156.5494384765625, 'wall': 23.90700912475586, 'kutta': 0.006723843980580568, 'circulation': 0.0, 'total': 395.686767578125, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 5500: {'step': 5500, 'residual': 133.21519470214844, 'wall': 18.224973678588867, 'kutta': 1.9030168232347933e-06, 'circulation': 0.0, 'total': 315.4649658203125, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 6000: {'step': 6000, 'residual': 415.205810546875, 'wall': 29.507190704345703, 'kutta': 0.0005015709903091192, 'circulation': 0.0, 'total': 710.28271484375, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 6500: {'step': 6500, 'residual': 325.5930480957031, 'wall': 34.88280487060547, 'kutta': 1.3752579661741038e-06, 'circulation': 0.0, 'total': 674.421142578125, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 7000: {'step': 7000, 'residual': 331.3243103027344, 'wall': 31.30937385559082, 'kutta': 7.962092058733106e-05, 'circulation': 0.0, 'total': 644.4188842773438, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 7500: {'step': 7500, 'residual': 58.08432388305664, 'wall': 7.872684001922607, 'kutta': 0.0031444502528756857, 'circulation': 0.0, 'total': 136.8426055908203, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 8000: {'step': 8000, 'residual': 26.041521072387695, 'wall': 4.17527961730957, 'kutta': 4.0693791447665717e-07, 'circulation': 0.0, 'total': 67.79432678222656, 'w_wall': 10.0, 'w_kutta': 10.0}
+adam 8500: {'step': 8500, 'residual': 165.11959838867188, 'wall': 23.274791717529297, 'kutta': 0.0053061265498399734, 'circulation': 0.0, 'total': 397.92059326171875, 'w_wall': 10.0, 'w_kutta': 10.0}

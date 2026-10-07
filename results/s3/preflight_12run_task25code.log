@@ -1,0 +1,19 @@
+preflight euler on test_in-0022: {'case_id': 'test_in-0022', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.17505316700408002, 'closure_s': 2.1682992089990876}
+preflight gradnorm on test_in-0004: {'case_id': 'test_in-0004', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.17160887500358513, 'balance_s': 0.17054791699774796, 'closure_s': 1.147378645498975}
+preflight visc1e-3 on test_in-0004: {'case_id': 'test_in-0004', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.7462521250054124, 'closure_s': 12.263390103496931}
+preflight visc3e-4 on test_in-0040: {'case_id': 'test_in-0040', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.7371482500020647, 'closure_s': 11.476177541499055}
+preflight nokutta on test_in-0022: {'case_id': 'test_in-0022', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.18037204100255622, 'closure_s': 1.4922493330013822}
+  euler     test_in-0022: 4.5 h
+  euler     test_in-0021: 4.5 h
+  euler     test_in-0043: 4.5 h
+  euler     test_in-0004: 4.5 h
+  euler     test_in-0031: 4.5 h
+  euler     test_in-0040: 4.5 h
+  gradnorm  test_in-0004: 3.0 h
+  visc1e-3  test_in-0004: 23.3 h
+  visc1e-3  test_in-0031: 23.3 h
+  visc1e-3  test_in-0040: 23.3 h
+  visc3e-4  test_in-0040: 22.1 h
+  nokutta   test_in-0022: 3.6 h
+projected total 125.3 h for 12 runs against a budget of 48.0 h
+REFUSING TO START: the projected S3 wall time exceeds the budget. Reduce points, steps or viscous runs as a recorded spec decision, or raise --budget-hours deliberately.

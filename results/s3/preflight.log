@@ -1,0 +1,12 @@
+preflight pure on test_in-0022: {'case_id': 'test_in-0022', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.18134987499797717, 'closure_s': 2.354120479500125}
+preflight gradnorm on test_in-0004: {'case_id': 'test_in-0004', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.17897754200384952, 'balance_s': 0.16814166599942837, 'closure_s': 1.341007228998933}
+preflight nokutta on test_in-0022: {'case_id': 'test_in-0022', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.1662580420015729, 'closure_s': 1.2972902289984631}
+  pure      test_in-0022: 4.8 h
+  pure      test_in-0021: 4.8 h
+  pure      test_in-0043: 4.8 h
+  pure      test_in-0004: 4.8 h
+  pure      test_in-0031: 4.8 h
+  pure      test_in-0040: 4.8 h
+  gradnorm  test_in-0004: 3.4 h
+  nokutta   test_in-0022: 3.2 h
+projected total 35.2 h for 8 runs against a budget of 48.0 h

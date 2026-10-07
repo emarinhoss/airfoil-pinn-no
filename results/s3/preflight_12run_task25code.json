@@ -1,0 +1,115 @@
+{
+  "shard": "0/1",
+  "formulation": "potential",
+  "n_adam_timed": 5,
+  "n_closure_timed": 2,
+  "timing_s": {
+    "euler": {
+      "case_id": "test_in-0022",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.17505316700408002,
+      "closure_s": 2.1682992089990876
+    },
+    "gradnorm": {
+      "case_id": "test_in-0004",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.17160887500358513,
+      "balance_s": 0.17054791699774796,
+      "closure_s": 1.147378645498975
+    },
+    "visc1e-3": {
+      "case_id": "test_in-0004",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.7462521250054124,
+      "closure_s": 12.263390103496931
+    },
+    "visc3e-4": {
+      "case_id": "test_in-0040",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.7371482500020647,
+      "closure_s": 11.476177541499055
+    },
+    "nokutta": {
+      "case_id": "test_in-0022",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.18037204100255622,
+      "closure_s": 1.4922493330013822
+    }
+  },
+  "runs": [
+    {
+      "variant": "euler",
+      "case_id": "test_in-0022",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0021",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0043",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0004",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0031",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0040",
+      "hours": 4.470303070866066
+    },
+    {
+      "variant": "gradnorm",
+      "case_id": "test_in-0004",
+      "hours": 3.037867736861598
+    },
+    {
+      "variant": "visc1e-3",
+      "case_id": "test_in-0004",
+      "hours": 23.251253963235285
+    },
+    {
+      "variant": "visc1e-3",
+      "case_id": "test_in-0031",
+      "hours": 23.251253963235285
+    },
+    {
+      "variant": "visc1e-3",
+      "case_id": "test_in-0040",
+      "hours": 23.251253963235285
+    },
+    {
+      "variant": "visc3e-4",
+      "case_id": "test_in-0040",
+      "hours": 22.082037557654782
+    },
+    {
+      "variant": "nokutta",
+      "case_id": "test_in-0022",
+      "hours": 3.5756688597454436
+    }
+  ],
+  "projected_total_hours": 125.27115446916409,
+  "budget_hours": 48.0,
+  "within_budget": false,
+  "note": "wall time, serial; L-BFGS projected at one closure per iteration (a lower bound)"
+}

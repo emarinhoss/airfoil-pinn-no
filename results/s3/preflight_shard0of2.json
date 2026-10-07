@@ -1,0 +1,54 @@
+{
+  "shard": "0/2",
+  "formulation": "potential",
+  "timings_from": "results/s3/preflight.json",
+  "n_adam_timed": 5,
+  "n_closure_timed": 2,
+  "timing_s": {
+    "pure": {
+      "case_id": "test_in-0022",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.18134987499797717,
+      "closure_s": 2.354120479500125,
+      "reused_from": "results/s3/preflight.json"
+    },
+    "gradnorm": {
+      "case_id": "test_in-0004",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.17897754200384952,
+      "balance_s": 0.16814166599942837,
+      "closure_s": 1.341007228998933,
+      "reused_from": "results/s3/preflight.json"
+    }
+  },
+  "runs": [
+    {
+      "variant": "pure",
+      "case_id": "test_in-0022",
+      "hours": 4.780860735399983
+    },
+    {
+      "variant": "pure",
+      "case_id": "test_in-0043",
+      "hours": 4.780860735399983
+    },
+    {
+      "variant": "pure",
+      "case_id": "test_in-0031",
+      "hours": 4.780860735399983
+    },
+    {
+      "variant": "gradnorm",
+      "case_id": "test_in-0004",
+      "hours": 3.368001362474994
+    }
+  ],
+  "projected_total_hours": 17.710583568674945,
+  "budget_hours": 48.0,
+  "within_budget": true,
+  "note": "wall time, serial; L-BFGS projected at one closure per iteration (a lower bound)"
+}

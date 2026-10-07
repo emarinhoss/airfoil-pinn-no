@@ -1,0 +1,58 @@
+{
+  "shard": "1/3",
+  "formulation": "potential",
+  "n_adam_timed": 5,
+  "n_closure_timed": 2,
+  "timing_s": {
+    "euler": {
+      "case_id": "test_in-0021",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 0.19682400000601774,
+      "closure_s": 2.753825958498055
+    },
+    "visc1e-3": {
+      "case_id": "test_in-0004",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 1.1417792499996722,
+      "closure_s": 90.65390131250024
+    },
+    "visc3e-4": {
+      "case_id": "test_in-0040",
+      "formulation": "potential",
+      "adam_device": "mps",
+      "lbfgs_device": "cpu",
+      "adam_s": 4.351326416996017,
+      "closure_s": 10.267888812497404
+    }
+  },
+  "runs": [
+    {
+      "variant": "euler",
+      "case_id": "test_in-0021",
+      "hours": 5.464958275741891
+    },
+    {
+      "variant": "euler",
+      "case_id": "test_in-0031",
+      "hours": 5.464958275741891
+    },
+    {
+      "variant": "visc1e-3",
+      "case_id": "test_in-0004",
+      "hours": 135.42302335069203
+    },
+    {
+      "variant": "visc3e-4",
+      "case_id": "test_in-0040",
+      "hours": 50.52201015899098
+    }
+  ],
+  "projected_total_hours": 196.8749500611668,
+  "budget_hours": 60.0,
+  "within_budget": false,
+  "note": "wall time, serial; L-BFGS projected at one closure per iteration (a lower bound)"
+}

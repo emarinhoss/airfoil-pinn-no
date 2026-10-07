@@ -534,3 +534,63 @@ overnight while per-case wall time was unchanged (median 197 s at that point), s
 campaign rather than slowing the solver. The mitigation was `caffeinate -i -s -m -w <run_s1 pid>`,
 which keeps the machine from idle or system sleep; awake throughput was then about 90 cases per hour.
 The campaign is resumable, so the pauses cost time only.
+
+## 2026-10-06 — stage S3: the PINN showcase runs (potential formulation, non-viscous plan)
+
+**Command.** `bash runs/run_s3.sh`, i.e. two shards of
+`python -u scripts/s3_pinn.py --shard k/2 --preflight-file results/s3/preflight.json` (k = 0, 1;
+`OMP_NUM_THREADS=6`). Logs `results/s3/shard{0,1}.log`, run records
+`results/s3/pinn_runs_shard{0,1}of2.json`, preflight `results/s3/preflight.json` (35.2 h serial
+projected against a 48 h budget), predictions `runs/predictions/pinn-<variant>-<case>.h5` (8 files).
+Both shards exited 0. Formulation `potential` (full potential, the 2026-10-04/05 decisions); Adam on
+the Apple GPU (`mps`), L-BFGS on `cpu`, for all 8 runs. Scores come in S4; none are computed here.
+
+| Run (variant / case) | Shard | Wall h | CPU h | Final residual | Final wall | Final kutta | Final total |
+|---|---|---|---|---|---|---|---|
+| pure / test_in-0022 | 0 | 5.45 | 9.74 | 2.25e-3 | 1.32e-4 | 1.2e-7 | 3.58e-3 |
+| pure / test_in-0043 | 0 | 4.97 | 9.23 | 1.10e-3 | 4.9e-5 | 8.8e-8 | 1.59e-3 |
+| pure / test_in-0031 | 0 | 6.47 | 11.57 | 5.31e-3 | 4.18e-4 | 4.5e-7 | 9.50e-3 |
+| gradnorm / test_in-0004 | 0 | 4.96 | 7.20 | 9.11 | 9.4e-3 | 1.9e-13 | 82.2 |
+| pure / test_in-0021 | 1 | 5.33 | 9.27 | 4.91e-3 | 3.9e-4 | 5.9e-6 | 8.92e-3 |
+| pure / test_in-0004 | 1 | 5.01 | 9.40 | 2.98e-3 | 2.2e-4 | 1.2e-7 | 5.15e-3 |
+| pure / test_in-0040 | 1 | 6.44 | 11.56 | 2.38e-2 | 2.1e-3 | 5.7e-6 | 4.51e-2 |
+| nokutta / test_in-0022 | 1 | 5.40 | 10.08 | 1.82e-3 | 7.8e-5 | 0 | 2.61e-3 |
+
+Values are the `final` and `wall_s`/`cpu_s` fields of the run records (per-shard wall times overlap:
+the two shards ran concurrently). The learned Gamma is NOT recorded in the run records or logs; it
+is recovered from the saved predictions in S4, not stated here. The circulation term's loss is 0.0 in
+every run (as recorded). `pure` and `nokutta` use fixed weights 10 / 10; `nokutta` sets the Kutta
+loss to exactly 0.
+
+**Failure-mode result: gradnorm's loss weights ran away.** On test_in-0004 the gradient-norm balancing
+drove `w_kutta` from 1.06e4 at Adam step 0 (fixed runs: 10) to 1.9e6 by step 1,500 and a peak of
+7.0e10 at step 16,500; it was still 5.8e9 at step 29,999 (`w_wall` 7.75e3 there). The Kutta loss
+had fallen to 3.6e-15 and the weights kept growing to compensate, so the weighted total stayed in the
+hundreds to thousands (719 at step 29,999). The Adam phase ended with residual 0.024; L-BFGS then
+ended at residual 9.11 (total 82.2), i.e. the quasi-Newton phase, run against those weights,
+made the PDE residual about 380 times worse than where Adam left it. The result is a run whose
+equation is effectively unenforced: compare `pure` on the same case at 2.98e-3. Reported as a result
+of the method; nothing was tuned. Command: `grep -n "w_kutta" results/s3/shard0.log` (the log's
+`final:` line is the L-BFGS end state).
+
+**nokutta** (test_in-0022, `kutta=False`): final residual 1.82e-3, wall 7.8e-5, total 2.61e-3 — the
+same case under `pure` ended at 2.25e-3 / 1.3e-4 / 3.58e-3. The PDE and wall losses alone converge
+equally well, so the loss does not reveal whether the circulation is pinned; that is for the S4 lift
+comparison.
+
+**Attempts that did not run to completion (kept under explicit names in `results/s3`).**
+1. `*_stopped_te_singularity.log` (3 shards, §7.8 code): residual 150-1000 after 11,000 Adam steps
+   on the trailing-edge singularity; stopped; fixed as in the 2026-10-05 entry.
+2. `*_refused_budget60.log` and `preflight_shard*of3_concurrent_refused.json`: three shards
+   preflighting at once measured contended timings (e.g. one variant at 29 s per Adam step, projected
+   289.8 h for the shard against 60 h), so the budget guard refused with exit 3. Resolved by
+   `--preflight-file` on an uncontended preflight.
+3. Memory: 3 shards thrash a 16 GB machine, so the final run used 2 shards (`runs/run_s3.sh`).
+4. `preflight_12run_task25code.*`: a preflight of the earlier 12-run plan (with the viscous
+   variants) on the Task 25 code, superseded by the 8-run plan.
+Earlier warm-ups: `warmup.json` (potential formulation, PASSED) and `warmup_euler_2026-10-02.*` (the
+Euler PINN's failure to fluid at rest).
+
+**Dropped.** The four viscous runs (`visc1e-3` x3, `visc3e-4`) were dropped by the author's decision
+of 2026-10-05 (projected 119-271 h for one viscous run); they are not part of S3 and are selectable
+with `--viscous`.

@@ -1,0 +1,10 @@
+preflight euler on test_in-0021: {'case_id': 'test_in-0021', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 0.527299999994284, 'closure_s': 4.016211750000366}
+preflight visc1e-3 on test_in-0004: {'case_id': 'test_in-0004', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 91.21854633400653, 'closure_s': 57.99553110399938}
+preflight visc3e-4 on test_in-0040: {'case_id': 'test_in-0040', 'formulation': 'potential', 'adam_device': 'mps', 'lbfgs_device': 'cpu', 'adam_s': 28.567267083002662, 'closure_s': 74.9573781045001}
+  euler     test_in-0021: 10.0 h
+  euler     test_in-0031: 10.0 h
+  visc1e-3  test_in-0004: 840.7 h
+  visc3e-4  test_in-0040: 342.2 h
+projected total 1202.8 h for 4 runs against a budget of 1000.0 h
+REFUSING TO START: the projected S3 wall time exceeds the budget. Reduce points, steps or viscous runs as a recorded spec decision, or raise --budget-hours deliberately.
+S3_SHARD1_EXIT=3

@@ -594,3 +594,235 @@ Euler PINN's failure to fluid at rest).
 **Dropped.** The four viscous runs (`visc1e-3` x3, `visc3e-4`) were dropped by the author's decision
 of 2026-10-05 (projected 119-271 h for one viscous run); they are not part of S3 and are selectable
 with `--viscous`.
+
+## 2026-10-06 — stage S4: head-to-head results, and the three predictions checked
+
+Command: `python scripts/s4_score.py` (commit e06ff06), which wrote `results/s4/scores.md`,
+`scores.json`, `costs.json`, `break_even.png`, `data_efficiency.png` and six `showcase_*.png`. Every
+figure below is read from those files; the per-case figures come from `scores.json`'s `rows`, e.g.
+`python -c "import json; [print(r['tag'], r['case_id'], r['score']['cl_err'], r['score']['cl_true']) for r in json.load(open('results/s4/scores.json'))['rows'] if r['method']=='pinn']"`.
+
+**Four things the brief for this stage predates, stated before any result.**
+
+1. **The PINN is the full-potential formulation** (author's decision 2026-10-04), not the Euler PINN
+   of spec §7.1-7.7, which converges to fluid at rest (the five refuted hypotheses and the decisive
+   probe are in the 2026-10-04 entry). It is exact only for shock-free inviscid flow and is an
+   isentropic approximation at shocks, so on supercritical cases it is solving a different equation
+   from SU2.
+2. **Its airfoil runs use the trailing-edge fixes of 2026-10-05** (quarter-chord vortex angle,
+   0.02-chord residual exclusion, equal-speed Kutta condition), **and its lift is under-predicted**
+   because none of the Kutta formulations tried constrains the circulation (2026-10-05 entry). That
+   entry's "about 8x" on test_in-0022 was Γ ≈ 0.02 against CL/2 ≈ 0.16 at 3,000 Adam steps; at the end
+   of the run S4 measures CL 0.0732 against SU2's 0.3192, **4.4x too small**. Both are measurements,
+   at different points of the run.
+3. **The four viscous runs were dropped** (author's decision 2026-10-05). Prediction 3 (no Kutta) is
+   still testable; the spec's comparison of the pure and artificially-viscous PINN at shocks (§7.4) is
+   not made, so nothing here says whether viscosity fixes the PINN's shocks.
+4. **The costs mix hardware.** SU2 is CPU time on this Mac (one process per case, measured with 8
+   concurrent workers). The FNO's training is GPU wall time on this Mac's Apple GPU (MPS). The PINN is
+   wall time of Adam on MPS plus L-BFGS on the CPU, two runs at once. POD is CPU time. Every
+   break-even or ratio below inherits that mix.
+
+**Test sets.** test_in (62 cases at 256x97, 61 scored: 37 subcritical, 24 supercritical) and
+test_ext (14 scored, **all supercritical**: the extrapolation set has no subcritical case, so no
+subcritical-extrapolation figure exists). Truth is SU2 at 512x193 sampled every second node; **the
+floor** is SU2's own 256x97 solution scored against that truth. No contestant has a missing or
+non-finite prediction on any case (`n_missing` and `n_non-finite` are 0 in every row of scores.md).
+
+### The three predictions
+
+**Prediction 1 — "For a single new case, SU2 beats the PINN on cost by one to two orders of
+magnitude." HELD.** `costs.json`: PINN per case 20,201.3 s (mean wall time of the six `pure` runs,
+5.61 h) against SU2 per case 209.87 s (median CPU time of the 256x97 test cases): **96.3x**, 1.98
+orders. On CPU time instead (mean 36,464 s per `pure` run, from `results/s3/pinn_runs_shard*of2.json`)
+it is 174x, 2.24 orders, just outside the band; the prediction holds on the basis S4 costs it at, and
+the mixed hardware of point 4 above is what separates the two figures. The ratio is for an answer of
+very different quality: the PINN's near-field error is 0.52-0.63 against the floor's 0.008-0.024
+(table below). Command:
+`python -c "import json; c=json.load(open('results/s4/costs.json'))['costs']; print(c['pinn']['per']/c['su2']['per'])"`.
+
+**Prediction 2 — "The FNO beats 'just run SU2' only after roughly as many new cases as it took to
+train it, about a thousand, unless the data-efficiency curve shows far fewer training cases are
+enough." HELD.** From `break_even(costs, 5000)` on `costs.json`, the FNO line first falls below
+SU2's at **n = 1,126 new cases** (fixed cost 236,237 s = campaign 229,211 s + 8 tuning runs 4,867 s +
+final training 2,160 s; per query 0.0536 s). The campaign alone is 1,092 SU2-case-equivalents, so the
+break-even is the campaign plus about 34 cases' worth of model search and training; on the
+final-fit-only fixed cost it is 1,103. POD breaks even at 1,094 (1,092 on its final fit only). The
+GPU-wall part of the FNO's fixed cost is 3.0 % of it, so the hardware mix of point 4 barely moves this
+result. Command:
+`python -c "import json,numpy as np; from apno.score.report import break_even; c=json.load(open('results/s4/costs.json'))['costs']; b=break_even(c,5000); print({k:int(np.argmax(b[k]<b['su2'])) for k in ('fno','pod')})"`.
+
+The "unless" clause does not fire. The data-efficiency curve (`data_efficiency.png`; mean near-field
+relative L2 over the 61 test_in cases at 256x97, both regimes pooled; floor 0.01432) stays well above
+the floor at every n and is still falling at 896:
+
+| n (train cases paid) | FNO (seed 0) | FNO / floor | POD | POD / floor | campaign, SU2-case-equivalents |
+|---|---|---|---|---|---|
+| 64 | 0.1088 | 7.6x | 0.1379 | 9.6x | 197 |
+| 128 | 0.0858 | 6.0x | 0.1044 | 7.3x | 257 |
+| 256 | 0.0698 | 4.9x | 0.0883 | 6.2x | 380 |
+| 512 | 0.0561 | 3.9x | 0.0753 | 5.3x | 690 |
+| 896 | 0.0483 | 3.4x | 0.0677 | 4.7x | 1,092 |
+
+(The campaign column is `campaign_cpu_s[n] / su2.per`; every n pays for all 128 validation cases.) A
+smaller training set would break even sooner — about 199 cases at n = 64, which is arithmetic on
+these figures, not a measured curve — but at 7.6x the floor rather than 3.4x. Command for the table:
+mean of `score['near_field_rel_l2']` over the `rows` with that `tag`, `grid` 256x97, `split` test_in.
+
+**Prediction 3 — "Without the Kutta condition, the PINN's residuals will look acceptable while its
+lift is wrong." PARTLY.** On test_in-0022 (subcritical, SU2 CL 0.3192): `nokutta` final residual loss
+1.82e-3 (total 2.61e-3), CL error −0.2667 (CL 0.0526); `pure`, the same case with the Kutta
+condition, final residual loss 2.25e-3 (total 3.58e-3), CL error −0.2461 (CL 0.0732). Residual losses
+from `results/s3/pinn_runs_shard{0,1}of2.json` (`final`), CL errors from `scores.json`. The part that
+held: without the Kutta condition the residual is as small as with it (smaller, in fact) and the lift
+is wrong, 84 % low, so the loss does not reveal the circulation. The part that failed: the prediction
+implies the Kutta condition is what gets the lift right, and here it does not — with it the lift is
+77 % low, a difference of 0.021 in CL against an error of 0.25. On this case the equal-speed Kutta
+condition, met to ~1e-7, makes no material difference to the circulation.
+
+### Results by regime and set, with the floor beside every error
+
+Near field = area-weighted relative L2 of the state within 2.5 chords (mean over cases); CL and CD
+are the largest absolute error over the group (CD in counts); Cp = RMS wall-Cp error (mean over
+cases). FNO rows are seed 0, n = 896, loss A, scored at 256x97 (the evaluation grid) and at 128x49
+(its training grid, against the truth at every fourth fine node). The floor exists only at 256x97,
+so a 128x49 row is beside it on a different comparison grid. PINN rows are single cases (3 per
+regime, test_in only).
+
+| set / regime | method | near field | CL max | CD max (counts) | Cp RMS |
+|---|---|---|---|---|---|
+| test_in subcritical (37) | **floor** | **0.0080** | **0.0073** | **6.9** | **0.0357** |
+| | FNO 256x97 | 0.0423 | 0.0312 | 31.3 | 0.0358 |
+| | FNO 128x49 | 0.0102 | 0.0095 | 7.5 | 0.0334 |
+| | POD | 0.0168 | 0.0097 | 14.2 | 0.0371 |
+| | PINN pure (3) | 0.5155 | 0.2461 | 41.1 | 0.1603 |
+| test_in supercritical (24) | **floor** | **0.0241** | **0.0140** | **17.2** | **0.0341** |
+| | FNO 256x97 | 0.0575 | 0.0431 | 40.4 | 0.0521 |
+| | FNO 128x49 | 0.0374 | 0.0314 | 46.6 | 0.0470 |
+| | POD | 0.1462 | 0.0750 | 122.2 | 0.1190 |
+| | PINN pure (3) | 0.6273 | 1.4028 | 776.5 | 0.4045 |
+| test_ext supercritical (14) | **floor** | **0.0651** | **0.0247** | **32.4** | **0.0598** |
+| | FNO 256x97 | 0.2318 | 0.1847 | 180.6 | 0.2038 |
+| | FNO 128x49 | 0.2320 | 0.1876 | 178.3 | 0.1966 |
+| | POD | 0.5151 | 0.3483 | 530.2 | 0.3512 |
+
+What this says:
+- **In range and subcritical the FNO at its own 128x49 resolution is near the floor** (near field
+  1.3x, CL 1.3x, CD 1.1x), **but evaluated at 256x97 it is 5.3x the floor** and POD beats it there on the near field, CL and CD
+  (not on wall-Cp RMS, 0.0371 against 0.0358). The resolution transfer costs the FNO more than any other single factor in range.
+- **Supercritical, in range, the FNO beats POD by 2.5x** on the near field and 3x on CD at 256x97,
+  and is 2.4x the floor.
+- **Extrapolation is where every surrogate fails**: the FNO is 3.6x the floor on the near field and
+  its CD error reaches 181 counts (5.6x the floor's 32); POD is 7.9x and 530 counts. The FNO's CD
+  errors on test_ext are biased, not scattered: median −78 counts at 256x97.
+- **The PINN is not competitive on any column**: 0.52-0.63 near field, 64x and 26x the floor.
+
+**The PINN per case (all eight runs, test_in, 256x97).** CL true → predicted, and the error:
+
+| run | regime | SU2 CL | PINN CL | CL error | CD error (counts) | near field |
+|---|---|---|---|---|---|---|
+| pure / 0022 | sub | 0.3192 | 0.0732 | −0.2461 | +41.1 | 0.559 |
+| nokutta / 0022 | sub | 0.3192 | 0.0526 | −0.2667 | +30.0 | 0.569 |
+| pure / 0021 | sub | 0.0922 | −0.0012 | −0.0934 | −5.6 | 0.629 |
+| pure / 0043 | sub | 0.2799 | 0.1008 | −0.1790 | +15.1 | 0.359 |
+| pure / 0004 | super | 1.0139 | 1.0662 | +0.0523 | +88.6 | 0.218 |
+| pure / 0031 | super | 0.2949 | 0.0007 | −0.2942 | −9.9 | 0.584 |
+| pure / 0040 | super | 1.3879 | −0.0149 | −1.4028 | −776.5 | 1.080 |
+| gradnorm / 0004 | super | 1.0139 | −0.3272 | −1.3411 | +724.8 | 1.273 |
+
+Five of the six `pure` runs under-predict lift, three of them to roughly zero (0021, 0031, 0040);
+test_in-0004 is the exception, CL 5 % high, with a CD error of 89 counts. The floor's CL errors on
+these cases are 0.0003-0.0086.
+
+**The FNO's three seeds (n = 896, loss A), range over seeds 0 / 1 / 2.**
+
+| set / regime | grid | near field | CL max | CD max (counts) | shocks missed |
+|---|---|---|---|---|---|
+| test_in sub | 256x97 | 0.0420-0.0437 | 0.0281-0.0312 | 31.3-36.1 | — |
+| test_in super | 256x97 | 0.0575-0.0613 | 0.0431-0.0451 | 33.8-40.4 | 1-2 of 27 |
+| test_ext super | 256x97 | 0.2318-0.2554 | 0.1733-0.2425 | 168.9-180.6 | 0 of 21 |
+| test_in sub | 128x49 | 0.0101-0.0103 | 0.0080-0.0095 | 7.5-11.2 | — |
+| test_in super | 128x49 | 0.0374-0.0398 | 0.0277-0.0343 | 32.5-46.6 | 0-1 of 27 |
+| test_ext super | 128x49 | 0.2320-0.2482 | 0.1804-0.2415 | 168.8-186.0 | 0 of 21 |
+
+The near-field spread is a few per cent of its value; the extrapolation CL maximum varies by 40 %
+between seeds, so a single-seed extrapolation CL figure is not reliable to better than that.
+
+**Loss A against loss B (n = 896, seed 0).** Loss B (A plus the wall row weighted 10) is **worse than
+loss A on the near field, CL and CD in every set and regime at both grids**, and most at the
+supercritical lift: test_in
+supercritical CL max 0.2489 against 0.0431 (256x97) and 0.2633 against 0.0314 (128x49), CD max 256
+against 40 counts; near field 0.1660 against 0.0575 (supercritical), 0.0694 against 0.0423
+(subcritical) and 0.4506 against 0.2318 (test_ext) at 256x97. Its wall-Cp RMS is marginally better
+in range subcritical (0.0337 against 0.0358 at 256x97, 0.0333 against 0.0334 at 128x49) and worse
+in every other set and regime. Loss B stopped early by
+patience at epoch 81 (S2 entry); the comparison is of the runs as made, not of converged runs.
+
+**Shocks** (scores.md, "Shocks"; 27 true shocks on the 24 test_in supercritical cases, 21 on the 14
+test_ext cases; position error in chords; "overshoot" is the largest |ΔCp| within 0.05 chord of the
+true shock):
+
+| set | method | missed | median / max \|Δx\| | median / max overshoot |
+|---|---|---|---|---|
+| test_in | **floor** | **0** | **0 / 0.0186** | **0.19 / 0.54** |
+| test_in | FNO 256x97 (s0) | 2 | 0 / 0.0577 | 0.42 / 1.05 |
+| test_in | FNO 128x49 (s0) | 1 | 0 / 0.0692 | 0.29 / 0.92 |
+| test_in | POD | 0 | 0.0610 / 0.1348 | 0.65 / 1.34 |
+| test_in | FNO loss B 256x97 | 2 | 0.0123 / 0.0682 | 0.59 / 1.29 |
+| test_in | PINN pure (3 cases, 4 shocks) | 1 | 0.0459 / 0.1812 | 0.74 / 1.67 |
+| test_in | PINN gradnorm (1 case, 1 shock) | 1 | — | 2.33 |
+| test_ext | **floor** | **0** | **0.0078 / 0.0122** | **0.69 / 1.00** |
+| test_ext | FNO 256x97 (s0) | 0 | 0.0419 / 0.2131 | 1.13 / 1.58 |
+| test_ext | POD | 0 | 0.1059 / 0.2499 | 1.28 / 1.60 |
+
+The FNO places in-range shocks at the floor's median accuracy (0 chords) but misses 1-2 of 27 and
+smears them (overshoot median twice the floor's); out of range its position errors reach 0.21 chord.
+POD never misses but places them 0.06-0.11 chord off at the median. At n = 64 the FNO misses up to 3
+of 27 in range. The PINN misses one of its four shocks, and the gradnorm run misses its only one.
+
+**Physics checks on SU2 itself** (the truth row, `su2-512x193`, sampled onto the 256x97 nodes; and
+the floor):
+- Entropy, ideally zero in subcritical inviscid flow: truth near-field maximum median 0.0197 (max
+  0.0489) over the 37 subcritical cases, the floor 0.0328 (0.0645) — **SU2 generates spurious entropy,
+  and more of it on the coarser grid**. Its area-weighted mean is 3.9e-7 (truth) and 1.7e-6 (floor),
+  and non-negative on every case at both grids. Supercritical maxima, which include real shock
+  entropy: 0.042 median in range and 0.133 out of range (truth).
+- Total enthalpy |H/H∞ − 1|: at most 1.3e-6 (subcritical) and 1.2e-5 (supercritical), both grids.
+- Wall-normal velocity RMS: 6.4e-9 to 9.8e-9 for the floor on its own grid; 2.8e-5 to 3.7e-5 median
+  (5.2e-3 worst, supercritical in range) for the truth, which is evaluated with the 256x97 grid's
+  wall normals rather than its own.
+- Net mass flux through the closed lines j = 8, 24, 48, 72: truth medians 1.6e-8 to 1.2e-4, worst
+  7.2e-4; floor worst 1.3e-3 (test_ext, j = 48).
+- No non-positive density or pressure anywhere, either grid.
+These are the scale against which the contestants' checks below are read.
+
+### Failures, stated as results
+
+- **Non-positive density or pressure in the near field (test_ext):** POD on 2, 5, 5, 6 and **7 of 14**
+  cases at n = 64, 128, 256, 512, 896 — it gets worse with more data; the FNO on 4-5 of 14 at n = 64
+  and 128, and on none at n ≥ 256. Where these occur the enthalpy deviation explodes (POD n = 512
+  worst 5,770; FNO n = 64 worst 543 at 256x97). No method has one in range.
+- **Entropy decrease:** the subcritical near-field mean entropy is **below free stream** on 9-24 of 37
+  cases for the FNO (9 for the n = 896 seed-0 run; 16 and 19 for seeds 1 and 2) and 10-23 of 37 for
+  POD, against 0 of 37 for SU2 at either grid. Command: count `rows` with `regime` subcritical,
+  `grid` 256x97 and `score['physics']['entropy_mean'] < 0`, by tag. That is an unphysical entropy
+  decrease somewhere in the field, but it is **not an expansion-shock test**: the scorer has no
+  check for an entropy decrease across a compression, so whether any surrogate predicts an expansion
+  shock is **not measured**. For the potential PINN entropy is identically constant, so an expansion
+  shock (which isentropic potential flow admits) could not be detected by any entropy check at all.
+- **Missed shocks:** FNO up to 3 of 27 in range (n = 64), 1-2 at n = 896; PINN 1 of 4 (`pure`) and 1
+  of 1 (`gradnorm`); POD and the floor none.
+- **Wrong lift from the wrong circulation:** the PINN's CL is 64-101 % low on five of six `pure` runs
+  (table above).
+- **PINN wall tangency and mass**, which the potential formulation enforces only softly: wall-normal
+  RMS 0.011 median (subcritical) and 0.020 (supercritical) against SU2's 1e-8; mass-flux medians at
+  j = 48 and 72 of 0.019-0.069 (`pure`), one to two orders above the FNO at n = 896 (4e-4 to 7e-3
+  at 256x97) and three to five above SU2's truth.
+- **A PINN run that did not converge:** `gradnorm` on test_in-0004 ended with residual 9.11 after
+  L-BFGS made it about 380x worse than Adam left it (S3 entry), and scores CL −0.33 against 1.01,
+  near field 1.27. The six `pure` runs and `nokutta` ended with residual losses 1.1e-3 to 2.4e-2; no
+  convergence threshold was fixed for the PINN in advance, so they are reported, not judged.
+- **FNO ringing** (spec §8.4) has no metric in the scorer and is not measured; the showcase plots
+  (`results/s4/showcase_*.png`) are the only view of it.
+- **Not measured at all:** the viscous PINN (dropped), and the Vassberg & Jameson comparison (still
+  open from S0).

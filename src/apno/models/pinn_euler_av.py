@@ -36,13 +36,25 @@ from apno.physics.euler import divergence, metrics
 from apno.physics.viscosity import READINGS, sensor, viscous_term
 
 G = GAMMA
-ENCODINGS = ("fourier", "periodic")
-CLOSURES = ("primitive", "enthalpy")
-VISCOSITIES = ("matrix", "scalar", "none")
+# The allowed values of every string option of AvConfig (design §2, §4). The consumers branch on
+# one value and treat any other as the alternative (weighting not "volume" as uniform, collocation
+# not "random" as nodes), so an unchecked typo would silently run a different ablation arm.
+OPTIONS = {
+    "encoding": ("fourier", "periodic"),
+    "closure": ("primitive", "enthalpy"),
+    "weighting": ("volume", "uniform"),
+    "collocation": ("nodes", "random"),
+    "viscosity": ("matrix", "scalar", "none"),
+    "sensor": tuple(READINGS),
+    "optimizer": ("lbfgs", "adam_lbfgs"),
+}
 
 
 @dataclass(frozen=True)
 class AvConfig:
+    """Checked at construction (and so by dataclasses.replace and config_from_dict): a string
+    option outside OPTIONS raises ValueError naming the field, before any run or projection."""
+
     # network (design §2.2)
     hidden: int = 128
     depth: int = 5
@@ -80,6 +92,12 @@ class AvConfig:
     final_lbfgs_history: int = 50
     seed: int = 0
     device: str = "auto"  # training; evaluation is always CPU float64
+
+    def __post_init__(self):
+        for field, allowed in OPTIONS.items():
+            value = getattr(self, field)
+            if value not in allowed:
+                raise ValueError(f"AvConfig.{field} = {value!r}: expected one of {allowed}")
 
 
 def config_from_dict(d):
@@ -175,9 +193,7 @@ class EulerAvPinn:
     formulation = "euler_av"
 
     def __init__(self, case, cfg):
-        if (cfg.encoding not in ENCODINGS or cfg.closure not in CLOSURES
-                or cfg.viscosity not in VISCOSITIES):
-            raise ValueError(f"unknown option in {cfg}")
+        """cfg: an AvConfig, whose string options are checked when it is built."""
         self.case, self.cfg = case, cfg
         self.net = EulerAvNet(cfg)
         self.ratio = stretch_ratio(case.radius)

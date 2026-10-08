@@ -1415,3 +1415,9 @@ per outer iteration, and the probes do not show where it ends. All arms used see
 
 **No recipe amendment is written.** Design §2.7 stays unwritten: nothing the author listed, nor the
 two additions (the balanced λ_res on case B, both conditions exact here), worked.
+
+**The author's decision (2026-10-08): one full epoch of both-hard on case A** before deciding about
+the gate. That is hard_both through the recipe's own L-BFGS limits: all 20 mini-batch outer
+iterations of an epoch, max_iter 1,000, max_eval 1,250, history 1,000, with no cut. The state is
+reported every 5 outer iterations. The question is whether the slowly falling low-density state
+ever turns physical.

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -75,7 +76,8 @@ def test_costs_against_su2(sc):
     s4 = {"costs": {"su2": {"per_cpu": 200.0, "per_wall": 220.0}, "fno": {"per": 0.05}}}
     c = sc.costs(runs, s4)
     assert c["euler_av"]["per_wall"] == 3600.0 and c["euler_av"]["n_runs"] == 6
-    assert c["ratio_to_su2_cpu"] == {"wall": pytest.approx(18.0), "cpu": pytest.approx(9.0)}
+    assert c["ratio_to_su2_cpu"] == {"wall": pytest.approx(18.0), "cpu": pytest.approx(9.0),
+                                     "per": pytest.approx(18.0)}
     assert sc.costs({}, s4)["euler_av"] is None
 
 
@@ -270,3 +272,110 @@ def test_identity_checks_are_labelled_by_construction_not_printed_as_values(
                                                    for m in sc.METHODS}},
                      {}, {}, {"euler_av": None})
     assert "## Physics checks" in md and "by construction" in md
+
+
+def _cells(line):
+    """A markdown table row's cells, split on the unescaped pipes only."""
+    return [c.strip() for c in re.split(r"(?<!\\)\|", line)[1:-1]]
+
+
+def _section(md, title):
+    return md.split(f"## {title}")[1].split("\n## ")[0]
+
+
+def _main_with_nothing_run(sc, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    Path("results/s4").mkdir(parents=True)
+    Path("results/s4/costs.json").write_text(json.dumps(S4_FULL))
+    monkeypatch.setattr(sc, "truth_and_floor", lambda cid: (None, None, None))
+    assert sc.main([]) == 0
+
+
+def test_ablation_json_states_the_one_at_a_time_caveat_beside_the_arms(sc, tmp_path,
+                                                                        monkeypatch):
+    """Design §4: the caveat is stated wherever a verdict appears, the record included."""
+    _main_with_nothing_run(sc, tmp_path, monkeypatch)
+    abl = json.loads(Path("results/s5/ablation.json").read_text())
+    assert "given the rest of R" in abl["note"] and "interactions" in abl["note"]
+    assert "One seed per arm" in abl["note"]
+    assert [k for k in abl if k != "note"] == list(sc.ARMS)
+    assert abl["A1"]["verdict"] == "not run"
+    md = sc.markdown(None, abl, {}, {}, {}, {})  # the written record, note and all, still renders
+    assert len([ln for ln in md.splitlines() if ln.startswith("| A")]) == len(sc.ARMS)
+    assert abl["note"] in md
+
+
+def test_gate_table_has_a_status_column_and_shows_none_as_a_dash(sc):
+    gate = {"configs": {
+        "T1": {"score": {"status": "ok", "passed": True, "collapsed": False,
+                         "rmae": {"cp": 0.0071, "mach": 0.0052}}},
+        "T2": {"score": {"status": "missing truth", "passed": False, "collapsed": None}},
+        "T3": {}}}
+    gate_md = sc.markdown(gate, sc.ablation({}), {}, {}, {}, {}).split("## Ablation")[0]
+    header = next(ln for ln in gate_md.splitlines() if ln.startswith("| config |"))
+    assert _cells(header) == ["config", "status", "passed", "RMAE Cp", "RMAE Mach", "collapsed"]
+    rows = {_cells(ln)[0]: _cells(ln) for ln in gate_md.splitlines() if ln.startswith("| T")}
+    assert rows["T1"] == ["T1", "ok", "True", "0.0071", "0.0052", "False"]
+    assert rows["T2"] == ["T2", "missing truth", "False", "—", "—", "—"]
+    assert rows["T3"] == ["T3", "—", "—", "—", "—", "—"]
+    assert "None" not in gate_md
+
+
+def test_a_status_with_a_pipe_or_a_newline_keeps_every_table_whole(sc):
+    bad = "scoring failed: ValueError: a | b\nsecond line"
+    gate = {"configs": {"T1": {"score": {"status": bad, "passed": False, "collapsed": None}}}}
+    runs = {"A1": {"diverged": False, "score": {"status": bad, "passed": False,
+                                               "collapsed": None}}}
+    table = _table(sc)
+    table[sc.STEP3_IN[0]]["euler_av"] = {"status": bad}
+    g = sc.group_ratios(table)
+    md = sc.markdown(gate, sc.ablation(runs), table, g, sc.degradation(g), {})
+    n_tables = 0
+    for block in md.split("\n\n"):
+        lines = block.splitlines()
+        if lines and lines[0].startswith("|"):
+            n_tables += 1
+            width = len(_cells(lines[0]))
+            assert all(ln.startswith("|") and ln.endswith("|") and len(_cells(ln)) == width
+                       for ln in lines), block
+    assert n_tables >= 4
+    # the gate, ablation, comparison and RMAE tables each carry it, escaped and on one line
+    assert md.count("scoring failed: ValueError: a \\| b second line") == 4
+
+
+def test_p7_reads_the_per_case_cost_by_the_s4_rule_over_su2_cpu_time(sc):
+    gpu = {c: {"wall_s": 3600.0, "cpu_s": 1800.0, "device": "mps"}
+           for c in sc.STEP3_IN + sc.STEP3_EXT}
+    assert sc.costs(gpu, S4_FULL)["ratio_to_su2_cpu"]["per"] == pytest.approx(18.0)
+    cpu = {c: {**r, "device": "cpu"} for c, r in gpu.items()}
+    assert sc.costs(cpu, S4_FULL)["ratio_to_su2_cpu"]["per"] == pytest.approx(9.0)
+    mixed = {**gpu, sc.STEP3_IN[0]: cpu[sc.STEP3_IN[0]]}  # one CPU-trained run: 1800 s
+    assert sc.costs(mixed, S4_FULL)["ratio_to_su2_cpu"]["per"] == pytest.approx(
+        (5 * 3600.0 + 1800.0) / 6 / 200.0)
+    md = sc.markdown(None, sc.ablation({}), {}, {}, {}, sc.costs(gpu, S4_FULL))
+    p7 = next(ln for ln in _section(md, "Costs").splitlines() if "P7" in ln)
+    assert '"per"' in p7 and "= 18" in p7 and "wall time" in p7 and "CPU time" in p7
+    for cost in ({}, sc.costs({}, S4_FULL)):
+        p7 = next(ln for ln in _section(sc.markdown(None, sc.ablation({}), {}, {}, {}, cost),
+                                        "Costs").splitlines() if "P7" in ln)
+        assert '"per" = —' in p7
+
+
+def test_rmae_of_cp_and_mach_per_case_and_method(sc):
+    """Design §5.3: the gate's RMAE for every comparison column, for Wassing et al."""
+    table = _table(sc)
+    cid, ext = sc.STEP3_IN[0], sc.STEP3_EXT[0]
+    table[cid]["euler_av"]["rmae"] = {"cp": 0.0123, "mach": 0.0456}
+    table[cid]["floor"]["rmae"] = {"cp": 0.0011, "mach": 0.0022}
+    table[ext]["euler_av"] = {"status": "diverged"}
+    md = sc.markdown(None, sc.ablation({}), table, {}, {}, {})
+    sec = _section(md, "RMAE of Cp and Mach")
+    header = next(ln for ln in sec.splitlines() if ln.startswith("| case |"))
+    assert _cells(header) == ["case", "method", "status", "RMAE Cp", "RMAE Mach"]
+    rows = {tuple(_cells(ln)[:2]): _cells(ln) for ln in sec.splitlines()
+            if ln.startswith("| test_")}
+    assert len(rows) == len(table) * len(sc.METHODS)
+    assert rows[(cid, "euler_av")] == [cid, "euler_av", "ok", "0.0123", "0.0456"]
+    assert rows[(cid, "floor")] == [cid, "floor", "ok", "0.0011", "0.0022"]
+    assert rows[(ext, "euler_av")] == [ext, "euler_av", "diverged", "—", "—"]
+    assert rows[(cid, "fno-128")] == [cid, "fno-128", "missing", "—", "—"]

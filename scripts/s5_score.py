@@ -10,22 +10,27 @@ or truth is missing is reported as a status and left out of the group means, wit
 
 Ablation verdict (design §4): "needed" if the arm failed its pass criterion, collapsed, diverged or
 could not be scored; "not needed" if it passed; "not run" if it has no record. Every arm's record
-keeps its score (RMAE, near field, CL, collapse), losses and costs beside the verdict. The
-comparison (§5.3): per case and method the S4 scores and the gate's RMAE; a step-3 run that
+keeps its score (RMAE, near field, CL, collapse), losses and costs beside the verdict;
+ablation.json states §4's caveat ("not needed" given the rest of R; one seed per arm) under
+"note" beside the arms, as scores.md does under the table. The comparison (§5.3): per case and
+method the S4 scores and the gate's RMAE (a table of its own in scores.md); a step-3 run that
 diverged (no prediction file) is the status "diverged", not "missing"; per method the mean
 near-field ratio to the floor over the in-range and over the extrapolation cases, with the mean
 |CL| and |CD| errors beside (not gated); degradation = the extrapolation mean over the in-range
 mean, for the FNO, POD and the new PINN, on all six cases only: a method short of a case (diverged,
 missing, unscored) has none, since a figure on the cases left is not like-for-like, and scores.md
-gives its counts and diverged cases instead.
+gives its counts and diverged cases instead. scores.md escapes "|" and line breaks in every cell.
 
 Costs (§5.4): per step-3 run its wall and CPU time and devices; the per-case cost is S4's rule
 (GPU training at wall time, CPU training at CPU time), averaged over the runs that did not diverge
-(a diverged run's time is cut short); the break-even (results/s5/break_even.png) puts the new
-PINN (no fixed cost) beside SU2 per case at CPU time and the FNO (S4's fixed cost, per query).
+(a diverged run's time is cut short); ratio_to_su2_cpu puts that per-case cost ("per", the
+figure P7 reads) and, beside it, the mean wall and CPU times over SU2's CPU time per case; the
+break-even (results/s5/break_even.png) puts the new PINN (no fixed cost) beside SU2 per case at
+CPU time and the FNO (S4's fixed cost, per query).
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -45,6 +50,12 @@ RES, PRED5, PRED = Path("results/s5"), Path("runs/predictions_s5"), Path("runs/p
 ARMS = ("A1", "A2", "A3", "A4", "A5", "A6a", "A6b")
 METHODS = ("floor", "fno-256", "fno-128", "pod", "pinn-pure", "euler_av")
 DEGRADED = ("fno-256", "fno-128", "pod", "euler_av")
+ABLATION_KEEP = ("diverged", "final", "stalled", "func_evals", "wall_s", "cpu_s", "device")
+ABLATION_NOTE = ('"Not needed" means not needed given the rest of R: a one-at-a-time ablation '
+                 "misses interactions (two ingredients that each suffice both read as not "
+                 "needed; design §4). One seed per arm.")
+GROUP_ERRORS = ("cl_err", "cd_err_counts")
+GROUPS = (("in", STEP3_IN), ("ext", STEP3_EXT))
 
 
 def _load(path):
@@ -67,14 +78,17 @@ def verdict(entry):
     return "needed" if (not sc.get("passed") or sc.get("collapsed")) else "not needed"
 
 
-ABLATION_KEEP = ("diverged", "final", "stalled", "func_evals", "wall_s", "cpu_s", "device")
-
-
 def ablation(runs):
     """Per arm the verdict, the score, the losses and the costs (None for an arm not run)."""
     return {a: {"verdict": verdict(runs.get(a)), "score": (runs.get(a) or {}).get("score"),
                 **{k: (runs.get(a) or {}).get(k) for k in ABLATION_KEEP}}
             for a in ARMS}
+
+
+def ablation_record(abl):
+    """results/s5/ablation.json: the arms where they were, with design §4's caveat beside them
+    under "note", since the caveat is stated wherever a verdict appears."""
+    return {"note": ABLATION_NOTE, **abl}
 
 
 def _column_file(method, case_id):
@@ -130,12 +144,6 @@ def score_column(method, case_id, specs, runs=None):
         for k in by_construction(method, case_id):  # an identity is labelled, never a value
             out["physics"][k] = BY_CONSTRUCTION_CELL
     return out
-
-
-GROUP_ERRORS = ("cl_err", "cd_err_counts")
-
-
-GROUPS = (("in", STEP3_IN), ("ext", STEP3_EXT))
 
 
 def group_ratios(table):
@@ -200,7 +208,8 @@ def _basis(devices):
 def costs(runs, s4_costs):
     """The new PINN's per-case cost beside SU2's and the FNO's (S4's record). euler_av is None
     with no step-3 record; its means (per, per_wall, per_cpu) are over the runs that did not
-    diverge, None if none finished; "runs" lists every recorded step-3 run."""
+    diverge, None if none finished; "runs" lists every recorded step-3 run. ratio_to_su2_cpu puts
+    each mean over SU2's CPU time per case; "per", the cost by S4's rule, is the one P7 reads."""
     su2, fno = s4_costs["costs"]["su2"], s4_costs["costs"]["fno"]
     out = {"euler_av": None, "su2": {"per_wall": su2["per_wall"], "per_cpu": su2["per_cpu"]},
            "fno": {"fixed": fno.get("fixed"), "per": fno["per"]}, "fno_per_query": fno["per"],
@@ -223,7 +232,8 @@ def costs(runs, s4_costs):
                  for c, r in step3.items()}}
     if done:
         out["ratio_to_su2_cpu"] = {"wall": per_wall / su2["per_cpu"],
-                                   "cpu": per_cpu / su2["per_cpu"]}
+                                   "cpu": per_cpu / su2["per_cpu"],
+                                   "per": out["euler_av"]["per"] / su2["per_cpu"]}
     return out
 
 
@@ -246,7 +256,17 @@ def _fmt(x, f="{:.4g}"):
 
 
 def _cell(x):
-    return "—" if x is None else str(x)
+    """A markdown table cell: None as "—", "|" escaped and line breaks as spaces, so a status
+    such as "scoring failed: ..." cannot split its row or end the table."""
+    return "—" if x is None else re.sub(r"\s*[\r\n]+\s*", " ", str(x)).replace("|", "\\|")
+
+
+def _row(*cells):
+    return "| " + " | ".join(_cell(c) for c in cells) + " |"
+
+
+def _rule(n):
+    return "|---" * n + "|"
 
 
 def ablation_row(arm, v):
@@ -256,62 +276,78 @@ def ablation_row(arm, v):
     r, s4 = sc.get("rmae") or {}, sc.get("s4") or {}
     cl = sc.get("cl") if arm == "A6a" else s4.get("cl_err")
     wall = v.get("wall_s")
-    cells = [arm, v["verdict"], _cell(sc.get("status")), _fmt(r.get("cp")), _fmt(r.get("mach")),
-             _fmt(s4.get("near_field_rel_l2")), _fmt(cl), _fmt(sc.get("max_cp_error")),
-             _cell(sc.get("collapsed")), _fmt((v.get("final") or {}).get("total")),
-             _fmt(None if wall is None else wall / 3600, "{:.2f}")]
-    return "| " + " | ".join(cells) + " |"
+    return _row(arm, v["verdict"], sc.get("status"), _fmt(r.get("cp")), _fmt(r.get("mach")),
+                _fmt(s4.get("near_field_rel_l2")), _fmt(cl), _fmt(sc.get("max_cp_error")),
+                sc.get("collapsed"), _fmt((v.get("final") or {}).get("total")),
+                _fmt(None if wall is None else wall / 3600, "{:.2f}"))
+
+
+def _ok(entry):
+    return entry if entry.get("status") == "ok" else {}
 
 
 def markdown(gate, abl, table, groups, degr, cost):
-    out = ["## Gate (design §3)", "", "| config | passed | RMAE Cp | RMAE Mach | collapsed |",
-           "|---|---|---|---|---|"]
+    """scores.md. `abl` is ablation()'s output or the ablation.json record: only the arms are
+    rows, its "note" is not."""
+    out = ["## Gate (design §3)", "",
+           _row("config", "status", "passed", "RMAE Cp", "RMAE Mach", "collapsed"), _rule(6)]
     for name, e in ((gate or {}).get("configs") or {}).items():
-        sc = e.get("score") or {}
+        sc = (e or {}).get("score") or {}
         r = sc.get("rmae") or {}
-        out.append(f"| {name} | {sc.get('passed')} | {_fmt(r.get('cp'))} | "
-                   f"{_fmt(r.get('mach'))} | {sc.get('collapsed')} |")
+        out.append(_row(name, sc.get("status"), sc.get("passed"), _fmt(r.get("cp")),
+                        _fmt(r.get("mach")), sc.get("collapsed")))
     out += ["", "## Ablation (design §4)", "",
-            "| arm | verdict | status | RMAE Cp | RMAE Mach | near field | CL err | max abs ΔCp | "
-            "collapsed | final loss | wall h |", "|---" * 11 + "|"]
-    out += [ablation_row(a, v) for a, v in abl.items()]
-    out += ["", '"Not needed" means not needed given the rest of R: a one-at-a-time ablation '
-            "misses interactions (design §4). One seed per arm."]
+            _row("arm", "verdict", "status", "RMAE Cp", "RMAE Mach", "near field", "CL err",
+                 "max abs ΔCp", "collapsed", "final loss", "wall h"), _rule(11)]
+    out += [ablation_row(a, abl[a]) for a in ARMS if a in abl]
+    out += ["", ABLATION_NOTE]
     out += ["", "## Comparison (design §5): near field, and ratio to the floor", "",
-            "| case | " + " | ".join(METHODS) + " |", "|---" * (len(METHODS) + 1) + "|"]
+            _row("case", *METHODS), _rule(len(METHODS) + 1)]
     for c, row in table.items():
-        fl = row["floor"].get("near_field_rel_l2") if row["floor"].get("status") == "ok" else None
+        fl = _ok(row["floor"]).get("near_field_rel_l2")
         cells = []
         for m in METHODS:
-            nf = row[m].get("near_field_rel_l2") if row[m].get("status") == "ok" else None
+            nf = _ok(row[m]).get("near_field_rel_l2")
             ratio = nf / fl if nf is not None and fl else None
             cells.append(row[m].get("status") if nf is None
                          else f"{nf:.4f} ({_fmt(ratio, '{:.1f}')}x)")
-        out.append(f"| {c} | " + " | ".join(cells) + " |")
-    out += ["", "| method | in-range ratio (n) | extrapolation ratio (n) | degradation | "
-            "CL err in | CL err ext | CD err in (counts) | CD err ext (counts) |",
-            "|---" * 8 + "|"]
+        out.append(_row(c, *cells))
+    out += ["", _row("method", "in-range ratio (n)", "extrapolation ratio (n)", "degradation",
+                     "CL err in", "CL err ext", "CD err in (counts)", "CD err ext (counts)"),
+            _rule(8)]
     for m, g in groups.items():
-        out.append(f"| {m} | {_fmt(g['in'])} ({g['n_in']}) | {_fmt(g['ext'])} ({g['n_ext']}) | "
-                   f"{_degradation_cell(degr.get(m), g if m in DEGRADED else None)} | "
-                   f"{_fmt(g.get('cl_err_in'))} | "
-                   f"{_fmt(g.get('cl_err_ext'))} | {_fmt(g.get('cd_err_counts_in'))} | "
-                   f"{_fmt(g.get('cd_err_counts_ext'))} |")
+        out.append(_row(m, f"{_fmt(g['in'])} ({g['n_in']})", f"{_fmt(g['ext'])} ({g['n_ext']})",
+                        _degradation_cell(degr.get(m), g if m in DEGRADED else None),
+                        _fmt(g.get("cl_err_in")), _fmt(g.get("cl_err_ext")),
+                        _fmt(g.get("cd_err_counts_in")), _fmt(g.get("cd_err_counts_ext"))))
     out += ["", "Degradation: on all six cases only (design §5.3); a method short of a case "
             "shows — with its counts and diverged cases, not a figure on the cases left.",
             "", "CL and CD errors: the mean absolute error over the same cases as the ratio, "
             "reported beside, not gated (design §5.3)."]
-    out += ["", "## Physics checks (design §5.3; S4's labels)", "",
-            "| case | method | " + " | ".join(PHYSICS) + " |", "|---" * (len(PHYSICS) + 2) + "|"]
+    out += ["", "## RMAE of Cp and Mach (design §5.3: the gate's metric, for comparison with "
+            "Wassing et al.)", "", _row("case", "method", "status", "RMAE Cp", "RMAE Mach"),
+            _rule(5)]
     for c, row in table.items():
         for m in METHODS:
-            ph = row[m].get("physics") if row[m].get("status") == "ok" else None
+            r = _ok(row[m]).get("rmae") or {}
+            out.append(_row(c, m, row[m].get("status"), _fmt(r.get("cp")), _fmt(r.get("mach"))))
+    out += ["", "## Physics checks (design §5.3; S4's labels)", "",
+            _row("case", "method", *PHYSICS), _rule(len(PHYSICS) + 2)]
+    for c, row in table.items():
+        for m in METHODS:
+            ph = _ok(row[m]).get("physics")
             if ph is not None:
                 cells = [ph[k] if isinstance(ph.get(k), str) else _fmt(ph.get(k)) for k in PHYSICS]
-                out.append(f"| {c} | {m} | " + " | ".join(cells) + " |")
+                out.append(_row(c, m, *cells))
     out += ["", f'"{BY_CONSTRUCTION_CELL}" marks a check the model satisfies identically '
             "(spec 8.2): it is not a pass."]
-    out += ["", "## Costs (design §5.4)", "", "```", json.dumps(cost, indent=2), "```", ""]
+    ratio = (cost or {}).get("ratio_to_su2_cpu") or {}
+    out += ["", "## Costs (design §5.4)", "",
+            f'P7 (design §6) reads ratio_to_su2_cpu "per" = {_fmt(ratio.get("per"))}: the new '
+            "PINN's per-case cost by S4's rule (GPU training at wall time, CPU training at CPU "
+            "time) over SU2's CPU time per case. \"wall\" and \"cpu\" put the mean wall and CPU "
+            "times over the same SU2 figure, beside it.",
+            "", "```", json.dumps(cost, indent=2), "```", ""]
     return "\n".join(out)
 
 
@@ -341,7 +377,8 @@ def main(argv=None):
     groups = group_ratios(table)
     degr = degradation(groups)
     cost = costs(runs, json.loads(Path("results/s4/costs.json").read_text()))
-    (RES / "ablation.json").write_text(json.dumps(abl, indent=2, default=float))
+    (RES / "ablation.json").write_text(json.dumps(ablation_record(abl), indent=2,
+                                                  default=float))
     (RES / "scores.json").write_text(json.dumps(
         {"table": table, "groups": groups, "degradation": degr}, indent=2, default=float))
     (RES / "costs.json").write_text(json.dumps(cost, indent=2, default=float))

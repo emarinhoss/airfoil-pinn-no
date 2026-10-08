@@ -1443,3 +1443,8 @@ L-BFGS stopping on its own tolerance.
 
 So the most constrained variant probed (both conditions exact) stalls in a non-physical state as
 firmly as T1 does in the uniform field. The probes give no amendment to write.
+
+**The author's decision (2026-10-08): run the gate as pre-registered**, on the recipe as built (no
+amendment), with the gate's budget measured as amended in design §7.1. First SU2 on the validation
+case (`scripts/s5_su2.py`), then `scripts/s5_pinn.py gate`, T1 to T4 in order. Expected from the
+probes: no configuration passes, and S5 stops after step 1 (design §3.4).

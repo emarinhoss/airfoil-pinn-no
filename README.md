@@ -90,6 +90,9 @@ finished work.
 | S3a | PINN cylinder warm-up | `python scripts/s3_warmup.py` |
 | S3 | PINN showcase runs (8 runs; shardable) | `python scripts/s3_pinn.py --shard K/N` |
 | S4 | Score everything; write tables, plots and costs | `python scripts/s4_score.py` |
+| S5 | SU2 reference for the validation case | `SU2_BIN_DIR=... python scripts/s5_su2.py` |
+| S5 | Euler PINN: the gate, then the ablation and comparison | `python scripts/s5_pinn.py gate`, then `steps` |
+| S5 | Score S5 against the FNO and the floor | `python scripts/s5_score.py` |
 
 S0 to S3 take hours to days on a laptop. S4 only scores the existing predictions.
 

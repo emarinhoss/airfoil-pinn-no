@@ -53,6 +53,9 @@ There is one entry point per stage. Each is resumable: a rerun skips finished wo
 | S3a | `python scripts/s3_warmup.py --device cpu --tag T` | `results/s3/warmup_T.json` |
 | S3 | `python scripts/s3_pinn.py --shard K/N --preflight-file results/s3/preflight.json` | `runs/predictions/pinn-*.h5`, `results/s3/` |
 | S4 | `python scripts/s4_score.py` | `results/s4/` |
+| S5 | `SU2_BIN_DIR=... python scripts/s5_su2.py` | `runs/su2/<level>/s5-val-*/`, `results/s5/su2.json`; exit 1 = unfinished (re-run), 2 = none converged |
+| S5 | `python scripts/s5_pinn.py gate`, then `steps [--shard K/N]` | `runs/predictions_s5/`, `results/s5/`; exit 2 = no validation case or truth, 3 = over budget, 4 = a scoring failure |
+| S5 | `python scripts/s5_score.py` | `results/s5/` |
 
 S0–S3 take hours to days. The S1 campaign ran over two days on 8 SU2 workers, the warm-up took
 about 8 h, and each PINN run takes 5–6 h. Do not launch them unless asked. S4 only scores and can
@@ -103,6 +106,16 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
     grid evaluation in float64 on the CPU, because MPS has no float64.
   - `s3_pinn.py` times every planned run first and refuses with exit 3 if the projection exceeds
     `--budget-hours`.
+- **S5 PINN** (`models/pinn_euler_av.py`, `models/train_pinn_av.py`, `physics/viscosity.py`): an
+  Euler PINN built to Wassing, Langer & Bekemeyer's recipe, for stage S5. It has primitive
+  outputs, Fourier features of the 512x193 grid indices, collocation at its nodes, mini-batch
+  L-BFGS, and artificial viscosity (closed-form |A|) localised by a shock sensor times a
+  stagnation sensor. Its residual is div F − D, the dissipative sign. The design is
+  `docs/superpowers/specs/2026-10-07-s5-euler-pinn-av-design.md`; `score/s5.py` holds the cases,
+  truth loading and run scores shared by the S5 scripts.
+  - S5 prediction files go to `runs/predictions_s5/`, never `runs/predictions/`, which S4's
+    scorer reads in full.
+  - A run in `results/s5/gate.json` or any `runs*.json` is finished and never retrained.
 - **Predictions** (`data/predictions.py`): one HDF5 file per contestant, `runs/predictions/<tag>.h5`.
   S4 identifies contestants and costs by exact tag (`fno-n896-s0`, `pod-n896`,
   `pinn-<variant>-<case>`). It refuses two files with the same (method, variant, n_train, seed).

@@ -85,3 +85,36 @@ def test_cylinder_score_on_potential_flow():
     assert sc["passed"] and not sc["collapsed"] and sc["max_cp_error"] < 1e-9
     q[:, 0, 1] = 0.0
     assert s5.cylinder_score(q)["collapsed"]
+
+
+def _write_level(path, split, ids, shape, seed):
+    import h5py
+    rng = np.random.default_rng(seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    q = rng.standard_normal((len(ids),) + shape + (4,))
+    mm = rng.uniform(0.5, 1.5, len(ids))
+    with h5py.File(path, "w") as f:
+        g = f.create_group(split)
+        g["q"], g["max_surface_mach"] = q, mm
+        g.create_dataset("case_id", data=ids, dtype=h5py.string_dtype())
+    return q, mm
+
+
+def test_the_real_truth_loader_reports_missing_data(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert s5.truth_and_floor("test_in-0004") == (None, None, None)
+    assert s5.truth_and_floor("s5-val-B") == (None, None, None)
+    _write_level(Path("data/hdf5/512x193.h5"), "test_in", ["test_in-0001"], (512, 193), 0)
+    _write_level(Path("data/hdf5/256x97.h5"), "test_in", ["test_in-0001"], (256, 97), 1)
+    assert s5.truth_and_floor("test_in-0004") == (None, None, None)
+
+
+def test_the_real_truth_loader_samples_the_fine_grid_every_second_node(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    ids = ["test_in-0001", "test_in-0004"]
+    fine, mm = _write_level(Path("data/hdf5/512x193.h5"), "test_in", ids, (512, 193), 2)
+    coarse, _ = _write_level(Path("data/hdf5/256x97.h5"), "test_in", ids, (256, 97), 3)
+    truth, floor, mmax = s5.truth_and_floor("test_in-0004")
+    np.testing.assert_array_equal(truth, fine[1][::2, ::2])
+    np.testing.assert_array_equal(floor, coarse[1])
+    assert truth.shape == (256, 97, 4) and mmax == pytest.approx(mm[1])

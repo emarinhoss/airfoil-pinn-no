@@ -8,16 +8,19 @@ gate: the tuning configurations T1-T4 (design §3.4) on the validation case sele
 scripts/s5_su2.py (results/s5/su2.json), in order; the first that passes the gate (RMAE of Cp and of
 local Mach each <= 1 % against SU2 at 512x193) is recipe R, written to results/s5/recipe.json. A
 configuration already in results/s5/gate.json is not re-run; once recipe.json exists the gate is
-decided and does not run again. If none passes, recipe.json records config null: S5 stops after
-step 1 and the author decides.
+decided and does not run again. A gate.json already decided (the first configuration in order that
+passed, every one before it a recorded failure) whose recipe.json was never written (a stop between
+the two) writes it from the recorded run straight away, before any timing, budget or truth check.
+If none passes, recipe.json records config null: S5 stops after step 1 and the author decides.
 
 steps: the ablation arms A1-A6b (design §4) and the step-3 cases (§5), each a variant of R, sharded
 by plan index K mod N, recorded in results/s5/runs{suffix}.json.
 
 Before either phase trains, each unfinished run is timed for one closure on its own case
-(`time_closure`, viscous term forced on everywhere). The gate budgets the upper bound of every
-outer iteration at max_eval closures; the steps re-project each run from R's measured gate run,
-scaled by the ratio of timed closures (A3 keeps its upper bound). A phase REFUSES TO START (exit 3)
+(`time_closure`, viscous term forced on everywhere), and for one iteration of L-BFGS's own
+recursion. The gate budgets the upper bound of every outer iteration at max_eval closures plus
+max_iter recursions; the steps re-project each run from R's measured gate run, scaled by the ratio
+of timed closures (A3 keeps its upper bound). A phase REFUSES TO START (exit 3)
 when its unfinished runs' projection exceeds --budget-hours; the check is per phase (design §7.1).
 Prediction files go to runs/predictions_s5/pinn-euler_av-<name>.h5, never runs/predictions/.
 
@@ -159,17 +162,20 @@ def truth_ok(case_ids):
     return not missing
 
 
-def run_one(name, case_id, cfg, specs, argv=None):
+def run_one(name, case_id, cfg, specs, argv=None, code=None):
     """Train, evaluate, write the prediction file (unless diverged), score: the record entry. It
-    carries the command line (argv) and both devices: training's, and evaluation's, always the CPU
-    (design §2.5, §3.5)."""
+    carries the command line (argv), the code (`code_version()` read when the process started,
+    passed by main: the process runs the code it imported then, so a commit or an edit made while
+    an earlier run trained is not the code that ran; read here when not passed) and both devices:
+    training's, and evaluation's, always the CPU (design §2.5, §3.5)."""
     path = prediction_path(name)
     if path.exists():
         raise FileExistsError(f"{path} is finished: it is scored, never overwritten")
+    code = code_version() if code is None else code
     pinn, rec = train(pinn_case(case_id, specs), cfg)
     keep = ("wall_s", "cpu_s", "device", "func_evals", "stalled", "diverged", "reason", "final",
             "history")
-    entry = {"case_id": case_id, "cfg": dataclasses.asdict(cfg), "argv": argv, **code_version(),
+    entry = {"case_id": case_id, "cfg": dataclasses.asdict(cfg), "argv": argv, **code,
              **{k: rec[k] for k in keep}, "eval_device": "cpu"}
     if rec["diverged"]:
         entry["score"] = {"status": "diverged", "passed": False, "collapsed": None}
@@ -204,7 +210,8 @@ def recover(name, case_id, cfg, specs, entry=None):
 
 
 def timings(runs, specs, preflight_file=None):
-    """{name: {"device", "closure_s"}} per run, timed on its own case or reused by name."""
+    """{name: {"device", "closure_s", "lbfgs_iter_s"}} per run, timed on its own case or reused
+    by name; an older preflight file's timings have no lbfgs_iter_s, projected as 0."""
     held = json.loads(Path(preflight_file).read_text())["timing_s"] if preflight_file else {}
     out = {}
     for name, cid, cfg in runs:
@@ -213,9 +220,9 @@ def timings(runs, specs, preflight_file=None):
     return out
 
 
-def reprojected_hours(cfg, closure_s, recipe):
+def reprojected_hours(cfg, closure_s, recipe, lbfgs_iter_s=0.0):
     if cfg.optimizer == "adam_lbfgs":
-        return projected_upper_s(cfg, 0, closure_s) / 3600
+        return projected_upper_s(cfg, 0, closure_s, lbfgs_iter_s) / 3600
     g = recipe["gate_run"]
     return g["wall_s"] * closure_s / g["closure_s"] / 3600
 
@@ -232,6 +239,26 @@ def _budget(path, timing, hours, budget, note):
     return True
 
 
+def decided(gate, configs):
+    """The configuration a recorded gate is decided on: in order, the first that passed, every one
+    before it a recorded failure; None while one of them still needs training or scoring."""
+    for name, _ in configs:
+        entry = gate["configs"].get(name)
+        if next_action(name, entry) or unscored(entry):
+            return None
+        if entry["score"].get("passed"):
+            return name
+    return None
+
+
+def write_recipe(name, entry, vid):
+    _write(RES / "recipe.json", {"config": name, "cfg": entry["cfg"], "validation_case": vid,
+                                 "gate_run": {"wall_s": entry["wall_s"],
+                                              "closure_s": entry["closure_s"]}})
+    print(f"{name} passed the gate: it is recipe R", flush=True)
+    return 0
+
+
 def run_gate(args, specs):
     su2_path = RES / "su2.json"
     vid = json.loads(su2_path.read_text()).get("selected") if su2_path.exists() else None
@@ -245,15 +272,20 @@ def run_gate(args, specs):
     gate = (json.loads(gate_path.read_text()) if gate_path.exists()
             else {"validation_case": vid, "configs": {}})
     configs = gate_configs()
+    r = decided(gate, configs)
+    if r:  # a stop between the gate.json and recipe.json writes: nothing to time, budget or check
+        return write_recipe(r, gate["configs"][r], vid)
     act = {n: next_action(n, gate["configs"].get(n)) for n, _ in configs}
     if any(act.values()) and not truth_ok([vid]):
         return 2
     todo = [(n, vid, c) for n, c in configs if act[n] == "train"]
     timing = timings(todo, specs, args.preflight_file)
     n_nodes = len(residual_nodes(pinn_case(vid, specs), AvConfig())["xi"])
-    hours = {n: projected_upper_s(c, n_nodes, timing[n]["closure_s"]) / 3600 for n, _, c in todo}
+    hours = {n: projected_upper_s(c, n_nodes, timing[n]["closure_s"],
+                                  timing[n].get("lbfgs_iter_s", 0.0)) / 3600 for n, _, c in todo}
     if not _budget(RES / "preflight_gate.json", timing, hours, args.budget_hours,
-                   "upper bound: every outer iteration at max_eval closures, viscous term on"):
+                   "upper bound: every outer iteration at max_eval closures, viscous term on, "
+                   "plus max_iter L-BFGS recursions"):
         return 3
     if args.preflight_only:
         return 0
@@ -261,8 +293,12 @@ def run_gate(args, specs):
         entry = gate["configs"].get(name)
         action = next_action(name, entry)
         if action:
-            gate["configs"][name] = (run_one(name, vid, cfg, specs, args.argv) if action == "train"
-                                     else recover(name, vid, cfg, specs, entry))
+            entry = (run_one(name, vid, cfg, specs, args.argv, args.code) if action == "train"
+                     else recover(name, vid, cfg, specs, entry))
+            if entry["score"].get("passed"):  # kept with the run: recipe.json is written from it
+                entry["closure_s"] = (timing.get(name)
+                                      or time_closure(pinn_case(vid, specs), cfg))["closure_s"]
+            gate["configs"][name] = entry
             _write(gate_path, gate)
         entry = gate["configs"][name]
         if unscored(entry):
@@ -273,13 +309,7 @@ def run_gate(args, specs):
                   flush=True)
             return 4
         if entry["score"].get("passed"):
-            closure = (timing.get(name) or time_closure(pinn_case(vid, specs), cfg))["closure_s"]
-            _write(RES / "recipe.json", {"config": name, "cfg": entry["cfg"],
-                                         "validation_case": vid,
-                                         "gate_run": {"wall_s": entry["wall_s"],
-                                                      "closure_s": closure}})
-            print(f"{name} passed the gate: it is recipe R", flush=True)
-            return 0
+            return write_recipe(name, entry, vid)
     _write(RES / "recipe.json", {"config": None, "cfg": None, "validation_case": vid,
                                  "gate_run": None})
     print("no configuration passed the gate: S5 stops after step 1", flush=True)
@@ -324,7 +354,8 @@ def run_steps(args, specs):
         return 2
     todo = [x for x in work if act[x[0]] == "train"]
     timing = timings(todo, specs, args.preflight_file)
-    hours = {name: reprojected_hours(cfg, timing[name]["closure_s"], recipe)
+    hours = {name: reprojected_hours(cfg, timing[name]["closure_s"], recipe,
+                                     timing[name].get("lbfgs_iter_s", 0.0))
              for name, _, cfg in todo}
     if not _budget(RES / f"preflight_steps{suffix}.json", timing, hours, args.budget_hours,
                    "re-projected from R's measured gate run; A3 at its upper bound"):
@@ -333,7 +364,7 @@ def run_steps(args, specs):
         return 0
     for name, cid, cfg in work:
         if act[name] == "train":
-            entry, path = run_one(name, cid, cfg, specs, args.argv), rec_path
+            entry, path = run_one(name, cid, cfg, specs, args.argv, args.code), rec_path
         else:  # back into the file that holds it: a copy elsewhere could hide behind the stale one
             entry, path = recover(name, cid, cfg, specs, done.get(name)), owner.get(name, rec_path)
         record_entry(path, name, entry)
@@ -360,6 +391,7 @@ def main(argv=None):
     ap.add_argument("--shard", type=parse_shard, default=(0, 1), metavar="K/N")
     args = ap.parse_args(argv)
     args.argv = sys.argv[1:] if argv is None else list(argv)
+    args.code = code_version()  # once: every run of this process trains the code imported now
     if args.phase == "gate" and args.shard != (0, 1):
         ap.error("the gate is sequential: --shard applies to the steps phase only")
     RES.mkdir(parents=True, exist_ok=True)

@@ -121,6 +121,37 @@ def test_a_decided_gate_does_not_run_again(s5):
     assert s5.main(["gate"]) == 0 and s5.trained == []
 
 
+@pytest.mark.parametrize("resume", ["as-before", "over-budget", "no-truth"])
+def test_a_gate_decided_before_its_recipe_is_written_writes_it_straight_away(s5, monkeypatch,
+                                                                              resume):
+    write = s5._write
+
+    def stopped_at_the_recipe(path, obj):  # a stop between writing gate.json and recipe.json
+        if path.name == "recipe.json":
+            raise Killed()
+        write(path, obj)
+
+    monkeypatch.setattr(s5, "_write", stopped_at_the_recipe)
+    s5.verdicts = [False, True]
+    with pytest.raises(Killed):
+        s5.main(["gate"])
+    assert list(json.loads(Path("results/s5/gate.json").read_text())["configs"]) == ["T1", "T2"]
+    assert not Path("results/s5/recipe.json").exists()
+    monkeypatch.setattr(s5, "_write", write)
+    preflight = Path("results/s5/preflight_gate.json").read_bytes()
+    s5.timed = []
+    if resume == "over-budget":  # T3 and T4 would project far past the budget
+        s5.closure_s = 1.0
+    if resume == "no-truth":  # and could not be trained without it
+        s5.no_truth["s5-val-B"] = None
+    assert s5.main(["gate"]) == 0
+    assert len(s5.trained) == 2 and s5.timed == []
+    assert json.loads(Path("results/s5/recipe.json").read_text()) == {
+        "config": "T2", "cfg": json.loads(json.dumps(dataclasses.asdict(AvConfig(sensor="B")))),
+        "validation_case": "s5-val-B", "gate_run": {"wall_s": 100.0, "closure_s": 1e-6}}
+    assert Path("results/s5/preflight_gate.json").read_bytes() == preflight  # no budget re-made
+
+
 def test_no_pass_records_a_null_recipe_and_the_steps_stop(s5):
     s5.verdicts = [False] * 4
     assert s5.main(["gate"]) == 0 and len(s5.trained) == 4
@@ -134,6 +165,39 @@ def test_the_gate_refuses_past_its_budget(s5):
     pre = json.loads(Path("results/s5/preflight_gate.json").read_text())
     assert pre["hours"]["T1"] == pytest.approx(40 * 20 * 1250 / 3600)
     assert pre["within_budget"] is False
+
+
+def _preflight_file(path, names, **timing):
+    """An earlier preflight's timings, reused by name through --preflight-file."""
+    Path(path).write_text(json.dumps({"timing_s": {n: {"device": "cpu", **timing} for n in names}}))
+    return path
+
+
+def test_the_gate_projection_adds_the_lbfgs_overhead(s5):
+    names = ["T1", "T2", "T3", "T4"]
+
+    def hours(path):
+        assert s5.main(["gate", "--preflight-only", "--preflight-file", path]) == 0
+        return json.loads(Path("results/s5/preflight_gate.json").read_text())["hours"]
+
+    old = hours(_preflight_file("old.json", names, closure_s=1e-3))  # no lbfgs_iter_s in it
+    new = hours(_preflight_file("new.json", names, closure_s=1e-3, lbfgs_iter_s=2e-3))
+    assert s5.timed == [] and s5.trained == []
+    for n in names:
+        assert old[n] == pytest.approx(40 * 20 * 1250 * 1e-3 / 3600)
+        assert new[n] - old[n] == pytest.approx(40 * 20 * 1000 * 2e-3 / 3600)
+
+
+def test_the_a3_reprojection_adds_the_lbfgs_overhead(s5):
+    _recipe(wall_s=3600.0, closure_s=0.1)
+    s5.closure_s = 0.2  # the other runs, timed by the fake: no lbfgs_iter_s
+    path = _preflight_file("a3.json", ["A3"], closure_s=0.2, lbfgs_iter_s=0.01)
+    assert s5.main(["steps", "--preflight-only", "--preflight-file", path]) == 0
+    pre = json.loads(Path("results/s5/preflight_steps.json").read_text())
+    a3 = dict((n, c) for n, _, c in s5.steps_plan(AvConfig(), "s5-val-B"))["A3"]
+    assert pre["hours"]["A3"] == pytest.approx(s5.projected_upper_s(a3, 0, 0.2, 0.01) / 3600)
+    assert pre["hours"]["A3"] > (30000 + 6250) * 0.2 / 3600
+    assert pre["hours"]["A1"] == pytest.approx(2.0)
 
 
 def test_the_gate_needs_a_validation_case(s5):
@@ -180,6 +244,49 @@ def test_a_diverged_run_is_recorded_without_a_prediction_file(s5, monkeypatch):
     assert gate["configs"]["T1"]["score"] == {"status": "diverged", "passed": False,
                                               "collapsed": None}
     assert not Path("runs/predictions_s5/pinn-euler_av-T1.h5").exists()
+
+
+def test_a_run_records_the_code_it_started_with(s5, monkeypatch):
+    code = {"git_commit": "started", "git_dirty": False}
+    monkeypatch.setattr(s5, "code_version", lambda: dict(code))
+    fake_train = s5.train
+
+    def committed_during_the_run(case, cfg, log=print):
+        out = fake_train(case, cfg, log)
+        code.update(git_commit="committed while it trained", git_dirty=True)
+        return out
+
+    monkeypatch.setattr(s5, "train", committed_during_the_run)
+    s5.verdicts = [True]
+    assert s5.main(["gate"]) == 0
+    t1 = json.loads(Path("results/s5/gate.json").read_text())["configs"]["T1"]
+    assert (t1["git_commit"], t1["git_dirty"]) == ("started", False)
+
+
+@pytest.mark.parametrize("phase", ["gate", "steps"])
+def test_every_run_of_a_process_records_the_code_it_started_with(s5, monkeypatch, phase):
+    """The process runs the code it imported at its start: a commit or an edit made while its
+    first run trains is not the code its later runs train with."""
+    code = {"git_commit": "process-start", "git_dirty": False}
+    monkeypatch.setattr(s5, "code_version", lambda: dict(code))
+    fake_train = s5.train
+
+    def committed_during_the_first_run(case, cfg, log=print):
+        out = fake_train(case, cfg, log)
+        code.update(git_commit="committed during the first run", git_dirty=True)
+        return out
+
+    monkeypatch.setattr(s5, "train", committed_during_the_first_run)
+    if phase == "gate":
+        s5.verdicts = [False, True]
+    else:
+        _recipe()
+    assert s5.main([phase]) == 0
+    rec = json.loads(Path(f"results/s5/{'gate' if phase == 'gate' else 'runs'}.json").read_text())
+    entries = rec["configs"] if phase == "gate" else rec
+    assert len(entries) == len(s5.trained) >= 2
+    assert {n: (e["git_commit"], e["git_dirty"]) for n, e in entries.items()} == {
+        n: ("process-start", False) for n in entries}
 
 
 def _files():

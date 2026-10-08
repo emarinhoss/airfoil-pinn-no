@@ -130,6 +130,39 @@ def test_non_physical_states_give_a_dissipative_matrix():
         assert np.all(lam.real >= 0.25 - 1e-6)
 
 
+def test_float32_non_physical_states_give_a_dissipative_matrix():
+    # Training runs in float32. At p <= 0 the floors on rho and p alone leave c ~ 1e-3, and the
+    # 1/c^2 in |A| amplifies float32 round-off into large negative (anti-dissipative) eigenvalues;
+    # the floor on c^2 bounds that amplification. States: p in (-1, 0), rho 1..30, |v_t| up to 8
+    # and the normal velocity q near the limiter eps = 0.25.
+    g = torch.Generator().manual_seed(7)
+    n = 4000
+    rho = (1 + 29 * torch.rand(n, generator=g)).float()
+    p = -torch.rand(n, generator=g).float()
+    vt = (16 * torch.rand(n, generator=g) - 8).float()
+    q = (0.25 + 0.05 * (2 * torch.rand(n, generator=g) - 1)).float()
+    for kx, ky, u, v in [(1.0, 0.0, q, vt), (0.0, 1.0, vt, q)]:
+        a = abs_jacobian(rho, u, v, p, kx, ky)
+        assert a.dtype == torch.float32
+        lam = np.linalg.eigvals(a.double().numpy())  # the float32 matrix's exact spectrum
+        assert np.all(lam.real >= 0), lam.real.min()
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_scalar_form_backward_is_finite_at_zero_velocity(dtype):
+    # |u| = sqrt(u^2 + v^2) has an infinite derivative at u = v = 0 (NaN through the chain rule),
+    # and in float32 u^2 underflows to 0 for |u| below ~1e-23.
+    u = torch.tensor([0.0, 1e-30], dtype=dtype, requires_grad=True)
+    v = torch.zeros(2, dtype=dtype, requires_grad=True)
+    rho = torch.ones(2, dtype=dtype, requires_grad=True)
+    p = torch.ones(2, dtype=dtype, requires_grad=True)
+    w = torch.ones(2, 4, dtype=dtype)
+    d = viscous_term(w, w, rho, u, v, p, torch.ones(2, dtype=dtype), 1e-3, "scalar")
+    d.sum().backward()
+    for x in (u, v, rho, p):
+        assert torch.isfinite(x.grad).all(), x.grad
+
+
 def test_empty_batch_gives_empty_term():
     z = torch.zeros(0)
     d = viscous_term(torch.zeros(0, 4), torch.zeros(0, 4), z, z, z, z, z, 1e-3, "matrix")

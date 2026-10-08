@@ -11,8 +11,11 @@ A = q I + M with M = r_a l_b + (gamma - 1) r_b beta, of rank two with eigenvalue
 M^3 = c^2 M and any function of A fixed by its values on the spectrum {q - c, q, q, q + c} is a
 quadratic in M: |A| = |l3| I + (|l1| - |l2|)/(2c) M + ((|l1| + |l2|)/2 - |l3|)/c^2 M^2, with
 l1 = q + c, l2 = q - c, l3 = q and each |l| floored at EIG_FLOOR (their limiter). This equals
-T|Lambda|T^-1 to round-off. rho and p are floored at STATE_FLOOR inside c and H, so a non-physical
-state (early in training) gives a finite viscosity rather than NaN.
+T|Lambda|T^-1 to round-off. rho and p are floored at STATE_FLOOR and c^2 at C2_FLOOR inside c
+and H, so a non-physical state (early in training) gives a finite, dissipative viscosity rather
+than NaN: the c^2 floor bounds the 1/c^2 in the quadratic, which on the floors of rho and p alone
+(c ~ 1e-3 at p <= 0) amplified float32 round-off into negative eigenvalues of |A|. Physical c^2 in
+this scaling is about 1, far above C2_FLOOR, so physical states are unchanged.
 """
 
 from dataclasses import dataclass
@@ -22,7 +25,8 @@ import torch
 from apno.constants import GAMMA
 
 EIG_FLOOR = 0.25  # their Appendix C limiter on |lambda|
-STATE_FLOOR = 1e-6  # floor on rho and p inside c and H
+STATE_FLOOR = 1e-6  # floor on rho and p inside c and H, and on |u| in the scalar form
+C2_FLOOR = 1e-3  # floor on c^2 = gamma p / rho: bounds 1/c^2 in |A| (float32 round-off)
 SELECT = (1.0, 0.0, 0.0, 1.0)  # I_{rho, rho E}: viscosity on the density and energy equations
 
 
@@ -40,7 +44,8 @@ READINGS = {"A": READING_A, "B": READING_B}
 
 
 def sound_speed(rho, p, gamma=GAMMA):
-    return torch.sqrt(gamma * p.clamp_min(STATE_FLOOR) / rho.clamp_min(STATE_FLOOR))
+    p_f, rho_f = p.clamp_min(STATE_FLOOR), rho.clamp_min(STATE_FLOOR)
+    return torch.sqrt((gamma * p_f / rho_f).clamp_min(C2_FLOOR))
 
 
 def shock_sensor(u, v, p_x, p_y, k):
@@ -68,8 +73,9 @@ def flux_jacobian_parts(rho, u, v, p, kx, ky, gamma=GAMMA):
     """(M, q, c) with A = q I + M the Jacobian dF_k/dW of the Euler flux in direction (kx, ky)."""
     q = u * kx + v * ky
     c = sound_speed(rho, p, gamma)
-    # H from the same floored c (c^2/(gamma-1) = gamma p/((gamma-1) rho)): M's spectrum is then
-    # {-c, 0, 0, c} with this c, so |A| stays an absolute value (dissipative) when rho, p <= 0.
+    # H from the same floored c (c^2/(gamma-1), = gamma p/((gamma-1) rho) on physical states): M's
+    # spectrum is then {-c, 0, 0, c} with this c, so |A| stays an absolute value (dissipative) when
+    # rho, p <= 0.
     h = c * c / (gamma - 1) + 0.5 * (u * u + v * v)
     one, zero = torch.ones_like(rho), torch.zeros_like(rho)
     r_a = torch.stack([one, u, v, h], -1)
@@ -105,7 +111,8 @@ def viscous_term(w_xx, w_yy, rho, u, v, p, s, nu, form="matrix", eps=EIG_FLOOR, 
         by = abs_jacobian(rho, u, v, p, 0.0, 1.0, eps, gamma)
         d = (ax @ w_xx[..., None])[..., 0] + (by @ w_yy[..., None])[..., 0]
     elif form == "scalar":
-        lam = sound_speed(rho, p, gamma) + torch.sqrt(u * u + v * v)
+        # floored inside the sqrt: its derivative is infinite at u = v = 0 (NaN in the backward)
+        lam = sound_speed(rho, p, gamma) + torch.sqrt((u * u + v * v).clamp_min(STATE_FLOOR ** 2))
         d = lam[:, None] * (w_xx + w_yy)
     else:
         raise ValueError(f"unknown viscosity form {form!r}; expected 'matrix' or 'scalar'")

@@ -202,3 +202,32 @@ def test_a_divergence_counts_the_evaluations_of_its_outer_iteration(monkeypatch,
     recorded = sum(h["func_evals"] for h in rec["history"])
     assert backwards[0] > recorded  # the diverging outer iteration completed closures
     assert rec["func_evals"] == backwards[0]
+
+
+def test_time_epoch_trains_one_epoch_of_the_run_itself(monkeypatch):
+    from dataclasses import replace
+    seen = []
+
+    def one_epoch(case, cfg, log):
+        seen.append(cfg)
+        return None, {"device": "cpu", "wall_s": 12.5, "func_evals": 7, "stalled": 1,
+                      "diverged": False}
+
+    monkeypatch.setattr(tr, "train", one_epoch)
+    full = replace(TINY, epochs=40)
+    assert tr.time_epoch(CASE, full) == {"device": "cpu", "epoch_s": 12.5, "func_evals": 7,
+                                         "stalled": 1, "diverged": False}
+    assert seen == [replace(full, epochs=1)]
+
+
+def test_the_timed_epoch_is_the_runs_first_epoch():
+    quiet = lambda *a: None  # noqa: E731
+    t = tr.time_epoch(CASE, TINY, log=quiet)
+    _, rec = train(CASE, TINY, log=quiet)
+    assert t["epoch_s"] > 0 and t["func_evals"] == rec["func_evals"] and t["device"] == "cpu"
+
+
+def test_an_epoch_is_an_lbfgs_pass():
+    from dataclasses import replace
+    with pytest.raises(ValueError, match="adam_lbfgs"):
+        tr.time_epoch(CASE, replace(TINY, optimizer="adam_lbfgs"))

@@ -16,12 +16,16 @@ If none passes, recipe.json records config null: S5 stops after step 1 and the a
 steps: the ablation arms A1-A6b (design §4) and the step-3 cases (§5), each a variant of R, sharded
 by plan index K mod N, recorded in results/s5/runs{suffix}.json.
 
-Before either phase trains, each unfinished run is timed for one closure on its own case
-(`time_closure`, viscous term forced on everywhere), and for one iteration of L-BFGS's own
-recursion. The gate budgets the upper bound of every outer iteration at max_eval closures plus
-max_iter recursions; the steps re-project each run from R's measured gate run, scaled by the ratio
-of timed closures (A3 keeps its upper bound). A phase REFUSES TO START (exit 3)
-when its unfinished runs' projection exceeds --budget-hours; the check is per phase (design §7.1).
+Budget (design §7.1, amended 2026-10-08), checked per phase against --budget-hours. The gate times
+each configuration just before it trains, by one real epoch of it (`time_epoch`: the run's first
+epoch exactly, its work discarded), and REFUSES TO START it (exit 3) when the time the phase has
+spent (its recorded runs, the epochs that timed them, and this timing epoch) plus cfg.epochs such
+epochs exceeds the budget; --preflight-only times the next configuration to train and stops. The
+steps time each unfinished run for one closure on its own case (`time_closure`, viscous term forced
+on everywhere) and one iteration of L-BFGS's own recursion, re-project it from R's measured gate
+run, scaled by the ratio of timed closures (A3 keeps its upper bound), and REFUSE TO START (exit 3)
+when the projection of their unfinished runs exceeds the budget. --preflight-file reuses an earlier
+preflight's timings by name; for the gate only a measured epoch, never an upper-bound timing.
 Prediction files go to runs/predictions_s5/pinn-euler_av-<name>.h5, never runs/predictions/.
 
 Before either phase trains or scores, the truth of every airfoil case it still has to run is loaded
@@ -49,7 +53,7 @@ from apno.data.predictions import read_predictions, write_predictions
 from apno.geometry.ogrid import TRAIN
 from apno.models.pinn_euler_av import AvConfig, config_from_dict
 from apno.models.train_pinn_av import (
-    evaluate_on_grid, projected_upper_s, residual_nodes, time_closure, train,
+    evaluate_on_grid, projected_upper_s, time_closure, time_epoch, train,
 )
 from apno.score.s5 import (
     ABLATION_AIRFOIL, CYLINDER, STEP3_EXT, STEP3_IN, all_specs, pinn_case, score_run,
@@ -209,10 +213,14 @@ def recover(name, case_id, cfg, specs, entry=None):
     return {**entry, "score": _score(by_case[case_id], case_id, specs)}
 
 
+def held_timings(preflight_file):
+    return json.loads(Path(preflight_file).read_text())["timing_s"] if preflight_file else {}
+
+
 def timings(runs, specs, preflight_file=None):
     """{name: {"device", "closure_s", "lbfgs_iter_s"}} per run, timed on its own case or reused
     by name; an older preflight file's timings have no lbfgs_iter_s, projected as 0."""
-    held = json.loads(Path(preflight_file).read_text())["timing_s"] if preflight_file else {}
+    held = held_timings(preflight_file)
     out = {}
     for name, cid, cfg in runs:
         out[name] = held.get(name) or time_closure(pinn_case(cid, specs), cfg)
@@ -237,6 +245,45 @@ def _budget(path, timing, hours, budget, note):
               "deliberately, on record, or cut runs as a recorded decision.", flush=True)
         return False
     return True
+
+
+GATE_NOTE = ("measured: cfg.epochs times one real epoch, after the time the gate has spent "
+             "(design §7.1, amended 2026-10-08)")
+
+
+def gate_spent_s(gate):
+    """Seconds the gate has spent on its recorded runs: each run's training and the epoch that
+    timed it."""
+    return sum((e.get("wall_s") or 0.0) + (e.get("epoch_timing") or {}).get("epoch_s", 0.0)
+               for e in gate["configs"].values())
+
+
+def gate_epoch(name, case, cfg, held):
+    """One measured epoch of a gate configuration: reused by name when an earlier preflight holds
+    one, else timed now."""
+    t = held.get(name) or {}
+    return t if "epoch_s" in t else time_epoch(case, cfg)
+
+
+def gate_check(pre, name, cfg, t, spent_s, budget):
+    """One gate configuration against the budget: spent_s (the phase's, this configuration's timing
+    epoch included) plus cfg.epochs measured epochs. Recorded in results/s5/preflight_gate.json;
+    False refuses it."""
+    hours = cfg.epochs * t["epoch_s"] / 3600
+    total = spent_s / 3600 + hours
+    ok = total <= budget
+    pre["timing_s"][name], pre["hours"][name] = t, hours
+    pre["checks"][name] = {"spent_hours": spent_s / 3600, "projected_hours": hours,
+                           "total_hours": total, "within_budget": ok}
+    pre.update(projected_total_hours=total, budget_hours=budget, within_budget=ok)
+    _write(RES / "preflight_gate.json", pre)
+    print(f"{name}: {spent_s / 3600:.1f} h spent in the gate, {hours:.1f} h projected "
+          f"({cfg.epochs} epochs of {t['epoch_s']:.0f} s), {total:.1f} h against {budget:.1f} h",
+          flush=True)
+    if not ok:
+        print("REFUSING TO START: the projection exceeds the budget. Raise --budget-hours "
+              "deliberately, on record, or cut runs as a recorded decision.", flush=True)
+    return ok
 
 
 def decided(gate, configs):
@@ -278,26 +325,30 @@ def run_gate(args, specs):
     act = {n: next_action(n, gate["configs"].get(n)) for n, _ in configs}
     if any(act.values()) and not truth_ok([vid]):
         return 2
-    todo = [(n, vid, c) for n, c in configs if act[n] == "train"]
-    timing = timings(todo, specs, args.preflight_file)
-    n_nodes = len(residual_nodes(pinn_case(vid, specs), AvConfig())["xi"])
-    hours = {n: projected_upper_s(c, n_nodes, timing[n]["closure_s"],
-                                  timing[n].get("lbfgs_iter_s", 0.0)) / 3600 for n, _, c in todo}
-    if not _budget(RES / "preflight_gate.json", timing, hours, args.budget_hours,
-                   "upper bound: every outer iteration at max_eval closures, viscous term on, "
-                   "plus max_iter L-BFGS recursions"):
-        return 3
-    if args.preflight_only:
+    case, held = pinn_case(vid, specs), held_timings(args.preflight_file)
+    pre = {"timing_s": {}, "hours": {}, "checks": {}, "note": GATE_NOTE}
+    if args.preflight_only:  # the next configuration to train, timed and checked; nothing runs
+        nxt = [(n, c) for n, c in configs if act[n] == "train"][:1]
+        for name, cfg in nxt:
+            t = gate_epoch(name, case, cfg, held)
+            if not gate_check(pre, name, cfg, t, gate_spent_s(gate) + t["epoch_s"],
+                              args.budget_hours):
+                return 3
         return 0
     for name, cfg in configs:
         entry = gate["configs"].get(name)
         action = next_action(name, entry)
+        if action == "train":
+            t = gate_epoch(name, case, cfg, held)
+            if not gate_check(pre, name, cfg, t, gate_spent_s(gate) + t["epoch_s"],
+                              args.budget_hours):
+                return 3
+            entry = {**run_one(name, vid, cfg, specs, args.argv, args.code), "epoch_timing": t}
+        elif action == "score":
+            entry = recover(name, vid, cfg, specs, entry)
         if action:
-            entry = (run_one(name, vid, cfg, specs, args.argv, args.code) if action == "train"
-                     else recover(name, vid, cfg, specs, entry))
             if entry["score"].get("passed"):  # kept with the run: recipe.json is written from it
-                entry["closure_s"] = (timing.get(name)
-                                      or time_closure(pinn_case(vid, specs), cfg))["closure_s"]
+                entry["closure_s"] = time_closure(case, cfg)["closure_s"]
             gate["configs"][name] = entry
             _write(gate_path, gate)
         entry = gate["configs"][name]

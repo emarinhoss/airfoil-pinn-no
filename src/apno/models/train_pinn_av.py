@@ -19,6 +19,7 @@ completed (loss and backward), those of an outer iteration that diverged include
 prints flushed at every line, so a run's progress shows under nohup or a redirection.
 """
 
+import dataclasses
 import math
 import time
 
@@ -191,6 +192,18 @@ def train(case, cfg, log=_log):
     _sync(device)
     rec["wall_s"], rec["cpu_s"] = time.perf_counter() - t0, time.process_time() - c0
     return pinn, rec
+
+
+def time_epoch(case, cfg, log=_log):
+    """{"device", "epoch_s", "func_evals", "stalled", "diverged"}: one real epoch of the run, timed
+    (design §7.1 as amended 2026-10-08): `train` with epochs = 1 and the run's own seeds, so it is
+    the run's first epoch exactly, its work then discarded. The gate projects a configuration at
+    cfg.epochs times epoch_s. L-BFGS only: A3's Adam steps make no epochs to scale."""
+    if cfg.optimizer != "lbfgs":
+        raise ValueError(f"time_epoch: optimizer {cfg.optimizer!r} has no L-BFGS epochs")
+    _, rec = train(case, dataclasses.replace(cfg, epochs=1), log)
+    return {"device": rec["device"], "epoch_s": rec["wall_s"], "func_evals": rec["func_evals"],
+            "stalled": rec["stalled"], "diverged": rec["diverged"]}
 
 
 def time_closure(case, cfg, n=3):

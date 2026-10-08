@@ -301,6 +301,19 @@ any S5 run**, and never edited afterwards; the author may change them before the
   uncontended preflight's timings, as in S3.
 - After the gate, the steps 2–3 projection is **re-made from R's measured run** (its actual iteration
   counts and wall time) before they launch.
+- *(Amended 2026-10-08, before any gate run; docs/findings.md, 2026-10-08.)* The gate's upper bound
+  is replaced by a measurement, because the bound (207.8 h per configuration on the Apple GPU, 651.8 h
+  on the CPU) refused the gate outright. **Before each gate configuration trains, one real epoch of
+  it is timed** (`time_epoch`: the run's own seeds, so it is the run's first epoch exactly; its work
+  is discarded) and the configuration is projected at **40 × that epoch**. The gate refuses
+  (exit 3) when the time it has already spent (its recorded runs, the epochs that timed them, and
+  this timing epoch) plus that projection exceeds `--budget-hours` (still **72**). The check is made
+  per configuration, just before it trains, because the gate is sequential and stops at the first
+  pass. `--preflight-only` times and checks the next configuration only. The projection assumes
+  later epochs cost what the first does, and nothing re-checks a run once it has started: a run that
+  slows (more nodes under the sensor as a shock forms) can overrun. Its measured wall time is
+  recorded next to the projection (`epoch_timing` in `gate.json`). The steps keep the
+  re-projection above.
 
 ### 7.2 Order
 

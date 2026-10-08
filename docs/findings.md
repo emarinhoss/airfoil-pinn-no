@@ -1287,3 +1287,80 @@ L-BFGS iterations. The real first epoch above took 39 s, but only because it was
   epoch of it is timed. The configuration is projected at 40 times that, and the phase refuses
   (exit 3) when the time already spent in the phase plus that projection exceeds `--budget-hours`
   (72). The steps phase keeps its re-projection from R's measured run.
+
+## 2026-10-08 — S5 trap probes: no candidate leaves the uniform field; the gate's budget is now measured
+
+**No S5 stage has run.** The probes write no S5 record. Each arm changes one thing from T1
+(`AvConfig()` defaults, seed 0) on validation case B and repeats the recipe's first three
+mini-batch outer iterations exactly as `train` runs them: the same seeds, batches and L-BFGS
+settings. To keep each arm to a minute or two, every outer iteration is cut at 120 L-BFGS iterations
+and 150 closures. Float32 on the Apple GPU. Commands:
+`python scripts/probes/probe_s5_trap.py > results/s5/probe_trap.log 2>&1`, then
+`python scripts/probes/probe_s5_trap.py --round 2 > results/s5/probe_trap_round2.log 2>&1`.
+
+**Round 1: the author's candidates.** The control repeats the pre-launch probe exactly: 279.6 to
+0.05075 in 97 closures, with layer 4's slope at 0.
+
+| arm | loss after outer iterations 1, 2, 3 | n ω_k at the end | end state |
+|---|---|---|---|
+| control | 0.05075, 0.05075, 0.05075 | −2.21, −2.15, −2.07, **0**, 1.34 | uniform: spread < 3e-8, wall Cp 0 |
+| slope recovery, S = 1 / mean_k exp(ω_k) | 0.05085, same, same | 12.5, 9.75, 9.31, **0**, 108 | uniform: spread < 2e-9 |
+| fixed slope (ω_k = 0.1) | 2.856, 2.587, 1.957 | 1, 1, 1, 1, 1 | near-vacuum: wall Cp −2.73 everywhere (p ≈ 0.01), L_∞ 1.77 |
+| weights capped at the box's largest (λ_res·cap 61.5) | 0.05075 (in 30 closures), same, same | **0**, −0.03, 0.12, −0.69, −1.56 | uniform: spread < 9e-8 |
+| slope recovery and capped weights | 0.06008, 0.05914, 0.05914 | 5.78, −1.41, 10.5, 64.2, **0** | uniform: spread < 7e-10 |
+
+None meets the criteria the author set: no arm has a stagnation point or a suction peak on the wall.
+- Slope recovery fails as a mean over layers can. The term is satisfied by inflating the other
+  slopes (n ω up to 108) while one layer stays dead. The term's form, exp(ω_k) averaged over the
+  layers, is recalled from Jagtap et al.'s layer-wise variant and was not checked against the paper,
+  which is not in `references/`.
+- A fixed slope keeps every layer alive. The network then finds the other trivial state, a near
+  vacuum (p, and with it every flux, close to zero), which the residual also nearly satisfies. The
+  far-field term (1.77) is still falling there, slowly.
+- Capping the weights changes the initial loss only from 279.6 to 252.2, and reaches the uniform
+  field three times faster.
+
+**Correction to point 2 of the entry above.** The far field holds the weight, not the loss. At
+initialisation (T1, every residual node, in the training batches):
+
+| region | share of the residual nodes | share of λ_res·L_res |
+|---|---|---|
+| wall rows, j < 10 | 5.2 % | 42.9 % |
+| rest of the RMAE box | 37.8 % | 42.8 % |
+| outer rows, j ≥ 183 | 5.2 % | 1.3 % |
+| elsewhere | 51.8 % | 13.0 % |
+
+The weight w ∝ cell area meets r² ∝ 1/(cell size)², so w·r² measures the field's variation in index
+space. The Fourier features act on the integer indices with σ = 1, so the network at initialisation
+varies from cell to cell everywhere. λ_res·L_res = 235.7 against L_∞ + L_af + L_lr = 2.516, a ratio
+of about 94.
+
+**Round 2: balancing the terms (an addition to the author's list).** Their reason for λ_res = 2·10⁴
+is to bring λ_res L_res level with the boundary loss (their §II H). Applied to this grid at
+initialisation, that reason gives λ_res = 2.516 / 0.01179 ≈ **210**.
+
+| arm | loss after outer iterations 1, 2, 3 | n ω_k at the end | end state |
+|---|---|---|---|
+| balanced (λ_res = 210) | 0.05075 (from 5.425, in 60 closures), same, same | −0.99, −0.95, −0.61, **0**, 1.74 | uniform: spread < 6e-6 |
+| balanced, fixed slope | 0.05356, 0.0538, 0.05075 | 1, 1, 1, 1, 1 | uniform: spread < 5e-4, reached in the third outer iteration |
+
+**What this establishes.** The uniform field is reached from initialisation however the terms are
+balanced and however the slopes are treated. Its residual and viscous term are exactly zero and its
+far-field term is near zero, so its loss is the wall-tangency term alone: 0.0469 = mean (u∞·n̂)².
+It is a local minimum. With one layer dead, the only directions out are perturbations of that
+layer's random, cell-scale pre-activations, which no Euler solution resembles, so each costs far
+more residual than it saves at the wall. This failure belongs to the recipe as specified, on this
+grid. The four candidates do not touch it. The changes that might (Adam before L-BFGS, a hard wall
+condition, a smoother embedding, another initialisation) are departures from their recipe, and the
+first two are ablation arms A3 and A2.
+
+**No recipe amendment is written** (design §2.7 stays unwritten): nothing worked. The gate's budget
+is amended as the author decided (design §7.1, dated 2026-10-08). `time_epoch` times one real epoch,
+and `s5_pinn.py gate` checks each configuration just before it trains: the time spent in the gate
+plus 40 measured epochs, against 72 h. Tests first; full suite 369 passed, 1 skipped; `ruff check`
+clean. A trapped epoch takes about 40 s, so a trapped gate configuration takes about half an hour.
+
+**Decision needed (the author's):** either run the gate as pre-registered on the recipe as built,
+where the expected outcome is "no configuration passes; S5 stops after step 1", or probe
+departures from their recipe. Probes of departures should run on a case that is not the gate's
+(validation case A or C), so that case B's gate stays unused.

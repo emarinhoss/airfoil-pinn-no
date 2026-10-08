@@ -26,6 +26,7 @@ def s5(tmp_path, monkeypatch):
     Path("results/s5").mkdir(parents=True)
     Path("results/s5/su2.json").write_text(json.dumps({"tried": [], "selected": "s5-val-B"}))
     mod.trained, mod.verdicts, mod.closure_s, mod.timed = [], [], 1e-6, []
+    mod.epoch_s = 1.0  # one measured epoch of a gate configuration
     mod.no_truth = {mod.CYLINDER: None}  # case_id -> None (missing) or the exception it raises
 
     def fake_train(case, cfg, log=print):
@@ -51,7 +52,13 @@ def s5(tmp_path, monkeypatch):
         mod.timed.append(cfg)
         return {"device": "cpu", "closure_s": mod.closure_s}
 
+    def fake_time_epoch(case, cfg, log=print):
+        mod.timed.append(cfg)
+        return {"device": "cpu", "epoch_s": mod.epoch_s, "func_evals": 3, "stalled": 0,
+                "diverged": False}
+
     monkeypatch.setattr(mod, "train", fake_train)
+    monkeypatch.setattr(mod, "time_epoch", fake_time_epoch)
     monkeypatch.setattr(mod, "evaluate_on_grid", lambda pinn, shape: np.ones(shape + (4,)))
     monkeypatch.setattr(mod, "score_run", fake_score)
     monkeypatch.setattr(mod, "truth_and_floor", fake_truth)
@@ -140,8 +147,8 @@ def test_a_gate_decided_before_its_recipe_is_written_writes_it_straight_away(s5,
     monkeypatch.setattr(s5, "_write", write)
     preflight = Path("results/s5/preflight_gate.json").read_bytes()
     s5.timed = []
-    if resume == "over-budget":  # T3 and T4 would project far past the budget
-        s5.closure_s = 1.0
+    if resume == "over-budget":  # T3 would project far past the budget
+        s5.epoch_s = 1e4
     if resume == "no-truth":  # and could not be trained without it
         s5.no_truth["s5-val-B"] = None
     assert s5.main(["gate"]) == 0
@@ -160,11 +167,15 @@ def test_no_pass_records_a_null_recipe_and_the_steps_stop(s5):
 
 
 def test_the_gate_refuses_past_its_budget(s5):
-    s5.closure_s = 1.0
+    s5.epoch_s = 7200.0  # 40 epochs of 2 h, after the 2 h timing epoch: 82 h
     assert s5.main(["gate"]) == 3 and s5.trained == []
+    assert s5.timed == [AvConfig()]  # T1 only: the gate times a configuration just before it runs
     pre = json.loads(Path("results/s5/preflight_gate.json").read_text())
-    assert pre["hours"]["T1"] == pytest.approx(40 * 20 * 1250 / 3600)
-    assert pre["within_budget"] is False
+    assert pre["hours"]["T1"] == pytest.approx(80.0)
+    assert pre["checks"]["T1"] == {"spent_hours": pytest.approx(2.0),
+                                   "projected_hours": pytest.approx(80.0),
+                                   "total_hours": pytest.approx(82.0), "within_budget": False}
+    assert pre["within_budget"] is False and pre["budget_hours"] == 72.0
 
 
 def _preflight_file(path, names, **timing):
@@ -173,19 +184,48 @@ def _preflight_file(path, names, **timing):
     return path
 
 
-def test_the_gate_projection_adds_the_lbfgs_overhead(s5):
-    names = ["T1", "T2", "T3", "T4"]
+def test_the_gate_projects_each_configuration_from_one_measured_epoch(s5):
+    s5.epoch_s = 900.0
+    assert s5.main(["gate", "--preflight-only"]) == 0 and s5.trained == []
+    assert s5.timed == [AvConfig()]
+    pre = json.loads(Path("results/s5/preflight_gate.json").read_text())
+    assert pre["hours"] == {"T1": pytest.approx(40 * 900 / 3600)}
+    assert pre["timing_s"]["T1"]["epoch_s"] == 900.0 and pre["within_budget"] is True
 
-    def hours(path):
-        assert s5.main(["gate", "--preflight-only", "--preflight-file", path]) == 0
-        return json.loads(Path("results/s5/preflight_gate.json").read_text())["hours"]
 
-    old = hours(_preflight_file("old.json", names, closure_s=1e-3))  # no lbfgs_iter_s in it
-    new = hours(_preflight_file("new.json", names, closure_s=1e-3, lbfgs_iter_s=2e-3))
-    assert s5.timed == [] and s5.trained == []
-    for n in names:
-        assert old[n] == pytest.approx(40 * 20 * 1250 * 1e-3 / 3600)
-        assert new[n] - old[n] == pytest.approx(40 * 20 * 1000 * 2e-3 / 3600)
+def test_each_gate_run_records_its_measured_epoch(s5):
+    s5.verdicts = [False, True]
+    assert s5.main(["gate"]) == 0
+    gate = json.loads(Path("results/s5/gate.json").read_text())
+    assert [gate["configs"][n]["epoch_timing"]["epoch_s"] for n in ("T1", "T2")] == [1.0, 1.0]
+    assert [c.sensor for c in s5.trained] == ["A", "B"]
+
+
+def test_the_gate_budget_counts_the_time_already_spent_in_the_phase(s5):
+    t1 = {"score": {"status": "ok", "passed": False, "collapsed": False},
+          "cfg": dataclasses.asdict(AvConfig()), "wall_s": 60 * 3600.0,
+          "epoch_timing": {"device": "cpu", "epoch_s": 1.5 * 3600}}
+    Path("results/s5/gate.json").write_text(json.dumps(
+        {"validation_case": "s5-val-B", "configs": {"T1": t1}}))
+    s5.epoch_s = 0.3 * 3600  # 61.5 h spent, 0.3 h timing T2, 12 h projected: 73.8 h
+    assert s5.main(["gate"]) == 3 and s5.trained == []
+    check = json.loads(Path("results/s5/preflight_gate.json").read_text())["checks"]["T2"]
+    assert check["spent_hours"] == pytest.approx(61.8)
+    assert check["total_hours"] == pytest.approx(73.8)
+    s5.epoch_s, s5.verdicts = 0.1 * 3600, [True]  # 61.5 + 0.1 + 4 = 65.6 h
+    assert s5.main(["gate"]) == 0 and [c.sensor for c in s5.trained] == ["B"]
+    assert json.loads(Path("results/s5/recipe.json").read_text())["config"] == "T2"
+
+
+def test_the_gate_reuses_a_measured_epoch_by_name(s5):
+    held = _preflight_file("held.json", ["T1"], epoch_s=360.0)
+    assert s5.main(["gate", "--preflight-only", "--preflight-file", held]) == 0
+    assert s5.timed == []
+    assert json.loads(Path("results/s5/preflight_gate.json").read_text())["hours"]["T1"] == (
+        pytest.approx(4.0))
+    old = _preflight_file("old.json", ["T1"], closure_s=1e-3)  # an upper-bound preflight
+    assert s5.main(["gate", "--preflight-only", "--preflight-file", old]) == 0
+    assert s5.timed == [AvConfig()]
 
 
 def test_the_a3_reprojection_adds_the_lbfgs_overhead(s5):

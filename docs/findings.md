@@ -1364,3 +1364,10 @@ clean. A trapped epoch takes about 40 s, so a trapped gate configuration takes a
 where the expected outcome is "no configuration passes; S5 stops after step 1", or probe
 departures from their recipe. Probes of departures should run on a case that is not the gate's
 (validation case A or C), so that case B's gate stays unused.
+
+**The author's decision (2026-10-08): probe departures from their recipe on validation case A**
+(NACA 0012, M 0.70, α 4°). Case A is the last fallback, so case B's gate stays unused. The probes
+are judged by the same structural criteria, without SU2's truth. Each changes one thing from T1:
+Adam before L-BFGS, a hard wall condition, a smoother Fourier embedding, or Glorot initialisation.
+A dated amendment (design §2.7) follows from what works, before the gate. Ablation arms that the
+amendment would make identical to R are re-specified on record.

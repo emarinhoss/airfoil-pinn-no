@@ -1272,3 +1272,18 @@ L-BFGS iterations. The real first epoch above took 39 s, but only because it was
   test case.
 - (c) The gate's budget: raise `--budget-hours` on record, cut epochs, max_iter or max_eval, or
   project from a measured first epoch rather than the upper bound.
+
+**The author's decisions (2026-10-08), taken on the measurements above, before any gate run:**
+- **The trap: probe, then amend.** A few short probes run on validation case B, each changing one
+  thing from T1: Jagtap et al.'s slope-recovery term; a fixed slope; residual weights capped at
+  their near-field value; and the slope-recovery term with the capped weights together. Each runs
+  the recipe's first outer iterations and is judged structurally, without SU2's truth (which is not
+  computed): does the field leave the uniform state, do the slopes stay off zero, does the loss
+  fall, and does the wall Cp have a stagnation point and a suction peak? The gate metric is not
+  used, so the gate's own measurement on case B stays unused until the gate. A dated recipe
+  amendment (design §2.7) follows from what works. T1-T4 stay the pre-registered tuning budget on
+  the amended recipe. The cost, accepted: the amendment is informed by probes on the gate's own case.
+- **The budget: project from a measured epoch.** Before each gate configuration trains, one real
+  epoch of it is timed. The configuration is projected at 40 times that, and the phase refuses
+  (exit 3) when the time already spent in the phase plus that projection exceeds `--budget-hours`
+  (72). The steps phase keeps its re-projection from R's measured run.

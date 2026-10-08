@@ -107,3 +107,98 @@ def test_a_divergence_records_where_it_happened(monkeypatch):
                   final_lbfgs_history=3)
     _, rec = train(CASE, cfg, log=lambda *a: None)
     assert rec["reason"].startswith("adam step 1: non-finite loss")
+
+
+def test_time_closure_also_times_one_lbfgs_iteration():
+    t = time_closure(CASE, TINY, n=1)
+    assert set(t) == {"device", "closure_s", "lbfgs_iter_s"}
+    assert t["device"] == "cpu" and t["lbfgs_iter_s"] > 0
+
+
+def test_the_lbfgs_iteration_is_timed_at_the_full_history_on_the_training_device(monkeypatch):
+    from dataclasses import replace
+    calls = []
+    monkeypatch.setattr(tr, "time_two_loop",
+                        lambda n_params, history, device, n=3: calls.append(
+                            (n_params, history, device, n)) or 0.5)
+    n_params = sum(p.numel() for p in tr.make_pinn(CASE, TINY).parameters())
+    assert time_closure(CASE, TINY, n=1)["lbfgs_iter_s"] == 0.5
+    adam = replace(TINY, optimizer="adam_lbfgs", final_lbfgs_history=3)
+    time_closure(CASE, adam, n=2)
+    assert calls == [(n_params, 5, "cpu", 1), (n_params, 3, "cpu", 2)]
+
+
+def test_the_timed_recursion_is_torch_lbfgs_own():
+    gen = torch.Generator().manual_seed(0)
+    m = torch.randn(20, 20, generator=gen, dtype=torch.float64)
+    A, b = m @ m.T + torch.eye(20, dtype=torch.float64), torch.randn(20, generator=gen,
+                                                                     dtype=torch.float64)
+    x = torch.zeros(20, dtype=torch.float64, requires_grad=True)
+    opt = torch.optim.LBFGS([x], max_iter=8, history_size=3, line_search_fn="strong_wolfe")
+
+    def closure():
+        opt.zero_grad()
+        f = 0.5 * x @ A @ x - b @ x
+        f.backward()
+        return f
+
+    opt.step(closure)
+    s = opt.state[x]
+    assert len(s["old_dirs"]) == 3  # the history is full and has shifted
+    d = tr._two_loop(s["prev_flat_grad"], s["old_dirs"], s["old_stps"], s["ro"], s["H_diag"])
+    assert torch.allclose(d, s["d"], rtol=1e-12, atol=1e-14)
+
+
+def test_time_two_loop_at_a_full_history():
+    assert tr.time_two_loop(1000, 4, "cpu", n=1) > 0
+
+
+def test_the_upper_bound_counts_the_lbfgs_iterations_own_cost():
+    from dataclasses import replace
+    full = AvConfig()
+    assert projected_upper_s(full, 98_815, 0.01, 0.02) == pytest.approx(
+        40 * 20 * (1250 * 0.01 + 1000 * 0.02))
+    adam = replace(full, optimizer="adam_lbfgs")
+    assert projected_upper_s(adam, 98_815, 0.01, lbfgs_iter_s=0.02) == pytest.approx(
+        30000 * 0.01 + 5000 * (1.25 * 0.01 + 0.02))
+
+
+def test_the_default_log_flushes_every_line(monkeypatch):
+    import io
+    import sys
+
+    class Stream(io.StringIO):
+        def __init__(self):
+            super().__init__()
+            self.flushed = []  # the lines written so far, at each flush
+
+        def flush(self):
+            self.flushed.append(self.getvalue().count("\n"))
+
+    out = Stream()
+    monkeypatch.setattr(sys, "stdout", out)
+    _, rec = train(CASE, TINY)
+    lines = out.getvalue().count("\n")
+    assert lines == len(rec["history"]) > 1
+    assert out.flushed == list(range(1, lines + 1))
+
+
+@pytest.mark.parametrize("finite_calls", [2, 6])
+def test_a_divergence_counts_the_evaluations_of_its_outer_iteration(monkeypatch, finite_calls):
+    real, calls, backwards = tr.losses, [0], [0]
+
+    def failing_losses(*a, **k):
+        calls[0] += 1
+        if calls[0] > finite_calls:
+            t = torch.tensor(float("nan"), requires_grad=True)
+            return {"residual": t, "far": t, "wall": t, "periodic": t, "total": t}
+        L = real(*a, **k)
+        L["total"].register_hook(lambda g: backwards.__setitem__(0, backwards[0] + 1))
+        return L
+
+    monkeypatch.setattr(tr, "losses", failing_losses)
+    _, rec = train(CASE, TINY, log=lambda *a: None)
+    assert rec["diverged"]
+    recorded = sum(h["func_evals"] for h in rec["history"])
+    assert backwards[0] > recorded  # the diverging outer iteration completed closures
+    assert rec["func_evals"] == backwards[0]

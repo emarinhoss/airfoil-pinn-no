@@ -1371,3 +1371,47 @@ are judged by the same structural criteria, without SU2's truth. Each changes on
 Adam before L-BFGS, a hard wall condition, a smoother Fourier embedding, or Glorot initialisation.
 A dated amendment (design §2.7) follows from what works, before the gate. Ablation arms that the
 amendment would make identical to R are re-specified on record.
+
+## 2026-10-08 — S5 departure probes on case A: every arm ends in a trivial or non-physical state
+
+**No S5 stage has run**, and the probes write no S5 record. This is the author's round of
+departures from their recipe, on validation case A (NACA 0012, M 0.70, α 4°), so case B's gate
+stays unused. The method is that of the case-B probes: the recipe's first three outer iterations,
+each cut at 120 L-BFGS iterations and 150 closures, float32 on the Apple GPU. A non-finite loss
+stops an arm, as it stops `train`. Commands:
+`python scripts/probes/probe_s5_departures.py --arms control,adam,hard_wall,sigma_0.1,glorot > results/s5/probe_departures.log 2>&1`;
+`python scripts/probes/probe_s5_departures.py --arms hard_both,hard_both+adam > results/s5/probe_departures_hard.log 2>&1`.
+The first log was written before the `--arms` option existed, by the script run with no arguments
+(the same five arms).
+
+| arm (one change from T1 unless stated) | loss after outer iterations 1, 2, 3 | n ω_k at the end | end state |
+|---|---|---|---|
+| control (T1 on case A) | diverged in the first, at closure 37 (last finite loss 1.4e25) | — | — |
+| adam: 400 Adam steps at 1e-3 first | Adam reaches 1.677 (L_∞ 1.62); then 0.04857, same, same | −0.37, **0**, 0.38, 1.05, 1.73 | uniform: spread < 5e-8 |
+| hard_wall: u −= (1 − η)⁴ (u·n̂) n̂ | 0.6378, 0.6448, 0.6384 (wall term 1e-18) | −3.64, −5.43, −5.04, **0**, −3.82 | near rest: wall speed ≤ 0.073 U∞, L_∞ 0.591 |
+| sigma_0.1: frequencies from N(0, 0.1²) | 0.04857, same, same | −1.71, −2.41, −2.41, **0**, 1.66 | uniform: spread < 7e-6 |
+| glorot: Glorot-normal weights, zero biases | 1.965e6, 1.72e6, 4.125e6 (initial 4.45e6) | 0.95, 0.95, 0.93, 0.92, 0.90 | non-physical: mean ρ 0.0006, mean p −0.0039 |
+| hard_both: q += η⁴ (w∞ − q), then hard_wall | 3.914, 3.858, 3.825 (initial 897) | −2.13, −3.54, −3.46, ≈0 (−0.001), 0.10 | low-density interior: box spread of ρ 0.033 and p 0.041, mean ρ 0.45, wall Cp −2.46 to −2.46 |
+| hard_both and Adam first | Adam reaches 9.712; then 3.674, 4.117, 3.852 | 12.4, −2.97, −0.94, **0**, 2.63 | the same: mean ρ 0.43, wall Cp −2.52 to −2.52 |
+
+No arm meets the author's criteria. None has a stagnation point (case A's stagnation Cp is 1.129)
+or a suction peak on the wall.
+- **Each trap is a state the residual nearly satisfies.** Each one violates only what is left soft:
+  - with a soft wall, the uniform field;
+  - with a soft far field, the fluid at rest or a vacuum;
+  - with both conditions exact, a low-density, low-pressure interior whose small fluxes make the
+    residual small (λ_res·L_res 3.8, still falling slowly).
+- **One layer's slope goes to zero in six of the seven trained arms.** Adam alone keeps every slope
+  near 0.85 for 400 steps, and the first L-BFGS outer iteration after it still kills one.
+- **T1 on case A diverges** where on case B it collapsed: the recipe is also fragile to the free
+  stream.
+- **Glorot initialisation** multiplies the initial loss by about 1.6e4 and makes no progress in
+  three outer iterations.
+
+**The limits of this evidence.** Each arm ran 3 of the recipe's 800 outer iterations, each cut at
+150 of its 1,250 closures. The uniform states are exact (a dead layer, the outer iterations stalling
+in 5 to 7 closures), so they are traps in practice. The both-hard state was still falling, by 1 %
+per outer iteration, and the probes do not show where it ends. All arms used seed 0.
+
+**No recipe amendment is written.** Design §2.7 stays unwritten: nothing the author listed, nor the
+two additions (the balanced λ_res on case B, both conditions exact here), worked.

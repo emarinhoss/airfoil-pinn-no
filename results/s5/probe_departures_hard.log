@@ -1,0 +1,22 @@
+mps available: True
+case A: stagnation Cp 1.129; each arm runs 3 outer iterations of at most 120 L-BFGS iterations and 150 closures
+hard_both:
+   0: 897 -> 3.914 (151 evals); residual 0.000195, far 6.99e-18, wall 1.08e-15, periodic 0.0177; n omega [-1.533, -3.023, -2.853, 0.059, -0.006]
+   1: 4.116 -> 3.858 (86 evals); residual 0.000192, far 0, wall 1.11e-15, periodic 0.0188; n omega [-2.128, -3.544, -3.463, 0.005, 0.164]
+   2: 4.091 -> 3.825 (42 evals); residual 0.00019, far 0, wall 8.23e-16, periodic 0.0176; n omega [-2.128, -3.544, -3.464, -0.001, 0.1]
+   279 closures in 166 s on mps
+   spread (max - min) of rho, u, v, p: all nodes ['6.84e-01', '1.67e+00', '1.67e+00', '8.45e-01'] ; RMAE box ['3.31e-02', '1.67e+00', '1.67e+00', '4.09e-02']
+   mean rho 0.4549, mean p 0.3264
+   wall Cp: max -2.464 at x 0.621; upper-surface min -2.464 at x 0.343; largest wall speed 1.673 U_inf
+hard_both+adam:
+   adam 100: 17.69; residual 0.000884, far 1.17e-15, wall 3.98e-18, periodic 0.000154; n omega [0.791, 0.763, 0.779, 0.759, 0.718]
+   adam 200: 12.77; residual 0.000638, far 2.35e-15, wall 2.15e-17, periodic 0.000501; n omega [0.757, 0.724, 0.744, 0.717, 0.661]
+   adam 300: 11.1; residual 0.000555, far 9.3e-16, wall 7.17e-17, periodic 0.00123; n omega [0.747, 0.712, 0.733, 0.704, 0.648]
+   adam 400: 9.712; residual 0.000485, far 7.22e-16, wall 1.43e-16, periodic 0.00249; n omega [0.74, 0.704, 0.726, 0.697, 0.651]
+   0: 10.11 -> 3.674 (119 evals); residual 0.000183, far 0, wall 9.83e-16, periodic 0.0174; n omega [12.378, -2.966, -0.942, 0.0, 2.633]
+   1: 4.409 -> 4.117 (7 evals); residual 0.000205, far 0, wall 1.1e-15, periodic 0.0174; n omega [12.378, -2.966, -0.942, -0.0, 2.633]
+   2: 3.852 -> 3.852 (7 evals); residual 0.000192, far 0, wall 1.2e-15, periodic 0.0174; n omega [12.378, -2.966, -0.942, -0.0, 2.633]
+   533 closures in 1266 s on mps
+   spread (max - min) of rho, u, v, p: all nodes ['7.11e-01', '1.66e+00', '1.66e+00', '8.63e-01'] ; RMAE box ['3.44e-02', '1.66e+00', '1.66e+00', '4.17e-02']
+   mean rho 0.4331, mean p 0.3125
+   wall Cp: max -2.515 at x 0.053; upper-surface min -2.515 at x 0.957; largest wall speed 1.665 U_inf

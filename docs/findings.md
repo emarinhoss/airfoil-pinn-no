@@ -1211,3 +1211,64 @@ and are never edited afterwards; outcomes are appended below them.
   degradation factor: mean extrapolation near-field ratio to the floor over mean in-range ratio),
   but its mean in-range near-field ratio to the floor stays above the FNO's at 256x97.
 - **P7.** Per case, the new PINN still costs at least 10x SU2's CPU time.
+
+## 2026-10-08 — S5 implemented; the recipe as built is trapped in a uniform field, and the gate over-runs its budget
+
+S5's code is on branch `s5` (commits a813c61 to 04bc30b; the plan's "Implementation notes" list
+where it departs from the plan's text). Full suite 363 passed, 1 skipped; `ruff check .` clean. **No
+S5 stage has run**: no SU2 on the validation case, no gate. The three figures below come from one
+probe that writes no S5 record. Command:
+`python scripts/probes/probe_s5_prelaunch.py > results/s5/probe_prelaunch.log 2>&1` (Apple GPU
+available, `mps available: True` on the log's first line).
+
+**1. The recipe falls into a uniform field in its first L-BFGS outer iteration.** One epoch of T1
+(`AvConfig()` defaults, seed 0) on validation case B (NACA 0012, M 0.72, α 3°), float32 on the Apple
+GPU, 39.1 s:
+- The first outer iteration took the loss from 279.6 to 0.05075 in 97 closures.
+- Layer 4's adaptive slope went to exactly zero: ω_k = −0.221, −0.215, −0.207, **−0.0**, 0.134. That
+  layer's output is tanh(0) = 0, so the network is a constant.
+- The field at the 256x97 nodes is uniform: every variable spreads by less than 2.9e-8, the wall Cp
+  by 6.6e-8, and the wall speed is 0.930 U∞ everywhere.
+- The other 19 outer iterations stalled at the same loss after 3-5 closures each.
+
+A whole-branch reviewer found the same state for T2-T4, through a different layer's slope each
+time. With ω frozen at 0.1 the reviewer found a drift towards a near-uniform field instead. Both of
+these are the reviewer's measurements, not re-measured here.
+
+T1-T4 vary only the sensor reading, the viscosity form and the trailing-edge exclusion. None of them
+acts on a uniform field, whose residual and viscous term are exactly zero, so the gate as specified
+would fail all four configurations for this one reason and use up the pre-registered tuning budget.
+
+The slope parameters n = 10, ω₀ = 0.1 were a declared assumption (design §2.2 and §2.6, item 5).
+Jagtap, Kawaguchi & Karniadakis's layer-wise adaptive activations ("Locally adaptive activation
+functions with slope recovery…", Proc. R. Soc. A 476, 20200334, 2020), which Wassing et al. cite as
+their ref. 20, add a slope-recovery term to the loss. This implementation has no such term, and
+Wassing et al. do not say whether they used it.
+
+**2. Where the residual's weight goes.** The volume weights on this 100-chord grid put 1.25e-4 of the
+residual weight inside the RMAE box, which holds 43.0 % of the residual nodes; the outer 10 rows
+carry 56.4 % of it. λ_res·w has a median of 1.67 in the box, 0.106 on the wall row and 1.62e5 on the
+outer row. The residual loss is therefore almost entirely the far field's, which a uniform free
+stream nearly satisfies.
+
+**3. The gate's upper bound exceeds its budget.** time_closure on case B with `AvConfig()` (one
+batch of 5,000 points, the viscous term forced on everywhere):
+
+| device | closure | L-BFGS two-loop per iteration | upper bound per gate configuration |
+|---|---|---|---|
+| Apple GPU | 0.408 s | 0.425 s | 207.8 h |
+| CPU | 2.233 s | 0.142 s | 651.8 h |
+
+The four configurations project to about 830 h against the 72 h budget, so `s5_pinn.py gate` would
+refuse (exit 3), as designed. The bound charges every outer iteration 1,250 closures and 1,000
+L-BFGS iterations. The real first epoch above took 39 s, but only because it was trapped.
+
+**Decisions needed before any gate run (the author's, to be recorded here):**
+- (a) How to keep the network out of the uniform state, for example Jagtap et al.'s slope-recovery
+  term, a fixed slope, or ω bounded away from zero; and whether the residual weighting on this
+  100-chord grid should change.
+- (b) Whether that is an amendment to the recipe made before the gate, so that T1-T4 stay the
+  pre-registered tuning budget. Any probe that informs it runs on validation case B, which is not a
+  test case.
+- (c) The gate's budget: raise `--budget-hours` on record, cut epochs, max_iter or max_eval, or
+  project from a measured first epoch rather than the upper bound.

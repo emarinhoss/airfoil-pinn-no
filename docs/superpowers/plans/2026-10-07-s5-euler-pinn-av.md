@@ -2597,3 +2597,45 @@ git commit -m "S5: the stage commands in CLAUDE.md and README" -m "Co-Authored-B
 - **§7 budget, order, failures** → Task 6 (`time_closure`, `projected_upper_s`, `NonFiniteLoss`, stalled), Task 7 (per-phase `_budget`, re-projection, shards, skip-finished resume, refuse to re-run a decided gate), Task 4 (fallback order).
 - **§8 tests** → each listed test is in the owning task; the Review Focus lines are pinned as named there.
 - **§9 files** → as listed, plus `src/apno/score/s5.py` (shared helpers; a refinement noted under File structure).
+
+---
+
+## Implementation notes (2026-10-08): where the code departs from this plan's text
+
+The plan's code blocks are kept as written; the reviews of the multi-agent run changed the code in
+these places, each with a regression test (commits on branch `s5`):
+
+- **Task 2** (a813c61, d174ef0): H is built from the floored sound speed (`h = c*c/(gamma-1) + ...`),
+  so M's spectrum stays {-c, 0, 0, c} and |A| stays dissipative at non-physical states; c² is also
+  floored at `C2_FLOOR = 1e-3`, which keeps float32 |A| dissipative; the scalar form's |u| radicand is
+  floored, so its gradient is finite at zero velocity.
+- **Task 3** (4f966dd): each quad is split along the diagonal that gives two positively oriented
+  triangles (folded quads are left out); a non-finite truth raises; a non-physical prediction scores
+  inf.
+- **Task 4** (a711e87, d18dcfe): a level with no result (SU2 killed, a driver error) is resumed, not
+  fallen back from; a recorded failure at either level falls back; exit codes 0 selected, 1 unfinished
+  (re-run), 2 none converged, 3 the runs disagree with the selection on record, 4 cannot run
+  (environment, another driver); su2.json is written atomically and gains an `unfinished` key; a
+  selection on record is never changed. The plan's test `test_falls_back_to_case_c_when_b_does_not_finish`
+  was replaced: a kill is not a result (spec §4.5).
+- **Task 5** (1446e4d, 114620c): every string option of `AvConfig` is checked at construction
+  (`__post_init__`, ValueError naming the field); added tests: the matrix viscosity through the map,
+  the energy row, boundary terms that tell their rows and columns apart.
+- **Task 6** (6dd9413, 27ccdb7): a divergence's reason names where it happened, and its outer
+  iteration's closures are counted; the default log flushes; `time_closure` also returns
+  `lbfgs_iter_s` (the measured two-loop recursion at the full history), and
+  `projected_upper_s(cfg, n_nodes, closure_s, lbfgs_iter_s=0.0)` charges it per iteration.
+- **Task 7** (ebfb980, fce42ab, 04bc30b): resume across shard layouts (any `runs*.json` counts); a
+  prediction file without a record is scored, never retrained; the truth is checked before training
+  (exit 2); a scoring failure is kept and re-scored (exit 4); records and prediction files are
+  written atomically; entries record `argv`, `eval_device` and the code version taken before
+  training; a gate decided in gate.json without recipe.json is finished at once, without timing; the
+  projections include the L-BFGS overhead; tests of the real truth loader.
+- **Task 8** (6de4b58, 6bdbbdf): per-run costs and the break-even plot; |CL| and |CD| errors beside
+  the near-field ratios; every arm's losses and costs; a diverged step-3 run is a status; degradation
+  only on all six cases; S4's "by construction" labels; the ablation caveat in ablation.json; the
+  gate's status column; an RMAE table; escaped table cells; P7's ratio on S4's cost rule.
+- **Task 9** (9bbb2d5): CLAUDE.md and README rows carry the scripts' real exit codes.
+
+Before any gate run, see `docs/findings.md`, 2026-10-08: the recipe as built is trapped in a uniform
+field in its first outer iteration, and the gate's upper bound exceeds its budget.

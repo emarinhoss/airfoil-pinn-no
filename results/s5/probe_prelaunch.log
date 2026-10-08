@@ -1,0 +1,29 @@
+mps available: True
+0/0: 279.6 -> 0.05075 (97 evals)
+0/1: 0.05075 -> 0.05075 (4 evals)
+0/2: 0.05075 -> 0.05075 (4 evals)
+0/3: 0.05075 -> 0.05075 (4 evals)
+0/4: 0.05075 -> 0.05075 (4 evals)
+0/5: 0.05075 -> 0.05075 (4 evals)
+0/6: 0.05075 -> 0.05075 (4 evals)
+0/7: 0.05075 -> 0.05075 (4 evals)
+0/8: 0.05075 -> 0.05075 (5 evals)
+0/9: 0.05075 -> 0.05075 (4 evals)
+0/10: 0.05075 -> 0.05075 (4 evals)
+0/11: 0.05075 -> 0.05075 (3 evals)
+0/12: 0.05075 -> 0.05075 (4 evals)
+0/13: 0.05075 -> 0.05075 (4 evals)
+0/14: 0.05075 -> 0.05075 (4 evals)
+0/15: 0.05075 -> 0.05075 (4 evals)
+0/16: 0.05075 -> 0.05075 (4 evals)
+0/17: 0.05075 -> 0.05075 (4 evals)
+0/18: 0.05075 -> 0.05075 (4 evals)
+0/19: 0.05075 -> 0.05075 (4 evals)
+1. one epoch of T1: 39.1 s on mps, 173 closures, 19 of 20 outer iterations stalled, diverged False
+   adaptive slopes omega_k: [-0.220834, -0.214891, -0.20677, -0.0, 0.134091]
+   spread (max - min) of rho, u, v, p over the 256x97 nodes: ['2.63e-08', '2.82e-08', '2.25e-08', '2.86e-08']
+   wall Cp spread 6.57e-08, largest wall speed 0.9303 U_inf
+2. mps: closure 0.408 s, L-BFGS two-loop 0.425 s per iteration, upper bound 207.8 h per gate configuration
+2. cpu: closure 2.233 s, L-BFGS two-loop 0.142 s per iteration, upper bound 651.8 h per gate configuration
+3. RMAE box: 43.0% of the residual nodes, 1.25e-04 of the residual weight; outer 10 rows: 56.4%
+   lambda_res * w, median: box 1.67, wall row 0.106, outer row 1.62e+05

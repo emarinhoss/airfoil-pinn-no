@@ -22,6 +22,11 @@ results/s5/probe_departures_hard.log:
   projection, which vanishes at eta = 1; no trivial state satisfies the residual and both;
 - hard_both+adam: and the Adam steps first.
 
+Then, by the author's decision, `--full-epoch`: hard_both through one whole epoch at the recipe's
+own L-BFGS limits (all 20 outer iterations, max_iter 1000, max_eval 1250, no cut), the state
+reported every 5 outer iterations on the training device, results/s5/probe_hard_both_epoch.log;
+the network is saved to runs/probes/s5_hard_both_epoch1.pt (git-ignored).
+
 A non-finite loss stops an arm, as it stops `train` (rec["diverged"]), and is reported with where
 it happened. Judged without SU2's truth, as before: does the field leave the uniform state, do the
 slopes stay off zero, does the loss fall, and does the wall Cp have a stagnation point and a
@@ -31,6 +36,8 @@ suction peak?
         --arms control,adam,hard_wall,sigma_0.1,glorot > results/s5/probe_departures.log 2>&1
     python scripts/probes/probe_s5_departures.py \
         --arms hard_both,hard_both+adam > results/s5/probe_departures_hard.log 2>&1
+    python scripts/probes/probe_s5_departures.py \
+        --arms hard_both --full-epoch > results/s5/probe_hard_both_epoch.log 2>&1
 
 MPS is often unavailable inside a sandbox; the log's first line says which device ran.
 """
@@ -38,6 +45,7 @@ MPS is often unavailable inside a sandbox; the log's first line says which devic
 import dataclasses
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -45,7 +53,7 @@ from torch import nn
 
 from apno.geometry.ogrid import TRAIN, Section, grid
 from apno.models.pinn import PinnCase, wall_normal
-from apno.models.pinn_euler_av import AdaptiveTanh, AvConfig, losses
+from apno.models.pinn_euler_av import AdaptiveTanh, AvConfig, losses, to_dataset_q
 from apno.models.train_pinn import resolve_device
 from apno.models.train_pinn_av import (
     _to, boundary_points, evaluate_on_grid, make_pinn, residual_nodes,
@@ -114,8 +122,20 @@ def hard_far(pinn):
     pinn.primitive = blended
 
 
-def end_state(pinn):
-    q = evaluate_on_grid(pinn, TRAIN)
+def on_device(pinn):
+    """q (ni, nj, 4) at the 256x97 nodes, in the dataset's units, on the training device in its
+    precision, so training can go on (evaluate_on_grid moves the network to the CPU)."""
+    ni, nj = TRAIN
+    dev = next(pinn.net.parameters()).device
+    xi = (torch.arange(ni, dtype=torch.float32) / ni)[:, None].expand(ni, nj).reshape(-1)
+    eta = (torch.arange(nj, dtype=torch.float32) / (nj - 1))[None, :].expand(ni, nj).reshape(-1)
+    with torch.no_grad():
+        q = to_dataset_q(*pinn.primitive(xi.to(dev), eta.to(dev)), pinn.case.mach)
+    return q.reshape(ni, nj, 4).cpu().double().numpy()
+
+
+def end_state(pinn, q=None):
+    q = evaluate_on_grid(pinn, TRAIN) if q is None else q
     X, Y = grid(CASE.geometry, TRAIN)
     xw, yw = X[:, 0], Y[:, 0]
     cp = pressure_coefficient(q[:, 0, 3], CASE.mach)
@@ -141,7 +161,8 @@ def finite(L, where):
     return L
 
 
-def run(adam=False, hard_wall_on=False, sigma=None, glorot_on=False, hard_far_on=False):
+def run(adam=False, hard_wall_on=False, sigma=None, glorot_on=False, hard_far_on=False,
+        full_epoch=False):
     cfg = AvConfig() if sigma is None else dataclasses.replace(AvConfig(), sigma=sigma)
     device, dtype = resolve_device(cfg.device), torch.float32
     torch.manual_seed(cfg.seed)  # as train() does
@@ -158,6 +179,8 @@ def run(adam=False, hard_wall_on=False, sigma=None, glorot_on=False, hard_far_on
     n = len(nodes["xi"])
     perm = torch.randperm(n, generator=gen)
     nb = -(-n // cfg.batch)
+    outer, max_iter, max_eval = ((nb, cfg.lbfgs_max_iter, cfg.lbfgs_max_eval) if full_epoch
+                                 else (OUTER, MAX_ITER, MAX_EVAL))
 
     def batch(k):
         idx = perm[(k % nb) * cfg.batch:(k % nb + 1) * cfg.batch]
@@ -178,9 +201,9 @@ def run(adam=False, hard_wall_on=False, sigma=None, glorot_on=False, hard_far_on
             if (step + 1) % 100 == 0:
                 print(f"   adam {step + 1}: {float(L['total'].detach()):.4g}; {snapshot(L)}; "
                       f"n omega {n_omega(pinn)}", flush=True)
-    for b in range(OUTER):
+    for b in range(outer):
         bt = batch(b)
-        opt = torch.optim.LBFGS(pinn.parameters(), lr=1.0, max_iter=MAX_ITER, max_eval=MAX_EVAL,
+        opt = torch.optim.LBFGS(pinn.parameters(), lr=1.0, max_iter=max_iter, max_eval=max_eval,
                                 tolerance_grad=cfg.lbfgs_tol_grad,
                                 tolerance_change=cfg.lbfgs_tol_change,
                                 history_size=cfg.lbfgs_history, line_search_fn="strong_wolfe")
@@ -205,24 +228,35 @@ def run(adam=False, hard_wall_on=False, sigma=None, glorot_on=False, hard_far_on
             return
         L = losses(pinn, bt, bnd, cfg)
         evals_all += evals[0]
-        print(f"   {b}: {before:.4g} -> {float(L['total'].detach()):.4g} ({evals[0]} evals); "
-              f"{snapshot(L)}; n omega {n_omega(pinn)}", flush=True)
+        print(f"   {b}: {before:.4g} -> {float(L['total'].detach()):.4g} ({evals[0]} evals, "
+              f"{time.perf_counter() - t0:.0f} s); {snapshot(L)}; n omega {n_omega(pinn)}",
+              flush=True)
+        if full_epoch and (b + 1) % 5 == 0 and b + 1 < outer:
+            end_state(pinn, on_device(pinn))
     print(f"   {evals_all} closures in {time.perf_counter() - t0:.0f} s on {device}", flush=True)
+    if full_epoch:
+        out = Path("runs/probes/s5_hard_both_epoch1.pt")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(pinn.net.state_dict(), out)
+        print(f"   network saved to {out}", flush=True)
     end_state(pinn)
 
 
 def main(argv):
-    names = argv[1].split(",") if argv[:1] == ["--arms"] else list(ARMS)
+    names = argv[argv.index("--arms") + 1].split(",") if "--arms" in argv else list(ARMS)
+    full_epoch = "--full-epoch" in argv
     print("mps available:", torch.backends.mps.is_available(), flush=True)
-    print(f"case A: stagnation Cp {stagnation_cp(CASE.mach):.3f}; each arm runs {OUTER} outer "
-          f"iterations of at most {MAX_ITER} L-BFGS iterations and {MAX_EVAL} closures", flush=True)
+    print(f"case A: stagnation Cp {stagnation_cp(CASE.mach):.3f}; "
+          + ("each arm runs one whole epoch at the recipe's L-BFGS limits" if full_epoch else
+             f"each arm runs {OUTER} outer iterations of at most {MAX_ITER} L-BFGS iterations and "
+             f"{MAX_EVAL} closures"), flush=True)
     for name in names:
         opts = ARMS[name]
         print(f"{name}:", flush=True)
         try:
             run(adam=opts.get("adam", False), hard_wall_on=opts.get("hard_wall", False),
                 sigma=opts.get("sigma"), glorot_on=opts.get("glorot", False),
-                hard_far_on=opts.get("hard_far", False))
+                hard_far_on=opts.get("hard_far", False), full_epoch=full_epoch)
         except Diverged as exc:
             print(f"   diverged: non-finite loss at {exc}", flush=True)
 

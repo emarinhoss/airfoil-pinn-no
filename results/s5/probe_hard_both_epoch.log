@@ -1,0 +1,37 @@
+mps available: True
+case A: stagnation Cp 1.129; each arm runs one whole epoch at the recipe's L-BFGS limits
+hard_both:
+   0: 897 -> 3.914 (210 evals, 85 s); residual 0.000195, far 6.97e-18, wall 8.8e-16, periodic 0.0177; n omega [-1.533, -3.027, -2.857, 0.063, -0.006]
+   1: 4.118 -> 4.091 (51 evals, 118 s); residual 0.000204, far 0, wall 9.51e-16, periodic 0.0191; n omega [-1.504, -3.053, -2.899, 0.07, 0.006]
+   2: 3.879 -> 3.798 (95 evals, 188 s); residual 0.000189, far 6.61e-18, wall 9.31e-16, periodic 0.0177; n omega [-1.047, -2.952, -2.61, -0.799, -0.0]
+   3: 3.892 -> 3.851 (7 evals, 207 s); residual 0.000192, far 6.56e-18, wall 8.77e-16, periodic 0.0177; n omega [-1.047, -2.952, -2.61, -0.799, 0.0]
+   4: 3.603 -> 3.57 (24 evals, 224 s); residual 0.000178, far 6.91e-18, wall 9.6e-16, periodic 0.0179; n omega [-1.047, -2.952, -2.61, -0.799, -0.0]
+   spread (max - min) of rho, u, v, p: all nodes ['6.71e-01', '1.69e+00', '1.68e+00', '8.20e-01'] ; RMAE box ['3.24e-02', '1.69e+00', '1.68e+00', '3.96e-02']
+   mean rho 0.4657, mean p 0.3468
+   wall Cp: max -2.390 at x 0.995; upper-surface min -2.390 at x 0.916; largest wall speed 1.686 U_inf
+   5: 4.021 -> 3.944 (27 evals, 260 s); residual 0.000196, far 6.75e-18, wall 8.65e-16, periodic 0.0175; n omega [-1.047, -2.952, -2.61, -0.799, -0.0]
+   6: 3.656 -> 3.622 (43 evals, 308 s); residual 0.00018, far 7.13e-18, wall 9.37e-16, periodic 0.0165; n omega [-1.047, -2.952, -2.61, -0.799, 0.0]
+   7: 3.669 -> 3.669 (7 evals, 328 s); residual 0.000183, far 7.05e-18, wall 1.04e-15, periodic 0.0165; n omega [-1.047, -2.952, -2.61, -0.799, 0.0]
+   8: 3.863 -> 3.825 (83 evals, 481 s); residual 0.00019, far 0, wall 1.13e-15, periodic 0.018; n omega [-0.899, -3.092, -2.35, -0.586, 0.0]
+   9: 3.871 -> 3.868 (6 evals, 508 s); residual 0.000193, far 0, wall 1.07e-15, periodic 0.018; n omega [-0.899, -3.092, -2.35, -0.586, 0.0]
+   spread (max - min) of rho, u, v, p: all nodes ['6.67e-01', '1.69e+00', '1.69e+00', '8.34e-01'] ; RMAE box ['3.22e-02', '1.69e+00', '1.69e+00', '4.03e-02']
+   mean rho 0.4688, mean p 0.3355
+   wall Cp: max -2.431 at x 0.982; upper-surface min -2.431 at x 0.798; largest wall speed 1.694 U_inf
+   10: 3.897 -> 3.895 (11 evals, 562 s); residual 0.000194, far 0, wall 1.19e-15, periodic 0.018; n omega [-0.899, -3.092, -2.35, -0.586, -0.0]
+   11: 3.932 -> 3.903 (36 evals, 612 s); residual 0.000194, far 0, wall 9.81e-16, periodic 0.0181; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   12: 3.706 -> 3.705 (32 evals, 651 s); residual 0.000184, far 0, wall 1.1e-15, periodic 0.0181; n omega [-0.898, -3.092, -2.35, -0.586, 0.0]
+   13: 3.86 -> 3.829 (26 evals, 682 s); residual 0.000191, far 0, wall 1.04e-15, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   14: 3.883 -> 3.883 (5 evals, 702 s); residual 0.000193, far 0, wall 9.84e-16, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, 0.0]
+   spread (max - min) of rho, u, v, p: all nodes ['6.81e-01', '1.71e+00', '1.70e+00', '8.31e-01'] ; RMAE box ['3.29e-02', '1.71e+00', '1.70e+00', '4.01e-02']
+   mean rho 0.4577, mean p 0.3377
+   wall Cp: max -2.423 at x 0.982; upper-surface min -2.423 at x 0.798; largest wall speed 1.707 U_inf
+   15: 3.682 -> 3.682 (6 evals, 718 s); residual 0.000183, far 0, wall 7.69e-16, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   16: 3.692 -> 3.692 (6 evals, 730 s); residual 0.000184, far 0, wall 1.09e-15, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, 0.0]
+   17: 3.731 -> 3.731 (7 evals, 739 s); residual 0.000186, far 0, wall 1e-15, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   18: 4.024 -> 4.024 (5 evals, 750 s); residual 0.0002, far 0, wall 9.85e-16, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   19: 3.784 -> 3.784 (12 evals, 782 s); residual 0.000188, far 0, wall 1.13e-15, periodic 0.0183; n omega [-0.898, -3.092, -2.35, -0.586, -0.0]
+   699 closures in 782 s on mps
+   network saved to runs/probes/s5_hard_both_epoch1.pt
+   spread (max - min) of rho, u, v, p: all nodes ['6.81e-01', '1.71e+00', '1.70e+00', '8.31e-01'] ; RMAE box ['3.29e-02', '1.71e+00', '1.70e+00', '4.02e-02']
+   mean rho 0.4577, mean p 0.3377
+   wall Cp: max -2.423 at x 0.657; upper-surface min -2.423 at x 0.320; largest wall speed 1.707 U_inf

@@ -1421,3 +1421,25 @@ the gate. That is hard_both through the recipe's own L-BFGS limits: all 20 mini-
 iterations of an epoch, max_iter 1,000, max_eval 1,250, history 1,000, with no cut. The state is
 reported every 5 outer iterations. The question is whether the slowly falling low-density state
 ever turns physical.
+
+**The full epoch (2026-10-08): the low-density state is a stall, not a slow descent.** Command:
+`python scripts/probes/probe_s5_departures.py --arms hard_both --full-epoch > results/s5/probe_hard_both_epoch.log 2>&1`.
+hard_both on case A ran through all 20 outer iterations at the recipe's own L-BFGS limits (max_iter
+1,000, max_eval 1,250, history 1,000, no cut). It took 699 closures in 782 s on the Apple GPU. No
+outer iteration came near max_eval: the first used 210 closures, and the last twelve 5 to 36 each,
+L-BFGS stopping on its own tolerance.
+- **The loss did not fall across the epoch.** The outer iterations ended at 3.914 (from 897),
+  4.091, 3.798, 3.851, 3.57, 3.944, 3.622, 3.669, 3.825, 3.868, 3.895, 3.903, 3.705, 3.829, 3.883,
+  3.682, 3.692, 3.731, 4.024 and 3.784. The spread, 3.57 to 4.09, is batch to batch. The loss is
+  λ_res·L_res (L_res 1.8e-4 to 2.0e-4) plus L_lr ≈ 0.018. Both hard conditions hold to round-off.
+- **A dead layer throughout.** Layer 4's slope sat near zero for the first two outer iterations
+  (n ω 0.063, 0.070). From the third on, layer 5's is exactly zero: n ω ends −0.898, −3.09, −2.35,
+  −0.586, 0.
+- **The same state at every report.** After 5, 10, 15 and 20 outer iterations the wall Cp is
+  −2.390, −2.431, −2.423 and −2.423, the same all round the wall. At the end the mean ρ is 0.458
+  and the mean p 0.338; in the RMAE box ρ spreads by 0.033 and p by 0.040, and the largest wall
+  speed is 1.707 U∞. There is no stagnation point or suction peak.
+- The network is saved to `runs/probes/s5_hard_both_epoch1.pt` (git-ignored).
+
+So the most constrained variant probed (both conditions exact) stalls in a non-physical state as
+firmly as T1 does in the uniform field. The probes give no amendment to write.

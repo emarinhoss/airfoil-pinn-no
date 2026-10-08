@@ -154,3 +154,185 @@ def test_exit_2_when_no_case_converges(fake_bin, tmp_path, monkeypatch):
     assert mod.main([]) == 2
     out = json.loads(Path("results/s5/su2.json").read_text())
     assert out["selected"] is None and len(out["tried"]) == 3
+
+
+# exit 4: the environment or another driver stops the call (not "unfinished, re-run")
+
+def test_exit_4_when_su2_bin_dir_is_unset_and_a_run_must_launch(level_bin, tmp_path, monkeypatch,
+                                                                  capsys):
+    _, log = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("SU2_BIN_DIR")
+    assert mod.main([]) == 4
+    assert capsys.readouterr().out.splitlines()[-1].startswith("cannot run: SU2_BIN_DIR")
+    assert _launches(log) == [] and not list(Path("runs/su2").glob("*/*/result.json"))
+    assert not Path("results/s5/su2.json").exists()
+
+
+def test_su2_bin_dir_is_read_only_when_a_run_launches(level_bin, tmp_path, monkeypatch, capsys):
+    b, log = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("S5_FAKE_MODES", "512x193/s5-val-B=sigkill")
+    assert mod.main([]) == 1
+    monkeypatch.delenv("S5_FAKE_MODES")
+    monkeypatch.delenv("SU2_BIN_DIR")  # 512x193 has no result, so SU2 must launch: exit 4, not 1
+    assert mod.main([]) == 4
+    assert capsys.readouterr().out.splitlines()[-1].startswith("cannot run: SU2_BIN_DIR")
+    monkeypatch.setenv("SU2_BIN_DIR", str(b))
+    assert mod.main([]) == 0
+    first, n = Path("results/s5/su2.json").read_text(), len(_launches(log))
+    monkeypatch.delenv("SU2_BIN_DIR")  # a re-run after success launches nothing: no SU2 needed
+    assert mod.main([]) == 0
+    assert Path("results/s5/su2.json").read_text() == first and len(_launches(log)) == n
+
+
+@pytest.mark.parametrize("bad", ["empty", "absent", "not_executable"])
+def test_exit_4_when_su2_bin_dir_holds_no_executable_su2_cfd(level_bin, tmp_path, monkeypatch,
+                                                             capsys, bad):
+    # a wrong SU2_BIN_DIR is a driver error that no re-run can fix: exit 4, not 1
+    b, log = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    wrong = tmp_path / "wrong_bin"
+    if bad != "absent":
+        wrong.mkdir()
+    if bad == "not_executable":
+        (wrong / "SU2_CFD").write_text((b / "SU2_CFD").read_text())  # no x bit
+    monkeypatch.setenv("SU2_BIN_DIR", str(wrong))
+    assert mod.main([]) == 4
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert last.startswith("cannot run: ") and str(wrong / "SU2_CFD") in last
+    assert _launches(log) == [] and not list(Path("runs/su2").glob("*/*/result.json"))
+    assert not Path("results/s5/su2.json").exists()
+
+
+def test_exit_4_on_a_wrong_su2_bin_dir_with_a_record_whose_runs_are_missing(
+        level_bin, tmp_path, monkeypatch, capsys):
+    b, _ = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    assert mod.main([]) == 0
+    record = Path("results/s5/su2.json").read_text()
+    Path("runs").rename("runs-aside")  # a fresh clone: SU2 must launch again
+    (tmp_path / "empty_bin").mkdir()
+    monkeypatch.setenv("SU2_BIN_DIR", str(tmp_path / "empty_bin"))
+    assert mod.main([]) == 4
+    assert capsys.readouterr().out.splitlines()[-1].startswith("cannot run: ")
+    assert Path("results/s5/su2.json").read_text() == record
+    assert not list(Path("runs/su2").glob("*/*/result.json"))
+
+
+def test_exit_4_on_a_run_made_with_other_settings(fake_bin, tmp_path, monkeypatch, capsys):
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SU2_BIN_DIR", str(fake_bin))
+    assert mod.main([]) == 0
+    record = Path("results/s5/su2.json").read_text()
+    res = Path("runs/su2/512x193/s5-val-B/result.json")
+    res.write_text(json.dumps({**json.loads(res.read_text()), "config_sha256": "0" * 64}))
+    assert mod.main([]) == 4  # the library's ResumeMismatch, not a traceback
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert last.startswith("cannot run: ") and "other settings" in last
+    assert Path("results/s5/su2.json").read_text() == record
+
+
+def test_exit_4_when_another_driver_holds_the_lock(level_bin, tmp_path, monkeypatch, capsys):
+    import fcntl
+
+    _, log = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    Path("runs/su2").mkdir(parents=True)
+    with open("runs/su2/.campaign.lock", "w") as other:
+        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert mod.main([]) == 4
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert last.startswith("cannot run: another campaign driver holds") and "re-run" in last
+    assert _launches(log) == [] and not Path("results/s5/su2.json").exists()
+
+
+# a recorded failure at either level decides the case (design §3.1)
+
+@pytest.mark.parametrize("failed,killed", [("256x97", "512x193"), ("512x193", "256x97")])
+def test_falls_back_on_a_recorded_failure_even_if_the_other_level_has_no_result(
+        level_bin, tmp_path, monkeypatch, failed, killed):
+    _, log = level_bin
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("S5_FAKE_MODES", f"{failed}/s5-val-B=nan {killed}/s5-val-B=sigkill")
+    assert mod.main([]) == 0
+    out = json.loads(Path("results/s5/su2.json").read_text())
+    assert out["selected"] == "s5-val-C" and out["unfinished"] is None
+    assert [t["case_id"] for t in out["tried"]] == ["s5-val-B", "s5-val-C"]
+    b = out["tried"][0]
+    assert b["converged_both"] is False and b["missing"] == [killed]
+    assert set(b["levels"]) == {failed} and b["levels"][failed]["converged"] is False
+    monkeypatch.delenv("S5_FAKE_MODES")
+    n = len(_launches(log))
+    assert mod.main([]) == 0  # B has failed already: its unfinished level is not run again
+    assert json.loads(Path("results/s5/su2.json").read_text()) == out
+    assert len(_launches(log)) == n
+
+
+# a record whose runs are missing or unfinished is a re-run (1), not a disagreement (3)
+
+def test_a_record_with_missing_runs_asks_for_a_rerun_and_keeps_the_record(level_bin, tmp_path,
+                                                                           monkeypatch, capsys):
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("S5_FAKE_MODES", "512x193/s5-val-B=nan")
+    assert mod.main([]) == 0
+    record = Path("results/s5/su2.json").read_text()
+    assert json.loads(record)["selected"] == "s5-val-C"
+    Path("runs").rename("runs-aside")  # a fresh clone: results/ is tracked, runs/ is not
+    monkeypatch.setenv("S5_FAKE_MODES", "256x97/s5-val-B=sigkill 512x193/s5-val-B=sigkill")
+    assert mod.main([]) == 1
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert "missing or unfinished" in last and "re-run" in last
+    assert Path("results/s5/su2.json").read_text() == record
+    monkeypatch.setenv("S5_FAKE_MODES", "512x193/s5-val-B=nan")  # the same SU2: the same choice
+    assert mod.main([]) == 0
+    assert json.loads(Path("results/s5/su2.json").read_text())["selected"] == "s5-val-C"
+
+
+def test_unfinished_runs_that_already_contradict_the_record_refuse(level_bin, tmp_path,
+                                                                   monkeypatch):
+    # the record says B, the runs record a failure of B and C is unfinished: they disagree
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    Path("results/s5").mkdir(parents=True)
+    record = json.dumps({"tried": [], "selected": "s5-val-B", "unfinished": None})
+    Path("results/s5/su2.json").write_text(record)
+    monkeypatch.setenv("S5_FAKE_MODES", "512x193/s5-val-B=nan 256x97/s5-val-C=sigkill "
+                                        "512x193/s5-val-C=sigkill")
+    assert mod.main([]) == 3
+    assert Path("results/s5/su2.json").read_text() == record
+
+
+# su2.json is replaced atomically
+
+def test_a_kill_while_writing_su2_json_leaves_the_previous_one(fake_bin, tmp_path, monkeypatch):
+    class Killed(BaseException):
+        pass
+
+    mod = _load()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SU2_BIN_DIR", str(fake_bin))
+    assert mod.main([]) == 0
+    record = Path("results/s5/su2.json").read_text()
+    real = Path.write_text
+
+    def torn(self, data, *a, **kw):  # half the text reaches the disk, then the process dies
+        if self.name.startswith("su2.json"):
+            real(self, data[: len(data) // 2], *a, **kw)
+            raise Killed
+        return real(self, data, *a, **kw)
+
+    monkeypatch.setattr(Path, "write_text", torn)
+    with pytest.raises(Killed):
+        mod.main([])
+    monkeypatch.setattr(Path, "write_text", real)
+    assert Path("results/s5/su2.json").read_text() == record
+    assert mod.main([]) == 0

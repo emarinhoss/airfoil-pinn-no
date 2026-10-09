@@ -14,8 +14,8 @@ record.
 - Plan, task by task: `docs/superpowers/plans/2026-10-01-airfoil-pinn-vs-neural-operator.md`.
 - Every measured result: `docs/findings.md`.
 
-Stages S0–S4 have all run (to 2026-10-06), and the work is merged into `main`. S5, on branch `s5`,
-ran its gate on 2026-10-08. No configuration passed, because every one is trapped in a uniform
+Stages S0–S4 have all run (to 2026-10-06), and the work is merged into `main`. S5 ran its gate on
+2026-10-08 and is merged into `main` too. No configuration passed, because every one is trapped in a uniform
 field, so S5 stopped after step 1. The probes behind that are in `scripts/probes/probe_s5_*.py`
 and the findings. The remote is `origin`,
 `git@github.com:emarinhoss/airfoil-pinn-no.git`, a public repository (pushed by the author's

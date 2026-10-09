@@ -62,6 +62,11 @@ On cost, the PINN is 88--220 times SU2 per case, depending on how GPU and CPU ti
 The FNO repays its training only after 1,126 new cases.
 Three predictions were recorded before any model ran. The first held on wall time only; the
 second held; the third held in part.
+A fifth stage rebuilt a published transonic Euler PINN with localised artificial
+viscosity~\cite{wassing2025} on this study's grid. Under all four tuning configurations it fell
+into a uniform stream, and it failed its validation gate at 5.2\,\% Cp error against a 1\,\%
+threshold. Nothing probed kept it out of a trivial state: not the slope treatment, the residual
+weighting, the optimiser, the embedding, the initialisation, nor hard boundary conditions.
 All of this is relative to SU2 at $512\times193$. On the NACA\,0012 anchor, that truth is itself
 6--8\,\% below the grid-converged lift of Vassberg and Jameson.
 \end{abstract}
@@ -126,7 +131,7 @@ teaching. They cover the network building blocks and their training, the FNO as 
 the PINN as implemented, and the three models side by side.
 
 \paragraph{How the work ran.}
-The work ran in five stages (\cref{fig:pipeline}):
+The comparison ran in five stages (\cref{fig:pipeline}):
 \begin{itemize}
   \item S0 checked SU2's accuracy and cost, and froze its settings;
   \item S1 ran the data campaign;
@@ -134,6 +139,8 @@ The work ran in five stages (\cref{fig:pipeline}):
   \item S3 ran the PINN;
   \item S4 scored everything.
 \end{itemize}
+A sixth stage, S5 (\cref{sec:s5}), rebuilt a published Euler PINN with artificial viscosity and
+put it through a validation gate. It made predictions of its own.
 Every figure quoted here comes from a committed record in \texttt{results/}. The dated log
 \texttt{docs/findings.md} gives the command behind each figure.
 
@@ -1240,8 +1247,303 @@ SU2 is not free of numerical artefacts:
   \item \emph{PINN wall tangency and mass.} The potential PINN enforces both only softly: its RMS
     wall-normal velocity has median 0.011 (subcritical) and 0.020 (supercritical), against SU2's
     $10^{-8}$. Its mass flux through the closed lines is one to two orders above the FNO's.
-  \item \emph{Not measured}: FNO ringing (only the plots show it), and the viscous PINN (dropped).
+  \item \emph{Not measured}: FNO ringing (only the plots show it), and the viscous PINN (dropped
+    from S3; the artificially viscous PINN of S5 is in \cref{sec:s5}).
 \end{itemize}
+
+%===================================================================================================
+\clearpage
+\section{Stage S5: a published Euler PINN, rebuilt}
+\label{sec:s5}
+
+Wassing, Langer and Bekemeyer~\cite{wassing2025} report an Euler PINN that captures the shock on
+transonic NACA\,0012 cases to within 0.3--0.4\,\% in Cp (\cref{sec:discussion}). This study's own
+Euler PINN converged to fluid at rest. Stage S5 rebuilt their recipe from the paper, on this
+study's grid, and asked three questions in turn:
+\begin{enumerate}
+  \item Does the rebuilt recipe pass a validation gate against SU2 on their case B?
+  \item If it does, which of its ingredients does it need? (A one-at-a-time ablation.)
+  \item How does it compare with the FNO on three in-range and three extrapolation cases?
+\end{enumerate}
+Four predictions were recorded before any S5 code existed (\cref{tab:s5predictions}). The design
+fixes what happens if the gate fails: S5 stops after step 1. It did.
+
+\subsection{The recipe as built}
+\label{sec:s5recipe}
+
+\paragraph{State and network.}
+The network outputs the primitive variables $(\rho,u,v,p)$ in their scaling: $\rho_\infty =
+p_\infty = 1$ and $\vu_\infty = \sqrt{\gamma}\,\Ma(\cos\alpha,\sin\alpha)$, so $c_\infty =
+\sqrt\gamma$. Its input is the index pair $\bm r = (i,j)$ of the $512\times193$ collocation grid,
+through random Fourier features,
+\begin{equation}
+  \bm\gamma(\bm r) = \bigl[\sin(\Phi\bm r),\ \cos(\Phi\bm r)\bigr],\qquad
+  \Phi\in\mathbb R^{128\times2},\quad \Phi_{kl}\sim\mathcal N(0,1),
+  \label{eq:fourierfeatures}
+\end{equation}
+followed by five weight-normalised layers of 128 units. Each layer $k$ has a layer-wise adaptive
+activation $\sigma_k(x) = \tanh(n\,\omega_k x)$, with $\omega_k$ trained. Their scale factor $n$ is
+not stated; here $n = 10$ and $\omega_k$ starts at 0.1, following Jagtap et
+al.~\cite{jagtap2020}, so that $n\omega_k = 1$ at the start. A last weight-normalised affine map
+gives the four outputs.
+
+\paragraph{Loss.}
+Collocation is at every node of the grid, in mini-batches of 5,000:
+\begin{gather}
+  L = \lambda_{\mathrm{res}} L_{\mathrm{res}} + L_\infty + L_{\mathrm{af}} + L_{\mathrm{lr}},\qquad
+  L_{\mathrm{res}} = \frac1{N_b}\sum_{n\in\text{batch}} w_n\,\bigl|\nabla\!\cdot\!\bm F(W_n) - D(W_n)\bigr|^2,
+  \label{eq:s5loss}
+\end{gather}
+with $\lambda_{\mathrm{res}} = 2\times10^4$. The weight $w_n$ is the node's dual-cell area,
+normalised to mean 1 over the grid (their volume weighting). $L_\infty$, $L_{\mathrm{af}}$ and
+$L_{\mathrm{lr}}$ are mean squares of the far-field mismatch $\hat q - w_\infty$ on the outer row,
+of the wall-normal velocity $\vu\cdot\hat{\bm n}$ on the wall row, and of the periodicity
+mismatch across the cut.
+
+\paragraph{Artificial viscosity.}
+The viscous term acts on the density and energy equations only, through the selector
+$I_{\rho,\rho E} = \mathrm{diag}(1,0,0,1)$:
+\begin{equation}
+  D = \mu_x\frac{\partial^2 W}{\partial x^2} + \mu_y\frac{\partial^2 W}{\partial y^2},\qquad
+  \mu_x = \nu\,s\,I_{\rho,\rho E}\,|A|,\quad \mu_y = \nu\,s\,I_{\rho,\rho E}\,|B|,\qquad \nu = 1.9\times10^{-3}.
+  \label{eq:s5visc}
+\end{equation}
+Here $|A| = T|\Lambda|T^{-1}$ is the absolute flux Jacobian, in Swanson and Turkel's closed
+form~\cite{swanson1992}, with each eigenvalue limited below at 0.25. The sensor
+\begin{equation}
+  \begin{gathered}
+  s = s_{\mathrm{shock}}\,s_{\mathrm{stag}},\qquad
+  s_{\mathrm{shock}} = \tanh\Bigl(\max\bigl(0,\ k^{(1)}_{\mathrm{shock}}\,\tfrac{\vu}{|\vu|}\cdot\nabla p - k^{(0)}_{\mathrm{shock}}\bigr)\Bigr),\\
+  s_{\mathrm{stag}} = \mathrm{sig}\Bigl(k^{(1)}_{\mathrm{stag}}\bigl(k^{(0)}_{\mathrm{stag}} - |\nabla(\rho u)| - |\nabla(\rho v)|\bigr)\Bigr),\qquad
+  k^{(0)}_{\mathrm{stag}} = 3,\quad k^{(1)}_{\mathrm{stag}} = 5,
+  \end{gathered}
+  \label{eq:s5sensor}
+\end{equation}
+is detached from the gradient graph. It switches the viscosity on where the pressure rises along
+the flow, and off at stagnation points. Their table gives the two shock constants in an ambiguous
+form, so both readings were kept as tuning configurations. Their Eq.~(13) writes the residual as
+$\nabla\!\cdot\!\bm F + D$, which with \cref{eq:s5visc} is anti-dissipative. The sign used here,
+$\nabla\!\cdot\!\bm F - D$, is the dissipative one, read as their intent.
+
+\paragraph{Optimiser.}
+Each mini-batch gets a fresh L-BFGS (at most 1,000 iterations and 1,250 evaluations, a history of
+1,000, strong-Wolfe line search), reset after its outer iteration. There are 20 batches per epoch
+and 40 epochs: 800 outer iterations.
+
+\paragraph{Departures, declared before any run.}
+The grid is this study's algebraic O-grid with its 100-chord radius and $512\times193$ nodes,
+because the truth lives on it; theirs is a $400\times200$ elliptic grid. The metric terms come
+from automatic differentiation of the analytic map. The trailing-edge wall node, where the map's
+Jacobian vanishes, is left out of the residual. The boundary terms are evaluated in full at every
+closure.
+
+\paragraph{The gate and its tuning budget.}
+The gate is their error metric~\cite[Eq.~28]{wassing2025}: the relative mean absolute error
+$\mathrm{RMAE} = \mathrm{MAE}/(\max u - \min u)$, of Cp and of local Mach number. It is evaluated
+on a $401\times401$ lattice over $x\in[-0.5,1.5]$, $y\in[-1,1]$, against SU2 at $512\times193$.
+Both must be at most 1\,\%. Four configurations make the tuning budget, each changing one thing
+from T1, the recipe as specified: T2 takes the other reading of the shock constants, T3 the scalar
+viscosity $\mu = \nu s\,I_{\rho,\rho E}(c+|\vu|)$, and T4 a 0.02-chord exclusion around the
+trailing edge. The first configuration to pass becomes the recipe R that steps 2 and 3 use. Before
+each configuration trains, one real epoch of it is timed; the run is projected at 40 times that,
+and the gate refuses it if the projection would carry the gate past 72\,h.
+
+\subsection{Before the gate: a uniform field}
+\label{sec:s5trap}
+
+A probe run before launch found the failure the gate later measured. One epoch of T1 on case B
+took the loss from 279.6 to 0.0508 in the first outer iteration, in 97 closures. In that step the
+fourth layer's slope went to $\omega_4 = 0$. With $\tanh(0) = 0$, that layer outputs zero for
+every input, so the network is a constant, and the field is uniform to $3\times10^{-8}$. A uniform
+stream satisfies the Euler equations exactly and makes the viscous term vanish, so its loss is the
+wall-tangency term alone, $\overline{(\vu\cdot\hat{\bm n})^2}\approx 0.047$, plus a small far-field
+term. Every way out runs through the dead layer's pre-activations. Those are random and vary from
+cell to cell, so no Euler solution resembles them, and each costs far more residual than it saves
+at the wall. The remaining 19 outer iterations stalled after 3--5 closures each.
+
+\begin{table}[t]
+\centering\small
+\caption{Where the weighted residual sits at initialisation (T1, case B, every residual node).
+$\lambda_{\mathrm{res}}L_{\mathrm{res}} = 235.7$ against $L_\infty+L_{\mathrm{af}}+L_{\mathrm{lr}}
+= 2.52$.}
+\label{tab:s5split}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Region & Share of nodes & Share of $\lambda_{\mathrm{res}}L_{\mathrm{res}}$\\
+\midrule
+Wall rows, $j<10$ & 5.2\,\% & 42.9\,\%\\
+Rest of the gate's box & 37.8\,\% & 42.8\,\%\\
+Outer rows, $j\ge183$ & 5.2\,\% & 1.3\,\%\\
+Elsewhere & 51.8\,\% & 13.0\,\%\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why the residual dominates.}
+The weight $w_n$ grows with the cell's area, and the squared physical residual of a field that
+varies from cell to cell grows as one over the area. The product $w_n|R_n|^2$ therefore measures
+the field's variation in index space. With $\sigma = 1$ on integer indices
+(\cref{eq:fourierfeatures}), the network at initialisation varies from cell to cell everywhere.
+The weighted residual then outweighs the boundary terms about 94 to 1
+(\cref{tab:s5split}), and it sits in the near field, not the far field, although the far field
+holds most of the weight.
+
+\paragraph{Probes.}
+Before the gate, three rounds of short probes looked for a single change that would keep the
+network out of the trap. Each ran the recipe's first three outer iterations, cut at 150 closures
+each. They were judged structurally, without the gate's truth, by four questions: does the field
+leave the uniform state, do the slopes stay off zero, does the loss fall, and does the wall Cp have
+a stagnation point and a suction peak? The rounds that departed from the recipe ran on case A,
+so that no departure was tuned on the gate's own case.
+\Cref{tab:s5probes} lists them. No probe met the criteria. Every arm ended in a state the residual
+nearly satisfies, violating only what was left soft: a uniform stream (the wall term), fluid at
+rest or a vacuum (the far field). With both conditions exact, the network found a low-density,
+low-pressure interior, whose small fluxes keep the residual small. A full epoch at the recipe's
+own L-BFGS limits left that state where it was.
+
+\begin{table}[t]
+\centering\small
+\caption{The S5 probes, each one change from T1 (or the combination named), and where each ended.
+The slope-recovery term is $1/\overline{\exp\omega_k}$ over the layers. The balanced
+$\lambda_{\mathrm{res}}$ equalises the residual and boundary terms at initialisation, the reason
+Wassing et al.\ give for theirs. The hard far field is $\hat q \leftarrow \hat q + \eta^4(w_\infty -
+\hat q)$; the hard wall removes the normal velocity with weight $(1-\eta)^4$.}
+\label{tab:s5probes}
+\begin{tabularx}{\textwidth}{@{}ll>{\raggedright\arraybackslash}X@{}}
+\toprule
+Case & Arm & End state\\
+\midrule
+B & T1 (control) & uniform stream, loss 0.0508; layer 4 dead\\
+B & slope recovery & uniform; one slope still zero, the others inflated to $n\omega$ up to 108\\
+B & fixed slopes, $n\omega_k = 1$ & near vacuum: wall Cp $-2.73$ everywhere ($p\approx0.01$)\\
+B & weights capped at the box's largest & uniform, three times faster\\
+B & slope recovery and capped weights & uniform\\
+B & balanced $\lambda_{\mathrm{res}} = 210$ & uniform\\
+B & balanced, fixed slopes & uniform by the third outer iteration\\
+\addlinespace
+A & T1 (control) & diverged at closure 37\\
+A & 400 Adam steps first & Adam keeps every slope near 0.85; the first L-BFGS outer iteration
+  then reaches the uniform stream\\
+A & hard wall & near rest: wall speed $\le 0.073\,U_\infty$, far-field term 0.59\\
+A & Fourier $\sigma = 0.1$ & uniform\\
+A & Glorot initialisation & initial loss $4.5\times10^6$; non-physical (mean $p<0$)\\
+A & both conditions hard & low-density interior: mean $\rho$ 0.45, wall Cp $-2.46$ everywhere\\
+A & both hard, Adam first & the same\\
+A & both hard, one full epoch & the same; loss 3.6--4.1 batch to batch, no descent\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+No recipe amendment was justified, so none was written. The gate ran on the recipe as specified.
+
+\subsection{The gate}
+\label{sec:s5gate}
+
+\begin{table}[t]
+\centering\small
+\caption{SU2 on validation case B (NACA\,0012, $\Ma = 0.72$, $\alpha = 3^\circ$), with the frozen
+settings and the convergence rule.}
+\label{tab:s5su2}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Level & Iterations & Wall (s) & $\CL$ & $\CD$ (counts) & $\CM$ & Max surface $M$\\
+\midrule
+$256\times97$ & 2,405 & 149 & 0.5687 & 148.5 & $-0.00445$ & 1.381\\
+$512\times193$ & 4,537 & 1,304 & 0.5744 & 149.4 & $-0.00340$ & 1.387\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+SU2 converged at both levels (\cref{tab:s5su2}). The floor's RMAE is 0.054\,\% in Cp and
+0.051\,\% in Mach.
+
+\begin{table}[t]
+\centering\small
+\caption{The gate, T1--T4 in order on case B. Every configuration ends in the uniform stream;
+the threshold is 1\,\%. ``Stalled'' counts the outer iterations whose loss did not fall.}
+\label{tab:s5gate}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Config & RMAE Cp & RMAE Mach & Final loss & Stalled & Projected (h) & Wall (s)\\
+\midrule
+T1, as specified & 5.177\,\% & 5.632\,\% & 0.05075 & 798/800 & 0.41 & 675\\
+T2, other sensor reading & 5.177\,\% & 5.631\,\% & 0.05075 & 799/800 & 0.09 & 76\\
+T3, scalar viscosity & 5.179\,\% & 5.634\,\% & 0.05076 & 799/800 & 1.58 & 1,696\\
+T4, trailing-edge exclusion & 5.177\,\% & 5.631\,\% & 0.05075 & 797/800 & 3.79 & 6,142\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{s5_gate.pdf}
+\caption{The S5 gate on case B. (a) SU2's wall pressure, with the shock at $x\approx0.42$, and the
+PINN's flat $\Cp = 0$. (b) The loss of T1--T4 after each outer iteration: one step from the initial
+value to the uniform stream, then 800 outer iterations without change.}
+\label{fig:s5gate}
+\end{figure}
+
+No configuration passes (\cref{tab:s5gate}, \cref{fig:s5gate}). Every one is in the uniform stream
+found by the probe: it predicts $\CL\approx0$ against 0.574 and misses the shock. The gate took
+2.53\,h in all, against its 72\,h budget. Each timed first epoch overestimated its run by 2.2--4.2
+times, because a trapped run descends only in its first epoch.
+
+Three readings of these numbers matter beyond the verdict.
+\begin{itemize}
+  \item \emph{A uniform stream scores only 5.2\,\% on the gate's metric.} RMAE divides by the
+    field's range, and most of the box is near free stream. On step-3 case
+    \texttt{test\_in-0004} the same metric gives the FNO 0.30\,\% at $256\times97$ and this
+    study's potential PINN 1.23\,\%. So 1\,\% is a demanding threshold, not a loose one.
+  \item \emph{The collapse flag misses this failure.} It asks whether the largest wall speed is
+    below half the truth's, which catches fluid at rest. A uniform stream at $0.93\,U_\infty$ passes
+    it. The gate's verdict does not use the flag.
+  \item \emph{The closure cost varied twentyfold}, from 0.086\,s (T2) to 1.77\,s (T4), for runs in
+    the same state. The cause was not identified.
+\end{itemize}
+
+\subsection{Predictions, and what S5 shows}
+\label{sec:s5outcome}
+
+\begin{table}[t]
+\centering\small
+\caption{The S5 predictions, recorded before any S5 code, and their outcomes.}
+\label{tab:s5predictions}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Prediction & Outcome\\
+\midrule
+P4. The recipe passes the gate within T1--T4. & \textbf{Failed.} All four miss the 1\,\%
+threshold by about five times, in the same uniform stream.\\
+\addlinespace
+P5. Reverting the residual weighting breaks R; reverting the encoding or the collocation does not;
+R fails or collapses on the cylinder at $\Ma = 0.1$. & \textbf{Not tested}: with no R there is no
+ablation.\\
+\addlinespace
+P6. In extrapolation the new PINN degrades less than the FNO, but stays above it in range. &
+\textbf{Not tested}: no step-3 runs.\\
+\addlinespace
+P7. Per case, the new PINN still costs at least 10 times SU2's CPU time. & \textbf{Not tested}.\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{What S5 shows.}
+Rebuilt from the paper on this study's grid, the recipe does not train. It falls into a uniform
+stream from initialisation under all four tuning configurations. No single change probed keeps it
+out of a trivial state: not the slope treatment, not the residual's weighting or balance, not the
+optimiser, the embedding's scale or the initialisation, and not hard boundary conditions. Artificial
+viscosity cannot help in such a state, because the viscous term is zero in each of them. This
+study's first Euler PINN found fluid at rest; the rebuilt one finds a uniform stream. Both are the
+same kind of failure: a minimum of the loss that satisfies the equations and violates only a soft
+condition.
+
+\paragraph{What it does not show.}
+It does not show that the published result is wrong. Within S5 a flaw in the recipe cannot be told
+apart from what the paper leaves unstated: the far-field distance of their PINN grid, how the
+volume weights are normalised, the initialisation, the precision. Every probe and every gate run
+used one seed. The probes ran three of the recipe's 800 outer iterations, except the one full
+epoch. The uniform states are exact (a dead layer, outer iterations stalling in a few closures), so
+they are traps in practice, not slow descents.
 
 %===================================================================================================
 \section{Discussion}
@@ -1290,9 +1592,11 @@ They train for 30--45\,min per case, against 5.6\,h for the \texttt{pure} runs h
 hardware.
 
 Their result bounds this study's conclusions about PINNs. The collapse of the Euler PINN and the
-low circulation of the potential PINN belong to the formulations and training tested here. Which
-of the many differences matters (residual weighting, input encoding, closure, optimiser,
-collocation and Mach range) is not known. The global viscous variants specified in this study's
+low circulation of the potential PINN belong to the formulations and training tested here. Stage
+S5 (\cref{sec:s5}) rebuilt their recipe on this study's grid to find out which of the many
+differences matters. The rebuilt recipe did not train either: it fell into a uniform stream. The
+question has moved rather than closed, and the list of differences now includes what their paper
+leaves unstated. The global viscous variants specified in this study's
 plan resemble their failing global form, though on a different formulation. They also conclude
 that PINNs do not currently beat CFD for a single forward case, which agrees with P1.
 
@@ -1324,8 +1628,10 @@ Five things keep this from being a general verdict on the two families.
   \item \textbf{This study's PINN is not the state of the art.} The Euler PINN of Wassing, Langer and
     Bekemeyer~\cite{wassing2025} reaches 0.3--0.4\,\% Cp error on transonic NACA\,0012 cases, in
     30--45\,min per case, with no explicit Kutta condition. The accuracy of the PINN here says more
-    about the formulations tried than about PINNs. Even so, they reach the same conclusion on cost:
-    a PINN does not currently beat CFD for a single forward case.
+    about the formulations tried than about PINNs. Rebuilt from their paper on this study's grid,
+    their recipe failed too (\cref{sec:s5}). The published result does not transfer from the paper
+    alone, but nothing here shows it wrong. Even so, they reach the same conclusion on cost: a PINN
+    does not currently beat CFD for a single forward case.
   \item \textbf{The operator's win is narrower than it looks.}
     \begin{itemize}
       \item It repays its training only after 1,126 new cases; for fewer, running SU2 is cheaper
@@ -1382,13 +1688,15 @@ about absolute accuracy.
 
 \paragraph{Still open.}
 \begin{itemize}
-  \item Which differences from Wassing, Langer and Bekemeyer's Euler PINN~\cite{wassing2025}
-    would rescue this study's Euler PINN, and whether a localised viscosity would fix the
-    potential PINN's circulation.
+  \item Why Wassing, Langer and Bekemeyer's Euler PINN~\cite{wassing2025}, rebuilt from the paper,
+    falls into a uniform stream on this study's grid (\cref{sec:s5}). The candidates left are what
+    the paper does not state: the far-field distance of their PINN grid, how the volume weights
+    are normalised, the initialisation and the precision. Also open: whether a localised
+    viscosity would fix the potential PINN's circulation.
   \item Why this study's SU2 grids fall short of the grid-converged anchor values: section, far
     field, grid and scheme are not separated.
-  \item The artificially viscous PINN runs, the expansion-shock test and an FNO ringing metric were
-    not made.
+  \item The expansion-shock test and an FNO ringing metric were not made. S5's ablation and its
+    extrapolation comparison did not run, because its gate failed.
 \end{itemize}
 
 \paragraph{Reproducing the work.}
@@ -1412,6 +1720,10 @@ S2 & \cmd{python scripts/s2\_operator.py tune | final | pod} & \cmd{runs/predict
 S3a & \cmd{python scripts/s3\_warmup.py} & \cmd{results/s3/warmup.json}\\
 S3 & \cmd{python scripts/s3\_pinn.py --shard K/N} & \cmd{runs/predictions/}, \cmd{results/s3/}\\
 S4 & \cmd{python scripts/s4\_score.py} & \cmd{results/s4/}\\
+S5 & \cmd{python scripts/s5\_su2.py} & \cmd{runs/su2/}, \cmd{results/s5/su2.json}\\
+ & \cmd{python scripts/s5\_pinn.py gate} & \cmd{results/s5/gate.json}\\
+ & \cmd{python scripts/s5\_score.py} & \cmd{results/s5/}\\
+ & \cmd{python scripts/probes/probe\_s5\_*.py} & \cmd{results/s5/probe\_*.log}\\
 Figures & \cmd{python docs/report/make\_figures.py} & \cmd{docs/report/figures/}\\
 \bottomrule
 \end{tabular}
@@ -1434,6 +1746,12 @@ I.~H. Abbott and A.~E. von Doenhoff.
 T.~D. Economon, F.~Palacios, S.~R. Copeland, T.~W. Lukaczyk, and J.~J. Alonso.
 \newblock {SU2}: An open-source suite for multiphysics simulation and design.
 \newblock \emph{AIAA Journal}, 54(3):828--846, 2016.
+
+\bibitem{jagtap2020}
+A.~D.~Jagtap, K.~Kawaguchi, and G.~E.~Karniadakis.
+\newblock Locally adaptive activation functions with slope recovery for deep and
+  physics-informed neural networks.
+\newblock \emph{Proceedings of the Royal Society A}, 476(2239):20200334, 2020.
 
 \bibitem{jameson1981jst}
 A.~Jameson, W.~Schmidt, and E.~Turkel.
@@ -1471,6 +1789,11 @@ M.~Raissi, P.~Perdikaris, and G.~E. Karniadakis.
 L.~Sirovich.
 \newblock Turbulence and the dynamics of coherent structures.
 \newblock \emph{Quarterly of Applied Mathematics}, 45(3):561--571, 1987.
+
+\bibitem{swanson1992}
+R.~C.~Swanson and E.~Turkel.
+\newblock On central-difference and upwind schemes.
+\newblock \emph{Journal of Computational Physics}, 101(2):292--306, 1992.
 
 \bibitem{vassberg2010}
 J.~C. Vassberg and A.~Jameson.

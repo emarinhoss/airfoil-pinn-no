@@ -711,6 +711,40 @@ the state is converted to the dataset's units, $p/p_\infty = \gamma\Ma^2\,p/(\rh
 \end{algorithmic}
 \end{algorithm}
 
+\subsection{Adaptive activations, and how a layer dies}
+\label{app:deadlayer}
+
+The S5 network (\cref{sec:s5recipe}) uses layer-wise adaptive activations~\cite{jagtap2020}:
+\begin{equation}
+  \sigma_k(x) = \tanh(n\,\omega_k x),\qquad
+  \frac{\partial\sigma_k}{\partial x} = n\omega_k\,\mathrm{sech}^2(n\omega_k x),\qquad
+  \frac{\partial\sigma_k}{\partial \omega_k} = n x\,\mathrm{sech}^2(n\omega_k x).
+  \label{eq:adaptivetanh}
+\end{equation}
+One trainable number per layer sets how steep that layer's activation is. A steeper layer resolves
+finer detail, and letting the optimiser choose the steepness speeds up early training.
+
+The same freedom opens a trap. Suppose one slope reaches $\omega_k = 0$.
+\begin{itemize}
+  \item The layer's output is $\tanh(0) = 0$ for every input, so the layers after it see only their
+    biases, and the network's output is a constant: a uniform field.
+  \item The gradient with respect to every weight before layer $k$ passes through
+    $\partial\sigma_k/\partial x = 0$, so it vanishes. Those weights receive no signal.
+  \item Only $\omega_k$ itself still has a gradient, $\partial\sigma_k/\partial\omega_k = n z_k$,
+    where $z_k(\bm r)$ is the layer's pre-activation. Reviving the layer therefore changes the
+    field along one fixed function, set by the dead layer's weights.
+\end{itemize}
+In S5 that function is random and varies from cell to cell (\cref{eq:fourierfeatures}). Any step
+along it adds far more residual than it removes wall-tangency error, so the best step is almost
+zero, and the layer stays dead.
+
+Jagtap et al.\ add a \emph{slope-recovery} term to the loss, $S = 1/\bigl(\tfrac1K\sum_k
+e^{\omega_k}\bigr)$, which falls as the slopes grow. Because it averages over the layers, it can be
+satisfied by steepening the live layers while one stays dead. That is what the S5 probe measured:
+slopes of $n\omega$ up to 108 beside a zero (\cref{tab:s5probes}). A per-layer floor on $|\omega_k|$
+would close that loophole. The probes suggest it would not be enough, though. With the slopes
+frozen, the network found other trivial states, a vacuum and fluid at rest.
+
 \subsection{What this study teaches about PINNs}
 \label{app:lessons}
 
@@ -720,7 +754,8 @@ the state is converted to the dataset's units, $p/p_\infty = \gamma\Ma^2\,p/(\rh
     only at the outer circle. Here, changing the equations and the hard constraints fixed that.
     Wassing, Langer and Bekemeyer~\cite{wassing2025} reach a working Euler PINN by other means,
     with different weighting, inputs and optimiser, so the minimum is a property of the whole
-    formulation, loss weights included, not of the Euler equations alone.
+    formulation, loss weights included, not of the Euler equations alone. Rebuilt here from their
+    paper (\cref{sec:s5}), their recipe found another such minimum, a uniform stream.
   \item \textbf{Geometric singularities dominate.} At a sharp trailing edge the map is degenerate
     and the true flow is singular. Before the fixes, ten of 20,000 points carried 99.9\,\% of the
     initial residual.
@@ -734,6 +769,11 @@ the state is converted to the dataset's units, $p/p_\infty = \gamma\Ma^2\,p/(\rh
   \item \textbf{Each case costs a full training.} The 56,354 parameters are refitted from scratch
     with third-order automatic differentiation on 20,000 points for 30,000 Adam steps and up to
     5,000 L-BFGS iterations: about 5.6 hours here, against 3.5 minutes for SU2.
+  \item \textbf{Trivial states are the default, not the exception.} A uniform stream, fluid at
+    rest and a vacuum all satisfy the Euler equations. A soft boundary condition is all that
+    separates them from the answer. In S5 every single change tried fell into one of them, or into
+    a low-density state when both conditions were made exact (\cref{tab:s5probes}). Its
+    artificial viscosity never acted, because the viscous term is zero in a trivial state.
 \end{enumerate}
 
 \subsection*{Questions}
@@ -752,6 +792,12 @@ third-order terms. The Euler residual needs only first derivatives.
 Without the Kutta term the problem has a family of solutions, one per circulation, and all of them
 satisfy the remaining terms equally well. The loss cannot select the physical one, and neither run
 found it.
+\item \textit{In S5 the gradient with respect to a dead layer's slope is not zero. Why does
+L-BFGS not revive the layer?}\newline
+It can move the slope, but only along one fixed, cell-scale function: the dead layer's
+pre-activation (\cref{app:deadlayer}). Along that function the weighted residual's curvature is
+huge, and the wall term's gain is small. The minimum along the line lies almost at zero slope, and
+the line search finds no decrease worth taking. The outer iterations stall in a few evaluations.
 \end{enumerate}
 
 %---------------------------------------------------------------------------------------------------

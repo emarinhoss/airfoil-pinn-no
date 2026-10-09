@@ -2,9 +2,10 @@
 
 Run from the repository root:  python docs/report/make_figures.py
 
-Reads the committed records (results/s1, results/s3, results/s4) and, for the flow-field and
-wall-pressure figures, the git-ignored dataset and predictions (data/hdf5, runs/predictions,
-runs/warmup_q*.npy), so those figures need a machine that has run the stages.
+Reads the committed records (results/s1, results/s3, results/s4, results/s5) and, for the
+flow-field and wall-pressure figures, the git-ignored dataset and predictions (data/hdf5,
+runs/predictions, runs/predictions_s5, runs/su2, runs/warmup_q*.npy), so those figures need a
+machine that has run the stages.
 
 One colour per contestant throughout: FNO, POD and PINN take the first three categorical slots;
 SU2 (the truth and the floor) is drawn in ink, as the reference every contestant is read against.
@@ -417,6 +418,53 @@ def fig_pinn_history():
     save(fig, "pinn_history.pdf")
 
 
+# S5: the gate on validation case B
+def fig_s5_gate():
+    from apno.score.s5 import truth_and_floor as s5_truth_and_floor
+    cid, mach = "s5-val-B", 0.72
+    truth, floor, mmax = s5_truth_and_floor(cid)
+    preds, _ = read_predictions(Path("runs/predictions_s5/pinn-euler_av-T1.h5"))
+    gate = json.loads(Path("results/s5/gate.json").read_text())["configs"]
+    fig, axs = plt.subplots(1, 2, figsize=(TEXTWIDTH, 2.4))
+    ax = axs[0]
+    X, _ = grid(Section(0.12, 0.0), TRAIN)
+    xw = np.r_[X[:, 0], X[0, 0]]
+    cp = lambda q: np.r_[pressure_coefficient(q[:, 0, 3], mach),  # noqa: E731
+                         pressure_coefficient(q[0, 0, 3], mach)]
+    ax.plot(xw, cp(truth), color=INK, lw=1.0, label="SU2 512×193 (truth)", zorder=5)
+    ax.plot(xw, cp(floor), color=INK2, lw=0.9, ls=(0, (3, 1.5)), label="SU2 256×97 (floor)",
+            zorder=4)
+    ax.plot(xw, cp(preds[cid]), color=EULER, lw=1.4, label="S5 PINN, T1 (T2–T4 the same)")
+    ax.invert_yaxis()
+    ax.set_xlabel("x / c")
+    ax.set_ylabel("Cp")
+    ax.set_title(f"(a) wall pressure, case B\nM∞ 0.72, α 3°, max surface M {mmax:.2f}",
+                 loc="left")
+    ax.legend(loc="lower center", bbox_to_anchor=(0.56, 0.0))
+    ax = axs[1]
+    start = []
+    for name, e in gate.items():
+        H = e["history"]
+        y = [H[0]["loss_before"]] + [h["total"] for h in H]
+        ax.plot(np.arange(len(y)), y, color=EULER, lw=1.2)
+        start.append(f"{name} {y[0]:.4g}")
+    ax.text(30, 300, "initial loss: " + ", ".join(start), fontsize=6.5, color=INK2, va="center")
+    ax.axhline(0.0469, color=MUTED, lw=0.8, ls=(0, (3, 1.5)))
+    ax.text(800, 0.0469 * 0.7, "wall-tangency term of the free stream, 0.0469",
+            fontsize=6.5, color=INK2, ha="right", va="top")
+    ax.text(800, 0.0508 * 1.35, "all four, from the first outer iteration on: 0.0508",
+            fontsize=6.5, color=INK2, ha="right")
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_xlim(0, 900)
+    ax.set_yscale("log")
+    ax.set_ylim(0.01, 3e3)
+    ax.set_xlabel("outer iterations completed (20 per epoch, 800 in all)")
+    ax.set_ylabel("loss")
+    ax.set_title("(b) loss of T1–T4 on the batch just trained", loc="left")
+    fig.tight_layout()
+    save(fig, "s5_gate.pdf")
+
+
 # Appendix figures (teaching): activations, spectral truncation, collocation points, learning curves
 def fig_activations():
     from scipy.stats import norm
@@ -556,6 +604,7 @@ def main():
     fig_spectral_truncation(truth, S)
     fig_collocation(S)
     fig_learning_curves()
+    fig_s5_gate()
 
 
 if __name__ == "__main__":

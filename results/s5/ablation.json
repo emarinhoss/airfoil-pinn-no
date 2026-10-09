@@ -1,0 +1,80 @@
+{
+  "note": "\"Not needed\" means not needed given the rest of R: a one-at-a-time ablation misses interactions (two ingredients that each suffice both read as not needed; design \u00a74). One seed per arm.",
+  "A1": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A2": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A3": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A4": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A5": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A6a": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  },
+  "A6b": {
+    "verdict": "not run",
+    "score": null,
+    "diverged": null,
+    "final": null,
+    "stalled": null,
+    "func_evals": null,
+    "wall_s": null,
+    "cpu_s": null,
+    "device": null
+  }
+}

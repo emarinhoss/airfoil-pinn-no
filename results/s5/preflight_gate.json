@@ -1,0 +1,68 @@
+{
+  "timing_s": {
+    "T1": {
+      "device": "mps",
+      "epoch_s": 37.32333199999994,
+      "func_evals": 173,
+      "stalled": 19,
+      "diverged": false
+    },
+    "T2": {
+      "device": "mps",
+      "epoch_s": 8.017290417017648,
+      "func_evals": 101,
+      "stalled": 19,
+      "diverged": false
+    },
+    "T3": {
+      "device": "mps",
+      "epoch_s": 142.16149262498948,
+      "func_evals": 235,
+      "stalled": 19,
+      "diverged": false
+    },
+    "T4": {
+      "device": "mps",
+      "epoch_s": 341.2696949579986,
+      "func_evals": 169,
+      "stalled": 18,
+      "diverged": false
+    }
+  },
+  "hours": {
+    "T1": 0.4147036888888882,
+    "T2": 0.08908100463352943,
+    "T3": 1.5795721402776608,
+    "T4": 3.7918854995333175
+  },
+  "checks": {
+    "T1": {
+      "spent_hours": 0.010367592222222204,
+      "projected_hours": 0.4147036888888882,
+      "total_hours": 0.4250712811111104,
+      "within_budget": true
+    },
+    "T2": {
+      "spent_hours": 0.20009557020861798,
+      "projected_hours": 0.08908100463352943,
+      "total_hours": 0.2891765748421474,
+      "within_budget": true
+    },
+    "T3": {
+      "spent_hours": 0.26079417535888855,
+      "projected_hours": 1.5795721402776608,
+      "total_hours": 1.8403663156365493,
+      "within_budget": true
+    },
+    "T4": {
+      "spent_hours": 0.8267295026622176,
+      "projected_hours": 3.7918854995333175,
+      "total_hours": 4.6186150021955354,
+      "within_budget": true
+    }
+  },
+  "note": "measured: cfg.epochs times one real epoch, after the time the gate has spent (design \u00a77.1, amended 2026-10-08)",
+  "projected_total_hours": 4.6186150021955354,
+  "budget_hours": 72.0,
+  "within_budget": true
+}

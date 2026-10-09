@@ -1,0 +1,40 @@
+{
+  "tried": [
+    {
+      "case_id": "s5-val-B",
+      "inputs": {
+        "mach": 0.72,
+        "alpha_deg": 3.0,
+        "t": 0.12,
+        "m": 0.0
+      },
+      "levels": {
+        "256x97": {
+          "converged": true,
+          "reason": "converged",
+          "iterations": 2405,
+          "cl": 0.5687360853,
+          "cd": 0.01485082931,
+          "cm": -0.004453917741,
+          "wall_s": 149.09047841699794,
+          "cpu_s": 146.176252,
+          "max_surface_mach": 1.380676208917788
+        },
+        "512x193": {
+          "converged": true,
+          "reason": "converged",
+          "iterations": 4537,
+          "cl": 0.5744373411,
+          "cd": 0.01493732383,
+          "cm": -0.003399447321,
+          "wall_s": 1303.5423850840016,
+          "cpu_s": 1291.181246,
+          "max_surface_mach": 1.38734374371778
+        }
+      },
+      "converged_both": true
+    }
+  ],
+  "selected": "s5-val-B",
+  "unfinished": null
+}

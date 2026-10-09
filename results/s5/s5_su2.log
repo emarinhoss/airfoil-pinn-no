@@ -1,0 +1,3 @@
+[1/2] s5-val-B: converged (2405 it, 149 s)
+[2/2] s5-val-B: converged (4537 it, 1304 s)
+{"tried": ["s5-val-B"], "selected": "s5-val-B", "unfinished": null}

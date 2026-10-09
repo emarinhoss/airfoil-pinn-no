@@ -1,0 +1,140 @@
+## Gate (design §3)
+
+| config | status | passed | RMAE Cp | RMAE Mach | collapsed |
+|---|---|---|---|---|---|
+| T1 | ok | False | 0.05177 | 0.05632 | False |
+| T2 | ok | False | 0.05177 | 0.05631 | False |
+| T3 | ok | False | 0.05179 | 0.05634 | False |
+| T4 | ok | False | 0.05177 | 0.05631 | False |
+
+## Ablation (design §4)
+
+| arm | verdict | status | RMAE Cp | RMAE Mach | near field | CL err | max abs ΔCp | collapsed | final loss | wall h |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | not run | — | — | — | — | — | — | — | — | — |
+| A2 | not run | — | — | — | — | — | — | — | — | — |
+| A3 | not run | — | — | — | — | — | — | — | — | — |
+| A4 | not run | — | — | — | — | — | — | — | — | — |
+| A5 | not run | — | — | — | — | — | — | — | — | — |
+| A6a | not run | — | — | — | — | — | — | — | — | — |
+| A6b | not run | — | — | — | — | — | — | — | — | — |
+
+"Not needed" means not needed given the rest of R: a one-at-a-time ablation misses interactions (two ingredients that each suffice both read as not needed; design §4). One seed per arm.
+
+## Comparison (design §5): near field, and ratio to the floor
+
+| case | floor | fno-256 | fno-128 | pod | pinn-pure | euler_av |
+|---|---|---|---|---|---|---|
+| test_in-0004 | 0.0103 (1.0x) | 0.0466 (4.5x) | 0.0212 (2.1x) | 0.0918 (8.9x) | 0.2178 (21.2x) | missing |
+| test_in-0031 | 0.0411 (1.0x) | 0.0861 (2.1x) | 0.0565 (1.4x) | 0.2485 (6.0x) | 0.5843 (14.2x) | missing |
+| test_in-0040 | 0.0358 (1.0x) | 0.0539 (1.5x) | 0.0457 (1.3x) | 0.2306 (6.4x) | 1.0796 (30.1x) | missing |
+| test_ext-0005 | 0.0409 (1.0x) | 0.3534 (8.6x) | 0.3539 (8.7x) | 0.3852 (9.4x) | missing | missing |
+| test_ext-0009 | 0.0688 (1.0x) | 0.2080 (3.0x) | 0.2081 (3.0x) | 0.5192 (7.6x) | missing | missing |
+| test_ext-0006 | 0.0588 (1.0x) | 0.1670 (2.8x) | 0.1564 (2.7x) | 0.5418 (9.2x) | missing | missing |
+
+| method | in-range ratio (n) | extrapolation ratio (n) | degradation | CL err in | CL err ext | CD err in (counts) | CD err ext (counts) |
+|---|---|---|---|---|---|---|---|
+| fno-256 | 2.709 (3) | 4.837 (3) | 1.786 | 0.02494 | 0.01456 | 9.894 | 82.86 |
+| fno-128 | 1.569 (3) | 4.781 (3) | 3.046 | 0.01314 | 0.0125 | 11.3 | 93.22 |
+| pod | 7.134 (3) | 8.729 (3) | 1.223 | 0.0153 | 0.05244 | 14.55 | 118.9 |
+| pinn-pure | 21.84 (3) | — (0) | — | 0.5831 | — | 291.6 | — |
+| euler_av | — (0) | — (0) | — (in 0/3; ext 0/3) | — | — | — | — |
+
+Degradation: on all six cases only (design §5.3); a method short of a case shows — with its counts and diverged cases, not a figure on the cases left.
+
+CL and CD errors: the mean absolute error over the same cases as the ratio, reported beside, not gated (design §5.3).
+
+## RMAE of Cp and Mach (design §5.3: the gate's metric, for comparison with Wassing et al.)
+
+| case | method | status | RMAE Cp | RMAE Mach |
+|---|---|---|---|---|
+| test_in-0004 | floor | ok | 0.000419 | 0.0003463 |
+| test_in-0004 | fno-256 | ok | 0.003041 | 0.00244 |
+| test_in-0004 | fno-128 | ok | 0.001031 | 0.0008638 |
+| test_in-0004 | pod | ok | 0.00404 | 0.003486 |
+| test_in-0004 | pinn-pure | ok | 0.01225 | 0.01 |
+| test_in-0004 | euler_av | missing | — | — |
+| test_in-0031 | floor | ok | 0.0007777 | 0.0006599 |
+| test_in-0031 | fno-256 | ok | 0.003379 | 0.002663 |
+| test_in-0031 | fno-128 | ok | 0.00153 | 0.0013 |
+| test_in-0031 | pod | ok | 0.007629 | 0.006386 |
+| test_in-0031 | pinn-pure | ok | 0.03236 | 0.02595 |
+| test_in-0031 | euler_av | missing | — | — |
+| test_in-0040 | floor | ok | 0.0008732 | 0.0008839 |
+| test_in-0040 | fno-256 | ok | 0.003767 | 0.00317 |
+| test_in-0040 | fno-128 | ok | 0.001522 | 0.001567 |
+| test_in-0040 | pod | ok | 0.01187 | 0.01065 |
+| test_in-0040 | pinn-pure | ok | 0.1075 | 0.0848 |
+| test_in-0040 | euler_av | missing | — | — |
+| test_ext-0005 | floor | ok | 0.0008373 | 0.0007865 |
+| test_ext-0005 | fno-256 | ok | 0.01391 | 0.01295 |
+| test_ext-0005 | fno-128 | ok | 0.01357 | 0.01265 |
+| test_ext-0005 | pod | ok | 0.01786 | 0.01596 |
+| test_ext-0005 | pinn-pure | missing | — | — |
+| test_ext-0005 | euler_av | missing | — | — |
+| test_ext-0009 | floor | ok | 0.001698 | 0.001583 |
+| test_ext-0009 | fno-256 | ok | 0.009878 | 0.009111 |
+| test_ext-0009 | fno-128 | ok | 0.009839 | 0.009056 |
+| test_ext-0009 | pod | ok | inf | inf |
+| test_ext-0009 | pinn-pure | missing | — | — |
+| test_ext-0009 | euler_av | missing | — | — |
+| test_ext-0006 | floor | ok | 0.001331 | 0.001454 |
+| test_ext-0006 | fno-256 | ok | 0.008452 | 0.008509 |
+| test_ext-0006 | fno-128 | ok | 0.007961 | 0.008623 |
+| test_ext-0006 | pod | ok | inf | inf |
+| test_ext-0006 | pinn-pure | missing | — | — |
+| test_ext-0006 | euler_av | missing | — | — |
+
+## Physics checks (design §5.3; S4's labels)
+
+| case | method | entropy_max | entropy_mean | enthalpy_max_dev | wall_normal_rms |
+|---|---|---|---|---|---|
+| test_in-0004 | floor | 0.0411 | 1.03e-05 | 1.431e-06 | 7.538e-09 |
+| test_in-0004 | fno-256 | 0.02479 | 4.104e-05 | 0.005296 | 0.01166 |
+| test_in-0004 | fno-128 | 0.02595 | 4.137e-05 | 0.004426 | 0.001819 |
+| test_in-0004 | pod | 0.04224 | 5.133e-05 | 0.008049 | 0.0001618 |
+| test_in-0004 | pinn-pure | by construction | by construction | by construction | 0.01459 |
+| test_in-0031 | floor | 0.07037 | 0.0003716 | 1.907e-06 | 6.794e-09 |
+| test_in-0031 | fno-256 | 0.04423 | 0.0003179 | 0.0114 | 0.01107 |
+| test_in-0031 | fno-128 | 0.04941 | 0.000316 | 0.01128 | 0.002666 |
+| test_in-0031 | pod | 0.0698 | 0.000448 | 0.009865 | 0.0005465 |
+| test_in-0031 | pinn-pure | by construction | by construction | by construction | 0.0203 |
+| test_in-0040 | floor | 0.1229 | 0.001447 | 9.418e-06 | 7.81e-09 |
+| test_in-0040 | fno-256 | 0.09019 | 0.001553 | 0.0118 | 0.0154 |
+| test_in-0040 | fno-128 | 0.0918 | 0.001483 | 0.01215 | 0.004958 |
+| test_in-0040 | pod | 0.09283 | 0.001541 | 0.02473 | 0.0005511 |
+| test_in-0040 | pinn-pure | by construction | by construction | by construction | 0.04543 |
+| test_ext-0005 | floor | 0.0739 | 0.0008051 | 3.099e-06 | 5.642e-09 |
+| test_ext-0005 | fno-256 | 0.04661 | 0.0001509 | 0.04137 | 0.01377 |
+| test_ext-0005 | fno-128 | 0.04601 | 0.0001654 | 0.04114 | 0.007163 |
+| test_ext-0005 | pod | 0.06978 | 0.0005504 | 0.02435 | 0.000787 |
+| test_ext-0009 | floor | 0.1474 | 0.001923 | 6.318e-06 | 6.137e-09 |
+| test_ext-0009 | fno-256 | 0.1102 | 0.001517 | 0.03975 | 0.0164 |
+| test_ext-0009 | fno-128 | 0.09834 | 0.001567 | 0.04259 | 0.01047 |
+| test_ext-0009 | pod | — | — | 0.6779 | 0.001155 |
+| test_ext-0006 | floor | 0.1793 | 0.003254 | 1.121e-05 | 6.891e-09 |
+| test_ext-0006 | fno-256 | 0.1631 | 0.003927 | 0.08709 | 0.02188 |
+| test_ext-0006 | fno-128 | 0.1603 | 0.00399 | 0.09337 | 0.01319 |
+| test_ext-0006 | pod | — | — | 481.6 | 0.0005148 |
+
+"by construction" marks a check the model satisfies identically (spec 8.2): it is not a pass.
+
+## Costs (design §5.4)
+
+P7 (design §6) reads ratio_to_su2_cpu "per" = —: the new PINN's per-case cost by S4's rule (GPU training at wall time, CPU training at CPU time) over SU2's CPU time per case. "wall" and "cpu" put the mean wall and CPU times over the same SU2 figure, beside it.
+
+```
+{
+  "euler_av": null,
+  "su2": {
+    "per_wall": 228.13894043749315,
+    "per_cpu": 209.8680205
+  },
+  "fno": {
+    "fixed": 236237.43589779036,
+    "per": 0.05359569026668494
+  },
+  "fno_per_query": 0.05359569026668494,
+  "ratio_to_su2_cpu": null
+}
+```

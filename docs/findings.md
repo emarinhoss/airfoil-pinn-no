@@ -1448,3 +1448,67 @@ firmly as T1 does in the uniform field. The probes give no amendment to write.
 amendment), with the gate's budget measured as amended in design §7.1. First SU2 on the validation
 case (`scripts/s5_su2.py`), then `scripts/s5_pinn.py gate`, T1 to T4 in order. Expected from the
 probes: no configuration passes, and S5 stops after step 1 (design §3.4).
+
+## 2026-10-08 — S5 gate: no configuration passes; S5 stops after step 1
+
+The pre-registered gate ran on the recipe as built, with no amendment, under the measured budget of
+design §7.1 (amended 2026-10-08). All runs were at commit d3da6d1, with a clean tree.
+
+**The reference.** Command:
+`SU2_BIN_DIR=/Users/esousa/theLab/bwb-tanker-scratch/bin python scripts/s5_su2.py --workers 2 > results/s5/s5_su2.log 2>&1`.
+Case B (NACA 0012, M 0.72, α 3°) converged at both levels under the frozen settings and the
+convergence rule, so `results/s5/su2.json` selects `s5-val-B`.
+
+| level | iterations | wall | CL | CD (counts) | CM | largest surface Mach |
+|---|---|---|---|---|---|---|
+| 256x97 | 2,405 | 149 s | 0.5687 | 148.5 | −0.00445 | 1.381 |
+| 512x193 | 4,537 | 1,304 s | 0.5744 | 149.4 | −0.00340 | 1.387 |
+
+The floor (SU2 at 256x97 against the truth) has RMAE 0.054 % on Cp and 0.051 % on Mach.
+
+**The gate.** Command: `python scripts/s5_pinn.py gate > results/s5/s5_pinn_gate.log 2>&1`, on the
+Apple GPU, T1 to T4 in order. Scores: `python scripts/s5_score.py > results/s5/s5_score.log 2>&1`
+(`results/s5/scores.md`, `gate.json`).
+
+| config | RMAE Cp | RMAE Mach | passed | final loss (L_∞, L_af) | outer iterations stalled | closures | timed epoch | projected | wall |
+|---|---|---|---|---|---|---|---|---|---|
+| T1 | 5.177 % | 5.632 % | no | 0.05075 (0.0039, 0.0469) | 798 / 800 | 3,416 | 37 s | 0.41 h | 675 s |
+| T2 (sensor reading B) | 5.177 % | 5.631 % | no | 0.05075 (0.0039, 0.0469) | 799 / 800 | 881 | 8 s | 0.09 h | 76 s |
+| T3 (scalar viscosity) | 5.179 % | 5.634 % | no | 0.05076 (0.0038, 0.0470) | 799 / 800 | 3,660 | 142 s | 1.58 h | 1,696 s |
+| T4 (0.02-chord TE exclusion) | 5.177 % | 5.631 % | no | 0.05075 (0.0039, 0.0469) | 797 / 800 | 3,462 | 341 s | 3.79 h | 6,142 s |
+
+- **All four configurations end in the probes' uniform field.** The residual is about 1e-15, and the
+  loss is the wall-tangency term plus a small far-field term. Every one predicts CL ≈ 0 (error
+  −0.574) and misses the upper-surface shock (SU2: at x = 0.42, Mach 1.34 ahead of it). The
+  near-field relative L2 error is 1.32 to 1.33.
+- **A uniform stream scores 5.2 % on the gate's metric.** RMAE divides by the field's range, and
+  most of the RMAE box is near free stream. For scale, on step-3 case `test_in-0004` the metric
+  gives 0.30 % for the FNO at 256x97 and 1.23 % for S3's potential PINN.
+- **The scorer's collapse flag is False for all four.** Its test, the largest wall speed below half
+  the truth's, catches fluid at rest. A uniform stream at 0.93 U∞ passes it. The gate's verdict does
+  not depend on the flag.
+- **The gate took 9,117 s (2.53 h) against 72 h**, timing epochs included. Each timed first epoch
+  overestimated its run, by 2.2 to 4.2 times, because a trapped run's only real descent is in its
+  first epoch.
+- **Closure cost varied from 0.086 s (T2) to 1.77 s (T4)** for runs in the same state. The cause is
+  not identified.
+
+`results/s5/recipe.json` records config null, so **S5 stops after step 1** (design §3.4).
+`s5_pinn.py steps` exits 0 on it with "the gate failed", and no ablation or step-3 run is made.
+
+**Predictions (2026-10-07 entry; the text there is unchanged, these are its outcomes):**
+- **P4 fails.** No configuration among T1–T4 passes the gate: every one misses the 1 % threshold by
+  about five times, in the same uniform state.
+- **P5, P6 and P7 are not tested.** Without a recipe R there is no ablation (P5), no step-3
+  comparison (P6) and no per-case cost (P7).
+
+**What this does and does not show.** The result concerns their recipe as specified and as built
+here, on this study's 100-chord O-grid. Within S5, it cannot separate a flaw in the recipe from a
+difference in what the paper leaves unstated: the far-field distance of their PINN grid, the
+weights' normalisation, the initialisation, the precision. What the probes add is that the trap does
+not depend on any single ingredient tried: the slope treatment, the residual weighting and balance,
+the optimiser, the embedding scale, the initialisation, or hard boundary conditions. It is the
+residual's preference for trivial states (uniform, at rest, vacuum, low density), reached from
+initialisation, under every ingredient tried. This study's earlier Euler PINN converged to fluid at
+rest (S3). S5 finds that artificial viscosity, localised by their sensors, does not change that on
+this grid: the viscous term is zero in each trivial state, so it never acts.

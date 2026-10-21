@@ -96,6 +96,10 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
   and is evaluated at 256×97.
   - Final runs also store `q_128x49`, so S4 scores the resolution transfer separately.
   - Radial padding is (NJ − 1)/6 rows, which keeps the padded η span the same at both resolutions.
+  - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
+    `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
+    (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and
+    `runs/predictions_lib/`, never `runs/predictions/`.
 - **POD** (`models/pod.py`): a linear basis whose mode weights are interpolated over the inputs by
   a thin-plate-spline RBF.
 - **PINN**: the PINN has two formulations, selected by `PinnConfig.formulation`.

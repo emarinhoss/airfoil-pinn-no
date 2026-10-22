@@ -6,8 +6,10 @@ at every second node (128x49 from 256x97), and evaluation runs at 256x97.
 
 The training set for n_train is the first n_train Sobol points minus those that failed to converge
 (spec 5.3), selected by the index in the case id; train.json records how many cases that is
-(n_cases) and which. Training runs on `device` (default: the Apple GPU when MPS is available, else
-the CPU, spec 6.4); process_time() cannot see GPU work, so a GPU run's cost is its wall time.
+(n_cases) and which. Training runs on `device` (default: an NVIDIA GPU when CUDA is available, else
+the Apple GPU when MPS is available, else the CPU). Spec 6.4 names the Apple GPU, and every S2
+record was trained on it; CUDA was added on 2026-10-22 for runs off the Mac, and train.json records
+the device. process_time() cannot see GPU work, so a GPU run's cost is its wall time.
 A run whose validation loss is never finite writes no checkpoint and is marked diverged; train.json
 is strict JSON, with non-finite floats written as null.
 """
@@ -47,6 +49,8 @@ class FnoConfig:
 
 
 def default_device():
+    if torch.cuda.is_available():
+        return "cuda"
     return "mps" if torch.backends.mps.is_available() else "cpu"
 
 

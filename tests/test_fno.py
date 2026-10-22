@@ -137,11 +137,12 @@ def test_early_stopping_after_patience_epochs_without_improvement(tmp_path):
     assert out["best_epoch"] == 0 and out["epochs_run"] == 3
 
 
-def test_default_device_is_the_apple_gpu_when_available(monkeypatch):
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
-    assert train_fno.default_device() == "mps"
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
-    assert train_fno.default_device() == "cpu"
+@pytest.mark.parametrize("cuda, mps, expected", [
+    (True, True, "cuda"), (True, False, "cuda"), (False, True, "mps"), (False, False, "cpu")])
+def test_default_device_prefers_cuda_then_the_apple_gpu(monkeypatch, cuda, mps, expected):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: cuda)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: mps)
+    assert train_fno.default_device() == expected
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="no MPS on this machine")

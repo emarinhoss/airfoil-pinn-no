@@ -104,7 +104,9 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and
     `runs/predictions_lib/`, never `runs/predictions/`. Running it on a Colab GPU:
-    `docs/notes/2026-10-22-colab-fno.md`.
+    `docs/notes/2026-10-22-colab-fno.md`. `scripts/probes/score_fno_libraries.py` scores those
+    files with S4's code (`load_truth`, `load_contestants`, `score_rows` in `s4_score.py`), beside
+    S2's FNO, into `results/fno_lib/`, never `results/s4/`.
 - **POD** (`models/pod.py`): a linear basis whose mode weights are interpolated over the inputs by
   a thin-plate-spline RBF.
 - **PINN**: the PINN has two formulations, selected by `PinnConfig.formulation`.

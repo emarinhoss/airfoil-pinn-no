@@ -144,8 +144,9 @@ loop differs from S2's and the other two numbers are not comparable to S2 either
 
 What to compare, per library, from `train.json`: `best_val` (loss A on the validation cases at
 128×49), `val_rel_l2_256x97`, `transfer_val_rel_l2`, `wall_s` and `n_params`. To score the test
-predictions as S4 does, point `load_contestants` in `scripts/s4_score.py` at
-`runs/predictions_lib` in a separate run; its tags will not collide with the S4 contestants.
+predictions as S4 does, run `python scripts/probes/score_fno_libraries.py`, which writes
+`results/fno_lib/`. *(Updated 2026-10-22: this said to point `load_contestants` in
+`scripts/s4_score.py` at `runs/predictions_lib` in a separate run; the scorer now does it.)*
 
 What the comparison would show: whether a library's FNO, with the same modes and width, reaches
 the same validation loss and transfer as `FNO2d` on this data, and at what cost. What it would

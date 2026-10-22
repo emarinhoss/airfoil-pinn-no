@@ -72,6 +72,53 @@ def load_contestants(pred_dir):
     return out
 
 
+def load_truth(fine_h5="data/hdf5/512x193.h5", train_h5="data/hdf5/256x97.h5"):
+    """(truth, floor, regimes) keyed by case id, for the test cases converged at both levels:
+    the truth is SU2 at 512x193 sampled at every second node, the floor SU2 at 256x97."""
+    truth, floor, regimes = {}, {}, {}
+    for split in ("test_in", "test_ext"):
+        t, mach = _group(fine_h5, split)
+        fl, _ = _group(train_h5, split)
+        for cid in t:
+            if cid in fl:
+                truth[cid], floor[cid] = t[cid][::2, ::2], fl[cid]
+                regimes[cid] = regime(mach[cid])
+    return truth, floor, regimes
+
+
+def floor_contestant(floor):
+    """SU2's own 256x97 solution as a contestant: the floor every method is measured against."""
+    return ("su2-256x97", "256x97",
+            {"method": "su2-256x97", "variant": "floor", "n_train": 0, "seed": 0}, floor)
+
+
+def score_rows(contestants, truth, regimes, specs, grids):
+    """One row per (contestant, case): every truth case for a field method, a PINN's own cases
+    only. A file's q_128x49 is scored on the 128x49 subgrid against the truth sampled there.
+    `grids` caches each case's 256x97 grid and is filled as cases are met."""
+    rows = []
+    for tag, gname, attrs, preds in contestants:
+        scope = list(preds) if attrs["method"] == "pinn" else list(truth)
+        for cid in scope:
+            if cid not in truth:
+                continue
+            s = specs[cid]
+            if cid not in grids:
+                grids[cid] = grid(Section(s.t, s.m), TRAIN)
+            X, Y = grids[cid]
+            t, flux = truth[cid], FLUX_LINES
+            if gname == "128x49":
+                X, Y, t, flux = X[::2, ::2], Y[::2, ::2], t[::2, ::2], COARSE_FLUX_LINES
+            rows.append({"tag": tag, "method": attrs["method"], "variant": attrs.get("variant", ""),
+                         "formulation": attrs.get("formulation", "euler"),
+                         "grid": gname, "n_train": int(attrs.get("n_train", 0)),
+                         "seed": int(attrs.get("seed", 0)), "split": cid.split("-")[0],
+                         "regime": regimes[cid], "case_id": cid,
+                         "score": score_case(preds.get(cid), t, X, Y, s.mach, s.alpha_deg,
+                                             regimes[cid], flux)})
+    return rows
+
+
 def _train_cost(attrs):
     """(seconds, basis): CPU time for CPU training, wall time for GPU training."""
     if attrs.get("train_device", "cpu") == "cpu":
@@ -183,38 +230,10 @@ def costs_record(by_tag, campaign, su2_per, tuning_path, campaign_wall=None, su2
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     specs = {s.case_id: s for split in ("test_in", "test_ext") for s in case_specs(split, TRAIN)}
-    truth, floor, regimes = {}, {}, {}
-    for split in ("test_in", "test_ext"):
-        t, mach = _group("data/hdf5/512x193.h5", split)
-        fl, _ = _group("data/hdf5/256x97.h5", split)
-        for cid in t:
-            if cid in fl:
-                truth[cid], floor[cid] = t[cid][::2, ::2], fl[cid]
-                regimes[cid] = regime(mach[cid])
-    contestants = [("su2-256x97", "256x97",
-                    {"method": "su2-256x97", "variant": "floor", "n_train": 0, "seed": 0}, floor)]
-    contestants += load_contestants("runs/predictions")
-    rows = []
+    truth, floor, regimes = load_truth()
+    contestants = [floor_contestant(floor)] + load_contestants("runs/predictions")
     grids = {}
-    for tag, gname, attrs, preds in contestants:
-        scope = list(preds) if attrs["method"] == "pinn" else list(truth)
-        for cid in scope:
-            if cid not in truth:
-                continue
-            s = specs[cid]
-            if cid not in grids:
-                grids[cid] = grid(Section(s.t, s.m), TRAIN)
-            X, Y = grids[cid]
-            t, flux = truth[cid], FLUX_LINES
-            if gname == "128x49":
-                X, Y, t, flux = X[::2, ::2], Y[::2, ::2], t[::2, ::2], COARSE_FLUX_LINES
-            rows.append({"tag": tag, "method": attrs["method"], "variant": attrs.get("variant", ""),
-                         "formulation": attrs.get("formulation", "euler"),
-                         "grid": gname, "n_train": int(attrs.get("n_train", 0)),
-                         "seed": int(attrs.get("seed", 0)), "split": cid.split("-")[0],
-                         "regime": regimes[cid], "case_id": cid,
-                         "score": score_case(preds.get(cid), t, X, Y, s.mach, s.alpha_deg,
-                                             regimes[cid], flux)})
+    rows = score_rows(contestants, truth, regimes, specs, grids)
     # SU2's own physics checks on the truth itself (spec 8.2: every column including SU2)
     for cid, q in truth.items():
         s = specs[cid]

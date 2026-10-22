@@ -103,12 +103,17 @@ def test_a_suffixed_rerun_has_its_own_tag_variant_and_files(tmp_path, monkeypatc
     assert rec["cfg"]["patience"] == 300
 
 
-def test_the_record_says_what_it_ran_on(tmp_path, monkeypatch):
+def test_the_record_says_what_it_ran_on(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("NVIDIA_TF32_OVERRIDE", "0")
     path = probe.write_standin(tmp_path / "d.h5", {"train": 4, "val": 2})
     probe.main(_tiny_args(path, tmp_path / "runs"))
     env = json.loads((tmp_path / "runs/apno-n4-s0/train.json").read_text())["env"]
+    # also printed before training, so a crashed run's log still says what it ran on
+    lines = capsys.readouterr().out.splitlines()
+    first_epoch = next(k for k, line in enumerate(lines) if line.startswith("epoch"))
+    logged = [json.loads(line[4:]) for line in lines[:first_epoch] if line.startswith("env ")]
+    assert logged == [env]
     assert env["torch"] == torch.__version__ and env["NVIDIA_TF32_OVERRIDE"] == "0"
     assert isinstance(env["cudnn_allow_tf32"], bool) and "gpu" not in env  # CPU: no GPU name
 

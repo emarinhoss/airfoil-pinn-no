@@ -157,7 +157,8 @@ def library_version(library):
 def environment(device):
     """What the run ran on: versions, the GPU's name, and the TF32 settings in force."""
     env = {"python": platform.python_version(), "torch": torch.__version__,
-           "cuda": torch.version.cuda, "platform": platform.platform(),
+           "cuda": torch.version.cuda, "cudnn": torch.backends.cudnn.version(),
+           "platform": platform.platform(),
            "NVIDIA_TF32_OVERRIDE": os.environ.get("NVIDIA_TF32_OVERRIDE"),
            "cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
            "cuda_matmul_allow_tf32": torch.backends.cuda.matmul.allow_tf32}
@@ -361,6 +362,8 @@ def main(argv=None):
     variant = f"{args.library}-{args.suffix}" if args.suffix else args.library
     out_dir = Path(args.runs) / tag
     print(f"{tag}: {args.library} {library_version(args.library)} on {device}, {h5_path}")
+    # before training, so a run that crashes still logs what it ran on
+    print("env " + json.dumps(environment(device)), flush=True)
     model, std, rec = train(args.library, cfg, h5_path, out_dir, device)
     path = None if args.smoke else write_test_predictions(model, std, h5_path, tag,
                                                           args.library, cfg, variant)

@@ -1567,7 +1567,9 @@ Command:
   cases it is the worst of the six 896-case `FNO2d` runs: 6.37 times the floor on in-range
   subcritical cases at 256x97, against 5.28 to 5.50 for the other five (table below). Arithmetic
   differences alone moved the run into early stopping. S2's three seeds (validation loss 0.0118 to
-  0.0127) therefore understate how much one run of this protocol can vary.
+  0.0127) therefore understate how much one run of this protocol can vary. *(Outcome 2026-10-22,
+  reruns entry below: trained to 300 epochs, seed 1 reaches 0.01264 at epoch 293, S2's 0.01274 at
+  epoch 293; the early stop, not the arithmetic, made it the outlier.)*
 - **Cost.** An epoch took 5.1 to 5.8 times less wall time on the A100 than on the Mac's GPU; the
   nine Colab runs took 2,237 s in all. This is GPU wall time on different hardware, its own cost
   basis, and is not substituted into S4's costs. It is below the 7–14 times estimated beforehand
@@ -1598,9 +1600,14 @@ at 5.32 / 2.38 / 3.56 times at 256x97. Command:
   0.0346 to 0.0381 for `FNO2d` and 0.0468 for PhysicsNeMo. Which of its differences does this (the
   channel MLP in each layer, the symmetric padding, the forward-normalised FFT, the initialisation)
   is not isolated. POD, at 2.12 times the floor there (S4, `pod-n896`), is still the best contestant
-  on in-range subcritical cases at 256x97. Command for POD:
+  on in-range subcritical cases at 256x97. *(Outcome 2026-10-22, reruns entry below: these are the
+  early-stopped run's figures. Trained to 300 epochs, NeuralOperator is 1.47 times the floor at
+  128x49 and 2.26 at 256x97.)* Command for POD:
   `python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; fl={(g['split'],g['regime']):g['near_field_rel_l2_mean'] for g in G if g['method']=='su2-256x97'}; [print(g['split'], g['regime'], round(g['near_field_rel_l2_mean']/fl[(g['split'],g['regime'])],2)) for g in G if g['method']=='pod' and g['n_train']==896 and g['grid']=='256x97']"`.
-- **On supercritical and extrapolation cases neither library beats `FNO2d`.** NeuralOperator is
+- **On supercritical and extrapolation cases neither library beats `FNO2d`.** *(Superseded for
+  NeuralOperator 2026-10-22, reruns entry below: trained to 300 epochs it is 1.84 times the floor
+  on in-range supercritical cases and 3.59 in extrapolation. What follows is the early-stopped
+  run.)* NeuralOperator is
   2.73 and 4.10 times the floor, PhysicsNeMo 3.45 and 4.62, against 2.40 and 3.57 for `FNO2d`
   seed 0. In extrapolation NeuralOperator's drag error is the largest of the four compared: mean
   |CD error| 148.9 counts (largest 268.3), against 79.3 (183.1) for `FNO2d` seed 0, 79.3 (180.6)
@@ -1620,5 +1627,93 @@ at 152, so its figures are not those of a converged run; seed 1 shows that one r
 more than the gaps between the libraries. Both libraries were run with their positional embeddings
 off and their modes matched to `FNO2d`'s, as the probe configures them, not with their defaults.
 Neither library's FNO, so configured, is better than this study's on supercritical or extrapolated
-flow. Reruns of seed 1 and of NeuralOperator with early stopping off (`--patience 300`) would
-settle whether the early stop, not the model, is behind their numbers; they have not been made.
+flow. *(Superseded for NeuralOperator 2026-10-22, reruns entry below.)* Reruns of seed 1 and of
+NeuralOperator with early stopping off (`--patience 300`) would settle whether the early stop, not
+the model, is behind their numbers; they have not been made.
+*(Made 2026-10-22: the next entry. The early stop was behind both.)*
+
+## 2026-10-22 — the two early-stopped FNO runs, rerun with early stopping off
+
+The previous entry's `FNO2d` seed 1 and NeuralOperator run were both ended by early stopping
+(patience 30). By the author, on a Colab A100, with `NVIDIA_TF32_OVERRIDE=0`, both were rerun for
+the full 300 epochs:
+`python scripts/probes/probe_fno_libraries.py --library apno --n-train 896 --seed 1 --epochs 300 --patience 300 --suffix nopatience --device cuda`
+and the same with `--library neuralop` (seed 0). `--suffix` keeps the early-stopped runs: the
+reruns are `apno-n896-s1-nopatience` and `neuralop-n896-s0-nopatience`, variants
+`apno-nopatience` and `neuralop-nopatience`.
+
+**A failure first.** The first attempt at the seed-1 rerun stopped in its first epoch with "CUDA
+error: an illegal memory access was encountered", in a training step identical to the nine
+earlier runs'. After a fresh Colab runtime (`docs/notes/2026-10-22-colab-fno.md`, "If a run stops
+with a CUDA error") both reruns completed. The cause is not identified; nothing was recorded of the
+runtime that failed.
+
+**The environment.** These are the first records that carry it: an NVIDIA A100-SXM4-80GB, torch
+2.11.0+cu130, `NVIDIA_TF32_OVERRIDE` 0. Torch's own `cudnn.allow_tf32` reads True; the override
+switches TF32 off inside cuDNN and cuBLAS whatever the framework's flags say. The nine earlier runs
+did not record their environment, so whether they ran on the same GPU model and torch is not known.
+
+**Scoring.** `python scripts/probes/score_fno_libraries.py --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2`
+(commit 3ed15ea, `results/fno_lib/scores.md` and `scores.json`): 2,175 case scores, all `ok`. The
+75 groups of the first scoring (commit fa9ce84) are unchanged, the largest difference 0.0.
+Command:
+`git show fa9ce84:results/fno_lib/scores.json > /tmp/fno_lib_fa9ce84.json && python -c "import json; k=lambda g:(g['method'],g['variant'],g['grid'],g['n_train'],g['seed'],g['split'],g['regime']); o={k(g):g for g in json.load(open('/tmp/fno_lib_fa9ce84.json'))['groups']}; n={k(g):g for g in json.load(open('results/fno_lib/scores.json'))['groups']}; print(len(o), max(abs(o[x][m]-n[x][m]) for x in o for m in o[x] if isinstance(o[x][m],float)))"`.
+
+| run | epochs run | best epoch | best val | transfer | wall (s) |
+|---|---|---|---|---|---|
+| S2 `fno-n896-s1` (MPS) | 300 | 293 | 0.01274 | 0.0355 | 2,242 |
+| `FNO2d` seed 1, early-stopped | 191 | 160 | 0.02035 | 0.0355 | 261 |
+| `FNO2d` seed 1, rerun | 300 | 293 | 0.01264 | 0.0355 | 408 |
+| NeuralOperator, early-stopped | 183 | 152 | 0.02450 | 0.0259 | 243 |
+| NeuralOperator, rerun | 300 | 294 | 0.01225 | 0.0271 | 398 |
+
+Command:
+`python -c "import json; r={x['tag']:x for x in json.load(open('results/fno_lib/scores.json'))['runs']}; [print(t, r[t]['epochs_run'], r[t]['best_epoch'], round(r[t]['best_val'],5), round(r[t]['transfer_val_rel_l2'],4), round(r[t]['wall_s']), r[t].get('env',{}).get('gpu'), r[t].get('env',{}).get('torch'), r[t].get('env',{}).get('NVIDIA_TF32_OVERRIDE')) for t in ('fno-n896-s1','apno-n896-s1','apno-n896-s1-nopatience','neuralop-n896-s0','neuralop-n896-s0-nopatience')]"`.
+
+Near-field relative L2 against the floor, n = 896, beside the previous entry's runs and S4's POD
+(`pod-n896`, 256x97 only). Command for the reruns:
+`python -c "import json; [print(r['variant'], r['seed'], r['grid'], r['split'], r['regime'], round(r['x_floor'],2)) for r in json.load(open('results/fno_lib/scores.json'))['floor_ratios'] if r['n_train']==896 and r['variant'] in ('apno-nopatience','neuralop-nopatience')]"`;
+the others are the previous entry's commands.
+
+| contestant | grid | test_in subcritical | test_in supercritical | test_ext supercritical |
+|---|---|---|---|---|
+| `FNO2d` seed 1, rerun | 256x97 | 5.30 | 2.52 | 3.94 |
+| S2 `fno-n896-s1` | 256x97 | 5.28 | 2.52 | 3.92 |
+| `FNO2d` seeds 0 and 2 (CUDA and S2) | 256x97 | 5.32 to 5.50 | 2.38 to 2.54 | 3.56 to 3.73 |
+| NeuralOperator, rerun | 256x97 | **2.26** | **1.84** | 3.59 |
+| NeuralOperator, rerun | 128x49 | 1.47 | 1.63 | 3.68 |
+| POD (S4) | 256x97 | 2.12 | 6.06 | 7.91 |
+
+- **The early stop, not the model or the arithmetic, was behind both outliers.** Seed 1, trained to
+  the end, lands on S2's seed 1: the same best epoch, 0.8 % lower validation loss, and the same
+  test scores to 0.02 times the floor. With it, all seven `FNO2d` runs reproduce S2. NeuralOperator,
+  trained to the end, halves its validation loss, from 0.0245 to 0.01225, inside the range of the
+  six fully trained `FNO2d` runs (0.01169 to 0.01274, CUDA and S2).
+- **Trained to the end, NeuralOperator is the best FNO here on in-range cases at 256x97.** It is
+  2.26 times the floor on subcritical cases and 1.84 on supercritical ones. The six fully trained
+  `FNO2d` runs score 5.28 to 5.50 and 2.38 to 2.54, PhysicsNeMo 5.53 and 3.45. In range it beats POD
+  on supercritical cases (6.06) and comes within 7 % of it on subcritical ones (2.12). It keeps the
+  smaller resolution transfer of the early-stopped run (0.0271 against 0.0346 to 0.0381). On its own
+  128x49 grid it is still a little behind `FNO2d` on subcritical cases (1.47 against 1.27 to 1.32).
+- **In extrapolation it matches `FNO2d` on the near field but not on drag.** It is 3.59 times the
+  floor (`FNO2d` 3.56 to 3.94). Its mean |CD error| is 139.0 counts (largest 243.6), against 79.3
+  (183.1) for `FNO2d` seed 0 and 82.0 (171.7) for the seed-1 rerun. In range its mean |CL error|
+  is the smallest measured here, 0.0066, against 0.0170 for `FNO2d` seed 0 and 0.0145 for the
+  seed-1 rerun; its mean |CD error| is 13.9 counts, against 16.4 and 16.7. Command:
+  `python -c "import json,numpy as np; R=json.load(open('results/fno_lib/scores.json'))['rows']; [print(v, s, sp, round(np.mean([abs(r['score']['cd_err_counts']) for r in x]),1), round(max(abs(r['score']['cd_err_counts']) for r in x),1), round(np.mean([abs(r['score']['cl_err']) for r in x]),4)) for v,s in (('apno',0),('apno-nopatience',1),('neuralop-nopatience',0)) for sp in ('test_in','test_ext') for x in [[r for r in R if r['variant']==v and r['seed']==s and r['n_train']==896 and r['grid']=='256x97' and r['split']==sp]]]"`.
+- **Shocks.** The NeuralOperator rerun misses none of the 27 in-range shocks and none of the 21 in
+  extrapolation; the seed-1 rerun misses 2 in range and none in extrapolation. Command:
+  `python -c "import json; [print(g['variant'], g['seed'], g['split'], g['n_true_shocks'], g['n_missed']) for g in json.load(open('results/fno_lib/scores.json'))['shock_groups'] if g['grid']=='256x97' and g['n_train']==896 and 'nopatience' in g['variant']]"`.
+
+**What this does and does not show.** Patience 30 ended two of the five 896-case runs of the first
+round, at epochs 191 and 183, when the cosine schedule still had the learning rate at 0.29 and 0.33
+of its starting value; one of them was a run S2 had trained to the end. Of S2's FNO runs only the
+loss-B run was stopped early (81 epochs, best at 50), as the 2026-10-06 S4 entry reports; the loss-A
+runs that S4's comparisons rest on all ran 300 epochs, so S4's results stand. The NeuralOperator
+result is one seed, and the seed-1 runs show that a single run can move by 1.6 times its loss. On
+in-range supercritical cases at 256x97 it is the best near field of any learned model in this study,
+and on subcritical ones second to POD; it pays for it with larger drag errors in extrapolation.
+Which of its differences from `FNO2d` gives it the smaller resolution transfer (the channel MLP in
+each layer, the symmetric padding, the forward-normalised FFT, the initialisation) is still not
+isolated. Whether the seed-1 rerun retraced the early-stopped run's first 191 epochs is not recorded
+here: the per-epoch logs are in the git-ignored `train.json` files.

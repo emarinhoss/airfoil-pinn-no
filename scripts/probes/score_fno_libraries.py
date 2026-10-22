@@ -90,6 +90,8 @@ def _run_row(tag, rec, source, path):
                 row[k] = rec[k]
         if rec.get("wall_s") is not None and rec.get("epochs_run"):
             row["s_per_epoch"] = rec["wall_s"] / rec["epochs_run"]
+        if "env" in rec:  # train.json is git-ignored, so its environment is kept here
+            row["env"] = rec["env"]
     return row
 
 

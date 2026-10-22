@@ -25,6 +25,16 @@ which S4 reads in full.
     python scripts/probes/probe_fno_libraries.py --library physicsnemo --n-train 896 --epochs 300
     python scripts/probes/probe_fno_libraries.py --library apno --n-train 896 --epochs 300
 
+`--suffix S` marks a rerun: its tag becomes `<library>-n<N>-s<seed>-S` and its prediction
+variant `<library>-S`, so it is scored beside the run it repeats instead of overwriting it, e.g.
+a rerun with early stopping off:
+
+    python scripts/probes/probe_fno_libraries.py --library apno --seed 1 --patience 300 \
+        --suffix nopatience
+
+Every record carries `env`: the torch and CUDA versions, the GPU's name, and the TF32 settings
+(`NVIDIA_TF32_OVERRIDE` and torch's two flags), so a record says what it ran on.
+
 `--smoke DIR` writes a stand-in dataset to DIR (the real grids and Sobol inputs, with an analytic
 stream-plus-doublet-plus-vortex field in place of SU2) and runs on it, to check a library runs end
 to end where the SU2 data is absent. Its numbers say nothing about airfoils.
@@ -33,6 +43,9 @@ to end where the SU2 data is absent. Its numbers say nothing about airfoils.
 import argparse
 import inspect
 import json
+import os
+import platform
+import re
 import sys
 import time
 from dataclasses import asdict
@@ -141,6 +154,18 @@ def library_version(library):
     return getattr(mod, "__version__", "?")
 
 
+def environment(device):
+    """What the run ran on: versions, the GPU's name, and the TF32 settings in force."""
+    env = {"python": platform.python_version(), "torch": torch.__version__,
+           "cuda": torch.version.cuda, "platform": platform.platform(),
+           "NVIDIA_TF32_OVERRIDE": os.environ.get("NVIDIA_TF32_OVERRIDE"),
+           "cudnn_allow_tf32": torch.backends.cudnn.allow_tf32,
+           "cuda_matmul_allow_tf32": torch.backends.cuda.matmul.allow_tf32}
+    if torch.device(device).type == "cuda":
+        env["gpu"] = torch.cuda.get_device_name(torch.device(device))
+    return env
+
+
 # ---------------------------------------------------------------- training, as train_fno.train
 
 def transfer_rel_l2(q_fine, q_coarse, inputs):
@@ -221,14 +246,14 @@ def train(library, cfg, h5_path, out_dir, device, subsample=2):
            "wall_s": wall, "cpu_s": cpu, "device": str(device), "n_cases": int(idx.size),
            "n_params": n_params, "library_lines": library_lines(library), **rel,
            "transfer_val_rel_l2": transfer_rel_l2(q_fine, q_coarse, va["inputs"]),
-           "query_s": query_s, "cfg": asdict(cfg), "log": log}
+           "query_s": query_s, "cfg": asdict(cfg), "env": environment(device), "log": log}
     out = finite_or_none(out)
     out["diverged"] = best_epoch < 0 or out["best_val"] is None
     (out_dir / "train.json").write_text(json.dumps(out, indent=2, allow_nan=False))
     return model, std, out
 
 
-def write_test_predictions(model, std, h5_path, tag, library, cfg):
+def write_test_predictions(model, std, h5_path, tag, library, cfg, variant=None):
     with h5py.File(h5_path) as f:
         splits = [s for s in ("test_in", "test_ext") if s in f]
     ids, q, qc = [], [], []
@@ -241,7 +266,7 @@ def write_test_predictions(model, std, h5_path, tag, library, cfg):
         return None
     path = PRED / f"{tag}.h5"
     write_predictions(path, ids, np.concatenate(q),
-                      {"method": "fno", "variant": library, "n_train": cfg.n_train,
+                      {"method": "fno", "variant": variant or library, "n_train": cfg.n_train,
                        "seed": cfg.seed, "library_version": library_version(library)},
                       extra={"q_128x49": np.concatenate(qc)})
     return path
@@ -310,9 +335,13 @@ def main(argv=None):
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--device", default="auto")
     ap.add_argument("--runs", default=str(RUNS))
+    ap.add_argument("--suffix", default="",
+                    help="marks a rerun: appended to the tag and to the prediction variant")
     ap.add_argument("--smoke", metavar="DIR", default=None,
                     help="write a stand-in dataset under DIR and run on it (no SU2 data needed)")
     args = ap.parse_args(argv)
+    if args.suffix and not re.fullmatch(r"[a-z0-9]+", args.suffix):
+        ap.error("--suffix takes lower-case letters and digits only")
 
     cfg = FnoConfig(width=args.width, modes_i=args.modes_i, modes_j=args.modes_j,
                     layers=args.layers, loss="A", batch=args.batch, epochs=args.epochs,
@@ -327,12 +356,14 @@ def main(argv=None):
         print(f"no dataset at {h5_path}; run scripts/build_dataset.py or pass --smoke DIR")
         return 2
     device = resolve_device(args.device)
-    tag = f"{args.library}-n{cfg.n_train}-s{cfg.seed}" + ("-smoke" if args.smoke else "")
+    tag = f"{args.library}-n{cfg.n_train}-s{cfg.seed}" + (f"-{args.suffix}" if args.suffix else "")
+    tag += "-smoke" if args.smoke else ""
+    variant = f"{args.library}-{args.suffix}" if args.suffix else args.library
     out_dir = Path(args.runs) / tag
     print(f"{tag}: {args.library} {library_version(args.library)} on {device}, {h5_path}")
     model, std, rec = train(args.library, cfg, h5_path, out_dir, device)
     path = None if args.smoke else write_test_predictions(model, std, h5_path, tag,
-                                                          args.library, cfg)
+                                                          args.library, cfg, variant)
     print(json.dumps({k: v for k, v in rec.items() if k != "log"}, indent=2))
     print(f"record {out_dir / 'train.json'}; predictions {path}")
     return 0

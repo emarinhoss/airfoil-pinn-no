@@ -69,6 +69,8 @@ def staged(tmp_path, monkeypatch):
                       extra={"q_128x49": truth[:, ::2, ::2]})
     write_predictions(lib / "apno-n896-s0.h5", ids, floor,
                       {"method": "fno", "variant": "apno", "n_train": 896, "seed": 0})
+    write_predictions(lib / "apno-n896-s0-nopatience.h5", ids, truth,  # a rerun beside it
+                      {"method": "fno", "variant": "apno-nopatience", "n_train": 896, "seed": 0})
     write_predictions("runs/predictions/fno-n896-s0.h5", ids, floor,
                       {"method": "fno", "variant": "", "n_train": 896, "seed": 0},
                       extra={"q_128x49": floor[:, ::2, ::2]})
@@ -78,7 +80,8 @@ def staged(tmp_path, monkeypatch):
         {"library": "apno", "version": "0.1.0", "device": "cuda", "n_cases": 881,
          "n_params": 3555476, "epochs_run": 300, "best_epoch": 280, "best_val": 0.0125,
          "val_rel_l2_256x97": 0.02, "transfer_val_rel_l2": 0.03, "wall_s": 240.0,
-         "query_s": 0.004, "log": []}))
+         "query_s": 0.004, "env": {"torch": "2.9.0+cu126", "gpu": "NVIDIA A100-SXM4-40GB",
+                                    "NVIDIA_TF32_OVERRIDE": "0"}, "log": []}))
     Path("results/s2").mkdir(parents=True)
     Path("results/s2/runs.json").write_text(json.dumps(
         [{"tag": "fno-n896-s0", "device": "mps", "n_cases": 881, "epochs_run": 300,
@@ -106,7 +109,10 @@ def test_scores_with_s4_code_and_writes_only_its_own_directory(staged):
             assert ratio[("s2", "256x97", split, reg)] == pytest.approx(1.0)
     assert ("apno", "128x49", "test_in", "subcritical") not in ratio  # no q_128x49 in the file
     assert ("s2", "128x49", "test_in", "subcritical") in ratio
-    assert {r["variant"] for r in out["rows"]} == {"floor", "neuralop", "apno", "s2"}
+    assert {r["variant"] for r in out["rows"]} == {"floor", "neuralop", "apno", "apno-nopatience",
+                                                   "s2"}
+    assert ratio[("apno-nopatience", "256x97", "test_in", "subcritical")] == pytest.approx(0.0,
+                                                                                          abs=1e-12)
 
 
 def test_runs_table_reads_the_probe_records_and_s2(staged):
@@ -116,6 +122,8 @@ def test_runs_table_reads_the_probe_records_and_s2(staged):
     assert runs["apno-n896-s0"]["source"] == "apno 0.1.0"
     assert runs["apno-n896-s0"]["device"] == "cuda"
     assert runs["apno-n896-s0"]["s_per_epoch"] == pytest.approx(0.8)
+    assert runs["apno-n896-s0"]["env"]["gpu"] == "NVIDIA A100-SXM4-40GB"  # kept from train.json
+    assert runs["apno-n896-s0-nopatience"]["source"] == "no record"
     assert runs["neuralop-n896-s0"]["source"] == "no record"
     assert runs["fno-n896-s0"]["source"] == "S2 FNO2d"
     assert runs["fno-n896-s0"]["s_per_epoch"] == pytest.approx(7.2)

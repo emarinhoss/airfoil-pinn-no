@@ -79,3 +79,40 @@ def test_probe_trains_end_to_end_on_the_standin(library, tmp_path, monkeypatch):
     assert json.loads((tmp_path / "run" / "train.json").read_text())["best_val"] == rec["best_val"]
     out = probe.write_test_predictions(model, std, path, f"{library}-test", library, cfg)
     assert out == Path("runs/predictions_lib") / f"{library}-test.h5" and out.exists()
+
+
+def _tiny_args(path, runs, *extra):
+    return ["--library", "apno", "--h5", str(path), "--n-train", "4", "--epochs", "1",
+            "--width", "8", "--modes-i", "4", "--modes-j", "3", "--layers", "2", "--batch", "2",
+            "--device", "cpu", "--runs", str(runs), *extra]
+
+
+def test_a_suffixed_rerun_has_its_own_tag_variant_and_files(tmp_path, monkeypatch):
+    """A rerun (e.g. early stopping off) is scored beside the run it repeats, not over it."""
+    import h5py
+    monkeypatch.chdir(tmp_path)
+    path = probe.write_standin(tmp_path / "d.h5", {"train": 4, "val": 2, "test_in": 2})
+    assert probe.main(_tiny_args(path, tmp_path / "runs", "--seed", "1")) == 0
+    assert probe.main(_tiny_args(path, tmp_path / "runs", "--seed", "1", "--patience", "300",
+                                 "--suffix", "nopatience")) == 0
+    for tag, variant in (("apno-n4-s1", "apno"), ("apno-n4-s1-nopatience", "apno-nopatience")):
+        assert (tmp_path / "runs" / tag / "train.json").exists()
+        with h5py.File(Path("runs/predictions_lib") / f"{tag}.h5") as f:
+            assert f.attrs["variant"] == variant
+    rec = json.loads((tmp_path / "runs/apno-n4-s1-nopatience/train.json").read_text())
+    assert rec["cfg"]["patience"] == 300
+
+
+def test_the_record_says_what_it_ran_on(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("NVIDIA_TF32_OVERRIDE", "0")
+    path = probe.write_standin(tmp_path / "d.h5", {"train": 4, "val": 2})
+    probe.main(_tiny_args(path, tmp_path / "runs"))
+    env = json.loads((tmp_path / "runs/apno-n4-s0/train.json").read_text())["env"]
+    assert env["torch"] == torch.__version__ and env["NVIDIA_TF32_OVERRIDE"] == "0"
+    assert isinstance(env["cudnn_allow_tf32"], bool) and "gpu" not in env  # CPU: no GPU name
+
+
+def test_a_suffix_must_be_lower_case_letters_and_digits(tmp_path):
+    with pytest.raises(SystemExit):
+        probe.main(_tiny_args(tmp_path / "d.h5", tmp_path / "runs", "--suffix", "no-patience"))

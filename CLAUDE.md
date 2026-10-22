@@ -103,7 +103,8 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
   - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and
-    `runs/predictions_lib/`, never `runs/predictions/`.
+    `runs/predictions_lib/`, never `runs/predictions/`. Running it on a Colab GPU:
+    `docs/notes/2026-10-22-colab-fno.md`.
 - **POD** (`models/pod.py`): a linear basis whose mode weights are interpolated over the inputs by
   a thin-plate-spline RBF.
 - **PINN**: the PINN has two formulations, selected by `PinnConfig.formulation`.

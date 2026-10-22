@@ -95,7 +95,11 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
 - **FNO** (`models/fno.py`, `train_fno.py`): trains at 128×49 (256×97 sampled every second node)
   and is evaluated at 256×97.
   - Final runs also store `q_128x49`, so S4 scores the resolution transfer separately.
-  - Radial padding is (NJ − 1)/6 rows, which keeps the padded η span the same at both resolutions.
+  - Radial padding is `radial_pad(NJ)` = round(3(NJ − 1)/16) − 1 rows, 8 at 128×49 and 17 at
+    256×97. It keeps the radial DFT period at 19/16 in η at every resolution, so a learned
+    radial mode is the same physical mode at every level. The earlier (NJ − 1)/6 rule matched
+    the padded span instead and was replaced on 2026-10-01 (spec §6.3, amended by the final
+    review).
   - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and

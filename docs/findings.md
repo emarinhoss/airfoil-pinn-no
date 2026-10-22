@@ -1512,3 +1512,113 @@ residual's preference for trivial states (uniform, at rest, vacuum, low density)
 initialisation, under every ingredient tried. This study's earlier Euler PINN converged to fluid at
 rest (S3). S5 finds that artificial viscosity, localised by their sensors, does not change that on
 this grid: the viscous term is zero in each trivial state, so it never acts.
+
+## 2026-10-22 — the FNO on a Colab A100: S2 reproduced, and the FNOs of two libraries scored
+
+Not a stage of the design: a probe of two questions the author asked on 2026-10-21. Does S2's FNO
+come out the same when trained on an NVIDIA GPU, and how do the FNOs of NeuralOperator 2.0.0 and
+PhysicsNeMo 2.2.2 compare with this study's `FNO2d` on the same data? The probe and what each
+library's FNO is are in `docs/notes/2026-10-21-fno-libraries.md`; the steps are in
+`docs/notes/2026-10-22-colab-fno.md`.
+
+**The runs.** By the author, on a Google Colab A100 runtime, with
+`NVIDIA_TF32_OVERRIDE=0` (author's statement, 2026-10-22: TF32 off, so float32 throughout as on the
+Mac), commands of the form
+`python scripts/probes/probe_fno_libraries.py --library L --n-train N --seed S --epochs 300 --device cuda`:
+`apno` (this study's `FNO2d` through the same loop as S2) at n = 64, 128, 256, 512 and 896 (seed 0)
+and at 896 with seeds 1 and 2; `neuralop` and `physicsnemo` at 896, seed 0. Every run used the S2
+configuration (width 48, modes 24 × 8, 4 layers, loss A, batch 8, AdamW 1e-3 with cosine decay,
+patience 30). The records (`runs/fno_lib/*/train.json`) and predictions are git-ignored; their
+fields are copied into `results/fno_lib/scores.json` (`runs`). The records do not carry the torch
+version or the GPU model: "cuda" and the author's A100 are all that is known of the hardware.
+
+**Scoring.** `python scripts/probes/score_fno_libraries.py --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2`
+(commit fa9ce84, which holds its output, `results/fno_lib/scores.md` and `scores.json`), with S4's
+truth, floor and per-case code. The S2 files scored beside them (variant `s2`) reproduce S4's own
+committed scores exactly: 18 groups, the largest difference over four metrics 0.0. Command:
+`python -c "import json; L=json.load(open('results/fno_lib/scores.json'))['groups']; S=json.load(open('results/s4/scores.json'))['groups']; k=lambda g:(g['grid'],g['n_train'],g['seed'],g['split'],g['regime']); s={k(g):g for g in S if g['method']=='fno' and g['variant']==''}; print(sum(g['variant']=='s2' for g in L), max(abs(g[m]-s[k(g)][m]) for g in L if g['variant']=='s2' for m in ('near_field_rel_l2_mean','cl_err_absmax','cd_err_counts_absmax','cp_max_mean')))"`.
+All 1,875 case scores are `ok`: no missing or non-finite prediction.
+
+### S2 on CUDA
+
+| run | best val, S2 (MPS) | at epoch | best val, CUDA | at epoch | epochs run | s per epoch, MPS / CUDA |
+|---|---|---|---|---|---|---|
+| n64 | 0.08493 | 297 | 0.08493 | 297 | 300 | 5.12 |
+| n128 | 0.05065 | 288 | 0.05065 | 288 | 300 | 5.70 |
+| n256 | 0.03320 | 284 | 0.03322 | 284 | 300 | 5.77 |
+| n512 | 0.01784 | 274 | 0.01781 | 287 | 300 | 5.81 |
+| n896 seed 0 | 0.01260 | 278 | 0.01256 | 284 | 300 | 5.27 |
+| n896 seed 1 | 0.01274 | 293 | **0.02035** | 160 | **191** | 5.47 |
+| n896 seed 2 | 0.01178 | 294 | 0.01169 | 294 | 300 | 5.47 |
+
+Command:
+`python -c "import json; r={x['tag']:x for x in json.load(open('results/fno_lib/scores.json'))['runs']}; s={x['tag']:x for x in json.load(open('results/s2/runs.json'))}; [print(t, s[t]['best_val'], s[t]['best_epoch'], r[a]['best_val'], r[a]['best_epoch'], r[a]['epochs_run'], round(s[t]['wall_s']/s[t]['epochs_run']/r[a]['s_per_epoch'],2)) for n,sd in ((64,0),(128,0),(256,0),(512,0),(896,0),(896,1),(896,2)) for t,a in [(f'fno-n{n}-s{sd}',f'apno-n{n}-s{sd}')]]"`.
+
+- **Six of the seven runs reproduce S2** to within 0.8 % in validation loss, and the n64 and n128
+  runs to four digits at the same best epoch. The starting weights and the batch order are drawn
+  on the CPU from the same seed on both machines, so only the floating-point arithmetic differs.
+- **The data-efficiency curve reproduces to 1 %.** Mean near-field relative L2 over the 61 test_in
+  cases at 256x97, CUDA against S4: 0.1088 / 0.1088 (n64), 0.0857 / 0.0857, 0.0699 / 0.0698,
+  0.0558 / 0.0561, 0.0487 / 0.0483 (n896). S4's data-efficiency result and the break-even it feeds
+  do not depend on the device. Command:
+  `python -c "import json,numpy as np; R=json.load(open('results/fno_lib/scores.json'))['rows']; S=json.load(open('results/s4/scores.json'))['rows']; f=lambda rows,v,n: np.mean([r['score']['near_field_rel_l2'] for r in rows if r['method']=='fno' and r['variant']==v and r['seed']==0 and r['n_train']==n and r['grid']=='256x97' and r['split']=='test_in']); [print(n, round(f(R,'apno',n),4), round(f(S,'',n),4)) for n in (64,128,256,512,896)]"`.
+- **Seed 1 did not reproduce.** Its validation loss stopped improving at epoch 160, and early
+  stopping (patience 30) ended it at epoch 191 with 0.02035, 1.6 times S2's 0.01274. On the test
+  cases it is the worst of the six 896-case `FNO2d` runs: 6.37 times the floor on in-range
+  subcritical cases at 256x97, against 5.28 to 5.50 for the other five (table below). Arithmetic
+  differences alone moved the run into early stopping. S2's three seeds (validation loss 0.0118 to
+  0.0127) therefore understate how much one run of this protocol can vary.
+- **Cost.** An epoch took 5.1 to 5.8 times less wall time on the A100 than on the Mac's GPU; the
+  nine Colab runs took 2,237 s in all. This is GPU wall time on different hardware, its own cost
+  basis, and is not substituted into S4's costs. It is below the 7–14 times estimated beforehand
+  (to the author, 2026-10-22, not recorded here) from the step's operation count, which assumed
+  about 6 ms of launch overhead per training step; the measured step is about 12 ms (1.37 s over
+  111 steps).
+
+### The library FNOs
+
+Near-field relative L2 against the floor (SU2 at 256x97), n = 896; S4 reported the S2 FNO, seed 0,
+at 5.32 / 2.38 / 3.56 times at 256x97. Command:
+`python -c "import json; [print(r['variant'], r['seed'], r['grid'], r['split'], r['regime'], round(r['x_floor'],2)) for r in json.load(open('results/fno_lib/scores.json'))['floor_ratios'] if r['n_train']==896]"`.
+
+| contestant | grid | test_in subcritical | test_in supercritical | test_ext supercritical |
+|---|---|---|---|---|
+| `FNO2d`, CUDA, seeds 0 / 2 | 256x97 | 5.38 / 5.50 | 2.40 / 2.54 | 3.57 / 3.68 |
+| `FNO2d`, CUDA, seeds 0 / 2 | 128x49 | 1.32 / 1.27 | 1.56 / 1.59 | 3.58 / 3.70 |
+| NeuralOperator | 256x97 | **3.59** | 2.73 | 4.10 |
+| NeuralOperator | 128x49 | 2.37 | 2.31 | 4.20 |
+| PhysicsNeMo | 256x97 | 5.53 | 3.45 | 4.62 |
+| PhysicsNeMo | 128x49 | 1.59 | 2.65 | 4.64 |
+
+- **NeuralOperator trades accuracy on its training grid for transfer to the finer one.** On in-range
+  subcritical cases at 128x49 it is 2.37 times the floor, worse than every 896-case `FNO2d` run that
+  trained to the end (1.27 to 1.32; the early-stopped seed 1 is 2.40), and at 256x97 it is the best
+  of the eight 896-case runs (3.59 against 5.28 to 6.37): its error grows 1.5 times between the
+  grids, `FNO2d`'s about 4 times. Its validation transfer is likewise the smallest, 0.0259 against
+  0.0346 to 0.0381 for `FNO2d` and 0.0468 for PhysicsNeMo. Which of its differences does this (the
+  channel MLP in each layer, the symmetric padding, the forward-normalised FFT, the initialisation)
+  is not isolated. POD, at 2.12 times the floor there (S4, `pod-n896`), is still the best contestant
+  on in-range subcritical cases at 256x97. Command for POD:
+  `python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; fl={(g['split'],g['regime']):g['near_field_rel_l2_mean'] for g in G if g['method']=='su2-256x97'}; [print(g['split'], g['regime'], round(g['near_field_rel_l2_mean']/fl[(g['split'],g['regime'])],2)) for g in G if g['method']=='pod' and g['n_train']==896 and g['grid']=='256x97']"`.
+- **On supercritical and extrapolation cases neither library beats `FNO2d`.** NeuralOperator is
+  2.73 and 4.10 times the floor, PhysicsNeMo 3.45 and 4.62, against 2.40 and 3.57 for `FNO2d`
+  seed 0. In extrapolation NeuralOperator's drag error is the largest of the four compared: mean
+  |CD error| 148.9 counts (largest 268.3), against 79.3 (183.1) for `FNO2d` seed 0, 79.3 (180.6)
+  for the S2 file, and 54.6 (126.4) for PhysicsNeMo. In range, NeuralOperator's mean lift and drag
+  errors are the smallest of the four (|CL error| 0.0102, |CD error| 10.6 counts, against 0.0170
+  and 16.4 for `FNO2d` seed 0).
+  Command:
+  `python -c "import json,numpy as np; R=json.load(open('results/fno_lib/scores.json'))['rows']; [print(v, s, sp, round(np.mean([abs(r['score']['cd_err_counts']) for r in x]),1), round(max(abs(r['score']['cd_err_counts']) for r in x),1), round(np.mean([abs(r['score']['cl_err']) for r in x]),4)) for v,s in (('s2',0),('apno',0),('neuralop',0),('physicsnemo',0)) for sp in ('test_in','test_ext') for x in [[r for r in R if r['variant']==v and r['seed']==s and r['n_train']==896 and r['grid']=='256x97' and r['split']==sp]]]"`.
+- **Shocks.** Of the 27 true in-range shocks at 256x97, NeuralOperator misses none, PhysicsNeMo 2,
+  the `FNO2d` runs 1 or 2; none of the eight runs misses any of the 21 in extrapolation. Command:
+  `python -c "import json; [print(g['variant'], g['seed'], g['split'], g['n_true_shocks'], g['n_missed']) for g in json.load(open('results/fno_lib/scores.json'))['shock_groups'] if g['grid']=='256x97' and g['n_train']==896]"`.
+
+**What this does and does not show.** S2's results, its data-efficiency curve included, do not
+depend on training on the Apple GPU. The library comparison rests on one seed per library, and
+NeuralOperator's run, like `FNO2d`'s seed 1, was ended by early stopping at epoch 183 with its best
+at 152, so its figures are not those of a converged run; seed 1 shows that one run can move by
+more than the gaps between the libraries. Both libraries were run with their positional embeddings
+off and their modes matched to `FNO2d`'s, as the probe configures them, not with their defaults.
+Neither library's FNO, so configured, is better than this study's on supercritical or extrapolated
+flow. Reruns of seed 1 and of NeuralOperator with early stopping off (`--patience 300`) would
+settle whether the early stop, not the model, is behind their numbers; they have not been made.

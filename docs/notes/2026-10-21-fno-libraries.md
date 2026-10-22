@@ -60,6 +60,8 @@ left as the libraries ship them, because the point is to see the library's opera
   Its period is (NJ + 2·round(4NJ/49))/(NJ − 1): 57/48 at 49 and 113/96 at 97, the 0.88 % mismatch
   the `FNO2d` docstring describes for the earlier rule. Its transfer error is therefore expected
   to be a little worse than `FNO2d`'s, and the record measures it.
+  *(Outcome 2026-10-22, on the S1 data: it was smaller, 0.0259 against 0.0346 to 0.0381
+  for `FNO2d`; `docs/findings.md`, 2026-10-22.)*
 
 Mode counts were matched exactly: `n_modes=(2·modes_i, 2·modes_j − 2)` in NeuralOperator keeps
 the same set as `FNO2d`'s `modes_i` and `modes_j`.

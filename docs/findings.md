@@ -1692,9 +1692,11 @@ the others are the previous entry's commands.
 - **Trained to the end, NeuralOperator is the best FNO here on in-range cases at 256x97.** It is
   2.26 times the floor on subcritical cases and 1.84 on supercritical ones. The six fully trained
   `FNO2d` runs score 5.28 to 5.50 and 2.38 to 2.54, PhysicsNeMo 5.53 and 3.45. In range it beats POD
-  on supercritical cases (6.06) and comes within 7 % of it on subcritical ones (2.12). It keeps the
-  smaller resolution transfer of the early-stopped run (0.0271 against 0.0346 to 0.0381). On its own
-  128x49 grid it is still a little behind `FNO2d` on subcritical cases (1.47 against 1.27 to 1.32).
+  on supercritical cases (6.06) and comes within 7 % of it on subcritical ones (2.12). *(Outcome
+  2026-10-24, five-seed entry below: over five seeds NeuralOperator averages 2.37 there, 1.94 to
+  3.09; POD is ahead of four of the five.)* It keeps the smaller resolution transfer of the
+  early-stopped run (0.0271 against 0.0346 to 0.0381). On its own 128x49 grid it is still a little
+  behind `FNO2d` on subcritical cases (1.47 against 1.27 to 1.32).
 - **In extrapolation it matches `FNO2d` on the near field but not on drag.** It is 3.59 times the
   floor (`FNO2d` 3.56 to 3.94). Its mean |CD error| is 139.0 counts (largest 243.6), against 79.3
   (183.1) for `FNO2d` seed 0 and 82.0 (171.7) for the seed-1 rerun. In range its mean |CL error|
@@ -1710,10 +1712,100 @@ round, at epochs 191 and 183, when the cosine schedule still had the learning ra
 of its starting value; one of them was a run S2 had trained to the end. Of S2's FNO runs only the
 loss-B run was stopped early (81 epochs, best at 50), as the 2026-10-06 S4 entry reports; the loss-A
 runs that S4's comparisons rest on all ran 300 epochs, so S4's results stand. The NeuralOperator
-result is one seed, and the seed-1 runs show that a single run can move by 1.6 times its loss. On
-in-range supercritical cases at 256x97 it is the best near field of any learned model in this study,
-and on subcritical ones second to POD; it pays for it with larger drag errors in extrapolation.
-Which of its differences from `FNO2d` gives it the smaller resolution transfer (the channel MLP in
-each layer, the symmetric padding, the forward-normalised FFT, the initialisation) is still not
-isolated. Whether the seed-1 rerun retraced the early-stopped run's first 191 epochs is not recorded
-here: the per-epoch logs are in the git-ignored `train.json` files.
+result is one seed, and the seed-1 runs show that a single run can move by 1.6 times its loss.
+*(Outcome 2026-10-24, five-seed entry below: the in-range lead at 256x97 holds over five seeds of
+each model.)* On in-range supercritical cases at 256x97 it is the best near field of any learned
+model in this study, and on subcritical ones second to POD; it pays for it with larger drag errors
+in extrapolation. Which of its differences from `FNO2d` gives it the smaller resolution transfer
+(the channel MLP in each layer, the symmetric padding, the forward-normalised FFT, the
+initialisation) is still not isolated. Whether the seed-1 rerun retraced the early-stopped run's
+first 191 epochs is not recorded here: the per-epoch logs are in the git-ignored `train.json` files.
+
+## 2026-10-24 — NeuralOperator and `FNO2d` over five seeds each
+
+The previous entry's NeuralOperator result rested on one seed. By the author, on the same Colab
+A100 (A100-SXM4-80GB, torch 2.11.0+cu130, `NVIDIA_TF32_OVERRIDE` 0, as each record's `env` shows),
+NeuralOperator seeds 1 to 4 and `FNO2d` seeds 3 and 4 were trained for the full 300 epochs:
+`python scripts/probes/probe_fno_libraries.py --library L --n-train 896 --seed S --epochs 300 --patience 300 --suffix nopatience --device cuda`.
+Scored with
+`python scripts/probes/score_fno_libraries.py --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2`
+(commit 0705cd1): 3,075 case scores, all `ok`; the 87 groups of the previous scoring (commit
+3ed15ea) are unchanged, the largest difference 0.0. Command:
+`git show 3ed15ea:results/fno_lib/scores.json > /tmp/fno_lib_3ed15ea.json && python -c "import json; k=lambda g:(g['method'],g['variant'],g['grid'],g['n_train'],g['seed'],g['split'],g['regime']); o={k(g):g for g in json.load(open('/tmp/fno_lib_3ed15ea.json'))['groups']}; n={k(g):g for g in json.load(open('results/fno_lib/scores.json'))['groups']}; print(len(o), max(abs(o[x][m]-n[x][m]) for x in o for m in o[x] if isinstance(o[x][m],float)))"`.
+
+**The two sets.** Five runs of each model, all on the A100, all 300 epochs. `FNO2d`: seeds 0 and
+2 (patience 30, which never fired, so their training is the same as with it off), and seeds 1, 3
+and 4 with patience off. NeuralOperator: seeds 0 to 4 with patience off. Each comparison below is
+a two-sided permutation test of the difference in means over all 252 ways of splitting the ten
+runs into two sets of five. p = 0.008 is the smallest such a test can give; in every case here
+where it is reached, the two sets of five do not overlap.
+
+| quantity | `FNO2d`, seeds 0 to 4 | mean | NeuralOperator, seeds 0 to 4 | mean | p |
+|---|---|---|---|---|---|
+| best validation loss (128x49) | 0.01256, 0.01264, 0.01169, 0.01265, 0.01324 | 0.01255 | 0.01225, 0.01219, 0.01161, 0.01248, 0.01162 | 0.01203 | 0.119 |
+| validation transfer | 0.0346, 0.0355, 0.0381, 0.0339, 0.0451 | 0.0374 | 0.0271, 0.0271, 0.0256, 0.0255, 0.0222 | 0.0255 | 0.008 |
+
+Command:
+`python -c "import json,itertools,numpy as np; r={x['tag']:x for x in json.load(open('results/fno_lib/scores.json'))['runs']}; F=['apno-n896-s0','apno-n896-s1-nopatience','apno-n896-s2','apno-n896-s3-nopatience','apno-n896-s4-nopatience']; N=[f'neuralop-n896-s{s}-nopatience' for s in range(5)]; P=lambda a,b: np.mean([abs(np.mean([(a+b)[i] for i in c])-np.mean([(a+b)[i] for i in range(10) if i not in c]))>=abs(np.mean(a)-np.mean(b))-1e-12 for c in itertools.combinations(range(10),5)]); [print(k, [round(r[t][k],5) for t in F], round(np.mean([r[t][k] for t in F]),5), [round(r[t][k],5) for t in N], round(np.mean([r[t][k] for t in N]),5), round(P([r[t][k] for t in F],[r[t][k] for t in N]),3)) for k in ('best_val','transfer_val_rel_l2')]"`.
+
+Near-field relative L2 against the floor (SU2 at 256x97), per seed:
+
+| grid | split, regime | `FNO2d` | mean | NeuralOperator | mean | p |
+|---|---|---|---|---|---|---|
+| 256x97 | test_in, subcritical | 5.38, 5.30, 5.50, 5.20, 5.33 | 5.34 | 2.26, 2.23, 2.32, 3.09, 1.94 | **2.37** | 0.008 |
+| 256x97 | test_in, supercritical | 2.40, 2.52, 2.54, 2.33, 3.02 | 2.56 | 1.84, 1.82, 1.78, 1.84, 1.50 | **1.76** | 0.008 |
+| 256x97 | test_ext, supercritical | 3.57, 3.94, 3.68, 4.45, 4.09 | 3.94 | 3.59, 3.77, 3.44, 4.26, 3.62 | 3.74 | 0.349 |
+| 128x49 | test_in, subcritical | 1.32, 1.30, 1.27, 1.29, 1.29 | **1.29** | 1.47, 1.45, 1.41, 1.53, 1.39 | 1.45 | 0.008 |
+| 128x49 | test_in, supercritical | 1.56, 1.65, 1.59, 1.54, 1.61 | 1.59 | 1.63, 1.73, 1.62, 1.65, 1.53 | 1.63 | 0.294 |
+| 128x49 | test_ext, supercritical | 3.58, 3.83, 3.70, 4.36, 4.07 | 3.91 | 3.68, 3.92, 3.54, 4.43, 3.83 | 3.88 | 0.905 |
+
+Command:
+`python -c "import json,itertools,numpy as np; X={(r['variant'],r['seed'],r['grid'],r['split'],r['regime']):r['x_floor'] for r in json.load(open('results/fno_lib/scores.json'))['floor_ratios'] if r['n_train']==896}; F=[('apno',0),('apno-nopatience',1),('apno',2),('apno-nopatience',3),('apno-nopatience',4)]; N=[('neuralop-nopatience',s) for s in range(5)]; P=lambda a,b: np.mean([abs(np.mean([(a+b)[i] for i in c])-np.mean([(a+b)[i] for i in range(10) if i not in c]))>=abs(np.mean(a)-np.mean(b))-1e-12 for c in itertools.combinations(range(10),5)]); [print(g, sp, rg, [round(X[f+(g,sp,rg)],2) for f in F], round(np.mean([X[f+(g,sp,rg)] for f in F]),2), [round(X[n+(g,sp,rg)],2) for n in N], round(np.mean([X[n+(g,sp,rg)] for n in N]),2), round(P([X[f+(g,sp,rg)] for f in F],[X[n+(g,sp,rg)] for n in N]),3)) for g in ('256x97','128x49') for sp,rg in (('test_in','subcritical'),('test_in','supercritical'),('test_ext','supercritical'))]"`.
+
+Forces at 256x97, per-seed means over the cases of each split:
+
+| quantity | `FNO2d` mean (range) | NeuralOperator mean (range) | p |
+|---|---|---|---|
+| test_in mean \|CL error\| | 0.0166 (0.0145 to 0.0178) | **0.0075** (0.0061 to 0.0088) | 0.008 |
+| test_in mean \|CD error\|, counts | 16.5 (13.7 to 18.5) | 15.3 (13.9 to 16.5) | 0.23 |
+| test_ext mean \|CL error\| | 0.0505 (0.0443 to 0.0609) | 0.0516 (0.0431 to 0.0673) | 0.857 |
+| test_ext mean \|CD error\|, counts | **83.8** (76.4 to 94.6) | 136.2 (104.6 to 177.9) | 0.008 |
+| test_ext largest \|CD error\|, counts | **180.1** (162.6 to 197.6) | 258.4 (199.6 to 341.1) | 0.008 |
+
+Command:
+`python -c "import json,itertools,numpy as np; R=json.load(open('results/fno_lib/scores.json'))['rows']; F=[('apno',0),('apno-nopatience',1),('apno',2),('apno-nopatience',3),('apno-nopatience',4)]; N=[('neuralop-nopatience',s) for s in range(5)]; P=lambda a,b: np.mean([abs(np.mean([(a+b)[i] for i in c])-np.mean([(a+b)[i] for i in range(10) if i not in c]))>=abs(np.mean(a)-np.mean(b))-1e-12 for c in itertools.combinations(range(10),5)]); m=lambda v,s,sp,k,f: float(f([abs(r['score'][k]) for r in R if r['variant']==v and r['seed']==s and r['n_train']==896 and r['grid']=='256x97' and r['split']==sp])); [print(sp, k, f.__name__, [round(m(*x,sp,k,f),4) for x in F], round(np.mean([m(*x,sp,k,f) for x in F]),4), [round(m(*x,sp,k,f),4) for x in N], round(np.mean([m(*x,sp,k,f) for x in N]),4), round(P([m(*x,sp,k,f) for x in F],[m(*x,sp,k,f) for x in N]),3)) for sp,k,f in (('test_in','cl_err',np.mean),('test_in','cd_err_counts',np.mean),('test_ext','cl_err',np.mean),('test_ext','cd_err_counts',np.mean),('test_ext','cd_err_counts',np.max))]"`.
+
+**Shocks** at 256x97: over the five seeds, NeuralOperator misses 1 of the 135 in-range shock
+instances (5 x 27) and `FNO2d` 7; neither misses any of the 105 in extrapolation. Command:
+`python -c "import json; G=json.load(open('results/fno_lib/scores.json'))['shock_groups']; [print(v, s, sp, g['n_true_shocks'], g['n_missed']) for v,s in [('apno',0),('apno-nopatience',1),('apno',2),('apno-nopatience',3),('apno-nopatience',4)]+[('neuralop-nopatience',s) for s in range(5)] for sp in ('test_in','test_ext') for g in G if g['variant']==v and g['seed']==s and g['grid']=='256x97' and g['n_train']==896 and g['split']==sp]"`.
+
+- **The in-range lead at 256x97 holds over five seeds.** NeuralOperator is 2.37 times the floor
+  on in-range subcritical cases and 1.76 on supercritical ones, against 5.34 and 2.56 for
+  `FNO2d`, with no overlap between the two sets of five. Its in-range lift error is less than
+  half of `FNO2d`'s, also without overlap.
+- **It comes from the transfer, not from the fit.** On the 128x49 grid both models train on, the
+  validation loss cannot be told apart (p 0.119), NeuralOperator is behind on in-range
+  subcritical cases (1.45 against 1.29, no overlap) and level elsewhere. Its transfer from 128x49
+  to 256x97 is smaller in all five seeds (0.0255 against 0.0374). The previous entry's single
+  seed showed the same pattern.
+- **In extrapolation it is level on the near field and worse on drag.** The near field and the
+  lift cannot be told apart (p 0.349 and 0.857). Its mean drag error, 136.2 counts against 83.8,
+  and its largest, 258.4 against 180.1, are larger in all five seeds.
+- **POD remains ahead on in-range subcritical cases.** POD's 2.12 times the floor (S4,
+  `pod-n896`) is below four of NeuralOperator's five seeds, whose mean is 2.37. On in-range
+  supercritical cases NeuralOperator's 1.76 is far ahead of POD's 6.06.
+- **Seed spread.** `FNO2d`'s five fully trained seeds give validation losses of 0.01169 to
+  0.01324 and NeuralOperator's 0.01161 to 0.01248. On test cells the spread within one model
+  reaches 1.94 to 3.09 times the floor (NeuralOperator, in-range subcritical). Single runs of
+  either model should be read with that spread in mind.
+
+**What this does and does not show.** Five seeds of each model, as the probe configures them
+(positional embeddings off, modes matched to `FNO2d`'s, the same loop, loss and schedule), on one
+GPU model. NeuralOperator's FNO gives a better near field than this study's `FNO2d` at the 256x97
+evaluation grid on in-range cases, because less is lost between the 128x49 training grid and
+256x97; it does not fit the training grid better, and it gives larger drag errors in
+extrapolation. Which of its differences causes the smaller transfer (the channel MLP in each
+layer, the symmetric padding, the forward-normalised FFT, the initialisation) is still not
+isolated: that needs runs that change one of them at a time. PhysicsNeMo was run once, with early
+stopping on (it did not fire), and is not part of this comparison. S4's results, which use S2's
+`FNO2d`, are unchanged.

@@ -43,6 +43,9 @@ to the input.
 | Parameters at the S2 configuration (W 48, modes 24×8, 4 layers) | 3,555,476 (complex counted once; 7,094,420 real) | 3,568,468 | 7,095,452 real: `FNO2d` plus the two-layer lift |
 | Lines of library source behind the model | 67 | 2,285 over 7 modules | 2,014 over 3 modules |
 
+*(2026-10-24: the FFT normalisation row changes nothing, because the transform pair is
+scaled by 1/N either way; `docs/findings.md`, corrections entry of 2026-10-24.)*
+
 Two of the differences matter for this study and were neutralised in the probe; the rest were
 left as the libraries ship them, because the point is to see the library's operator:
 

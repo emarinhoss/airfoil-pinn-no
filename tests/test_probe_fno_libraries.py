@@ -20,7 +20,7 @@ SMALL = FnoConfig(width=8, modes_i=4, modes_j=3, layers=2)
 
 def _skip_unless(library):
     if library != "apno":
-        pytest.importorskip(library)
+        pytest.importorskip("neuralop" if library == "ablate" else library)
 
 
 @pytest.mark.parametrize("library", probe.LIBRARIES)

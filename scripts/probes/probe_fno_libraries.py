@@ -66,7 +66,7 @@ from apno.models.train_fno import (
     FnoConfig, _tensors, finite_or_none, load_features_only, load_split, loss_fn, relative_l2,
 )
 
-LIBRARIES = ("apno", "neuralop", "physicsnemo")
+LIBRARIES = ("apno", "neuralop", "physicsnemo", "ablate")
 RUNS, PRED = Path("runs/fno_lib"), Path("runs/predictions_lib")
 IN_CH, OUT_CH = 6, 4
 
@@ -118,7 +118,12 @@ class PhysicsnemoFno(nn.Module):
         return self.net(x)
 
 
-def build_model(library, cfg):
+def build_model(library, cfg, factors=""):
+    """factors: for library "ablate", which of NeuralOperator's differences to switch on
+    (scripts/probes/fno_ablation.py)."""
+    if library == "ablate":
+        from fno_ablation import AblationFno
+        return AblationFno(cfg, factors)
     if library == "apno":
         return FNO2d(in_ch=IN_CH, out_ch=OUT_CH, width=cfg.width, modes_i=cfg.modes_i,
                      modes_j=cfg.modes_j, layers=cfg.layers)
@@ -140,6 +145,10 @@ def library_lines(library):
         from neuralop.models import fno
         mods = (fno, fno_block, spectral_convolution, padding, embeddings, channel_mlp,
                 skip_connections)
+    elif library == "ablate":
+        import fno_ablation
+        from neuralop.layers import channel_mlp, padding, skip_connections, spectral_convolution
+        mods = (fno_ablation, spectral_convolution, padding, channel_mlp, skip_connections)
     else:
         from physicsnemo.models.fno import fno
         from physicsnemo.nn.module import fno_layers, spectral_layers
@@ -150,7 +159,7 @@ def library_lines(library):
 def library_version(library):
     if library == "apno":
         return "0.1.0"
-    mod = __import__("neuralop" if library == "neuralop" else "physicsnemo")
+    mod = __import__("physicsnemo" if library == "physicsnemo" else "neuralop")
     return getattr(mod, "__version__", "?")
 
 
@@ -187,7 +196,7 @@ def predict(model, std, xy, inputs, batch=8):
     return from_targets(std.inverse(z.astype(np.float64)), inputs), sec
 
 
-def train(library, cfg, h5_path, out_dir, device, subsample=2):
+def train(library, cfg, h5_path, out_dir, device, subsample=2, factors=""):
     torch.manual_seed(cfg.seed)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -198,7 +207,7 @@ def train(library, cfg, h5_path, out_dir, device, subsample=2):
     std = Standardiser().fit(to_targets(tr["q"][idx], tr["inputs"][idx]))
     xt, yt = (t.to(device) for t in _tensors(tr, std, subsample, idx))
     xv, yv = (t.to(device) for t in _tensors(va, std, subsample))
-    model = build_model(library, cfg).float().to(device)
+    model = build_model(library, cfg, factors).float().to(device)
     n_params = sum(p.numel() for p in model.parameters())
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, cfg.epochs)
@@ -243,6 +252,7 @@ def train(library, cfg, h5_path, out_dir, device, subsample=2):
         for tag, q, inp, y in (("256x97", q_fine, va["inputs"], yv_true),
                                ("128x49", q_coarse, va["inputs"], yv_true[:, :, ::2, ::2]))}
     out = {"library": library, "version": library_version(library), "status": "ok",
+           **({"factors": factors or "none"} if library == "ablate" else {}),
            "best_val": best, "best_epoch": best_epoch, "epochs_run": epoch + 1,
            "wall_s": wall, "cpu_s": cpu, "device": str(device), "n_cases": int(idx.size),
            "n_params": n_params, "library_lines": library_lines(library), **rel,
@@ -336,6 +346,9 @@ def main(argv=None):
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--device", default="auto")
     ap.add_argument("--runs", default=str(RUNS))
+    ap.add_argument("--factors", default=None,
+                    help="with --library ablate: which of M, P, I, L to switch on, e.g. MP, "
+                         "or none (scripts/probes/fno_ablation.py)")
     ap.add_argument("--suffix", default="",
                     help="marks a rerun: appended to the tag and to the prediction variant")
     ap.add_argument("--smoke", metavar="DIR", default=None,
@@ -343,6 +356,17 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.suffix and not re.fullmatch(r"[a-z0-9]+", args.suffix):
         ap.error("--suffix takes lower-case letters and digits only")
+    factors, name = "", args.library
+    if args.library == "ablate":
+        from fno_ablation import canonical, variant_name
+        if args.factors is None:
+            ap.error("--library ablate needs --factors (e.g. MP, or none)")
+        try:
+            factors, name = canonical(args.factors), variant_name(args.factors)
+        except ValueError as e:
+            ap.error(str(e))
+    elif args.factors is not None:
+        ap.error("--factors goes with --library ablate only")
 
     cfg = FnoConfig(width=args.width, modes_i=args.modes_i, modes_j=args.modes_j,
                     layers=args.layers, loss="A", batch=args.batch, epochs=args.epochs,
@@ -357,14 +381,14 @@ def main(argv=None):
         print(f"no dataset at {h5_path}; run scripts/build_dataset.py or pass --smoke DIR")
         return 2
     device = resolve_device(args.device)
-    tag = f"{args.library}-n{cfg.n_train}-s{cfg.seed}" + (f"-{args.suffix}" if args.suffix else "")
+    tag = f"{name}-n{cfg.n_train}-s{cfg.seed}" + (f"-{args.suffix}" if args.suffix else "")
     tag += "-smoke" if args.smoke else ""
-    variant = f"{args.library}-{args.suffix}" if args.suffix else args.library
+    variant = f"{name}-{args.suffix}" if args.suffix else name
     out_dir = Path(args.runs) / tag
-    print(f"{tag}: {args.library} {library_version(args.library)} on {device}, {h5_path}")
+    print(f"{tag}: {name} {library_version(args.library)} on {device}, {h5_path}")
     # before training, so a run that crashes still logs what it ran on
     print("env " + json.dumps(environment(device)), flush=True)
-    model, std, rec = train(args.library, cfg, h5_path, out_dir, device)
+    model, std, rec = train(args.library, cfg, h5_path, out_dir, device, factors=factors)
     path = None if args.smoke else write_test_predictions(model, std, h5_path, tag,
                                                           args.library, cfg, variant)
     print(json.dumps({k: v for k, v in rec.items() if k != "log"}, indent=2))

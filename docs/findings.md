@@ -1599,10 +1599,13 @@ at 5.32 / 2.38 / 3.56 times at 256x97. Command:
   grids, `FNO2d`'s about 4 times. Its validation transfer is likewise the smallest, 0.0259 against
   0.0346 to 0.0381 for `FNO2d` and 0.0468 for PhysicsNeMo. Which of its differences does this (the
   channel MLP in each layer, the symmetric padding, the forward-normalised FFT, the initialisation)
-  is not isolated. POD, at 2.12 times the floor there (S4, `pod-n896`), is still the best contestant
-  on in-range subcritical cases at 256x97. *(Outcome 2026-10-22, reruns entry below: these are the
-  early-stopped run's figures. Trained to 300 epochs, NeuralOperator is 1.47 times the floor at
-  128x49 and 2.26 at 256x97.)* Command for POD:
+  is not isolated. *(Corrected 2026-10-24: the forward-normalised FFT is not a difference, since
+  both normalisations scale the transform pair by the same 1/N; the fourth difference is the
+  two-layer lifting and projection. See the corrections entry of 2026-10-24.)* POD, at 2.12 times
+  the floor there (S4, `pod-n896`), is still the best contestant on in-range subcritical cases at
+  256x97. *(Outcome 2026-10-22, reruns entry below: these are the early-stopped run's figures.
+  Trained to 300 epochs, NeuralOperator is 1.47 times the floor at 128x49 and 2.26 at 256x97.)*
+  Command for POD:
   `python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; fl={(g['split'],g['regime']):g['near_field_rel_l2_mean'] for g in G if g['method']=='su2-256x97'}; [print(g['split'], g['regime'], round(g['near_field_rel_l2_mean']/fl[(g['split'],g['regime'])],2)) for g in G if g['method']=='pod' and g['n_train']==896 and g['grid']=='256x97']"`.
 - **On supercritical and extrapolation cases neither library beats `FNO2d`.** *(Superseded for
   NeuralOperator 2026-10-22, reruns entry below: trained to 300 epochs it is 1.84 times the floor
@@ -1718,8 +1721,11 @@ each model.)* On in-range supercritical cases at 256x97 it is the best near fiel
 model in this study, and on subcritical ones second to POD; it pays for it with larger drag errors
 in extrapolation. Which of its differences from `FNO2d` gives it the smaller resolution transfer
 (the channel MLP in each layer, the symmetric padding, the forward-normalised FFT, the
-initialisation) is still not isolated. Whether the seed-1 rerun retraced the early-stopped run's
-first 191 epochs is not recorded here: the per-epoch logs are in the git-ignored `train.json` files.
+initialisation) is still not isolated. *(Corrected 2026-10-24: the forward-normalised FFT is not a
+difference, since both normalisations scale the transform pair by the same 1/N; the fourth
+difference is the two-layer lifting and projection. See the corrections entry of 2026-10-24.)*
+Whether the seed-1 rerun retraced the early-stopped run's first 191 epochs is not recorded here: the
+per-epoch logs are in the git-ignored `train.json` files.
 
 ## 2026-10-24 — NeuralOperator and `FNO2d` over five seeds each
 
@@ -1802,10 +1808,42 @@ instances (5 x 27) and `FNO2d` 7; neither misses any of the 105 in extrapolation
 **What this does and does not show.** Five seeds of each model, as the probe configures them
 (positional embeddings off, modes matched to `FNO2d`'s, the same loop, loss and schedule), on one
 GPU model. NeuralOperator's FNO gives a better near field than this study's `FNO2d` at the 256x97
-evaluation grid on in-range cases, because less is lost between the 128x49 training grid and
-256x97; it does not fit the training grid better, and it gives larger drag errors in
-extrapolation. Which of its differences causes the smaller transfer (the channel MLP in each
-layer, the symmetric padding, the forward-normalised FFT, the initialisation) is still not
-isolated: that needs runs that change one of them at a time. PhysicsNeMo was run once, with early
-stopping on (it did not fire), and is not part of this comparison. S4's results, which use S2's
-`FNO2d`, are unchanged.
+evaluation grid on in-range cases, because less is lost between the 128x49 training grid and 256x97;
+it does not fit the training grid better, and it gives larger drag errors in extrapolation. Which of
+its differences causes the smaller transfer (the channel MLP in each layer, the symmetric padding,
+the forward-normalised FFT, the initialisation) is still not isolated: that needs runs that change
+one of them at a time. *(Corrected 2026-10-24: the forward-normalised FFT is not a difference, since
+both normalisations scale the transform pair by the same 1/N; the fourth difference is the two-layer
+lifting and projection. See the corrections entry of 2026-10-24.)* PhysicsNeMo was run once, with
+early stopping on (it did not fire), and is not part of this comparison. S4's results, which use
+S2's `FNO2d`, are unchanged.
+
+## 2026-10-24 — corrections: what NeuralOperator's FNO differs in
+
+Found while setting up the ablation of the transfer (`scripts/probes/fno_ablation.py`): the list
+of NeuralOperator's differences from `FNO2d` given as candidates for its smaller transfer, in the
+entries of 2026-10-22 (twice) and 2026-10-24 (five seeds), named one that is not a difference and
+missed one that is. Each place is marked.
+
+- **The FFT normalisation is not a difference.** NeuralOperator transforms with
+  `norm="forward"` (1/N on the forward transform) and `FNO2d` with PyTorch's default
+  `"backward"` (1/N on the inverse). A spectral layer multiplies between the two transforms, so
+  the 1/N lands once either way and the output is the same. One NeuralOperator spectral layer
+  under both, with the same weights: largest difference 1.3e-7 of the output's largest value,
+  float32 rounding. Command:
+  `python -c "import torch; from neuralop.layers.spectral_convolution import SpectralConv as S; torch.manual_seed(0); a=S(8,8,(8,6)); b=S(8,8,(8,6),fft_norm='backward'); b.load_state_dict(a.state_dict()); x=torch.randn(2,8,32,17); print(float(((a(x)-b(x)).abs().max()/a(x).abs().max()).detach()))"`.
+  Pinned by `tests/test_fno_ablation.py::test_the_fft_normalisation_is_not_a_difference`.
+- **The two-layer lifting and projection are a difference.** NeuralOperator lifts with a
+  two-layer channel MLP (6 to 96 to 48, GELU) where `FNO2d` lifts linearly (6 to 48), and projects
+  through 96 hidden channels where `FNO2d` uses 128.
+- **The initialisation also places the bias differently.** NeuralOperator's spectral weights
+  have a standard deviation of 0.144 at width 48 against `FNO2d`'s 4.3e-4, and its bias sits on
+  the spectral output (drawn with the same deviation) where `FNO2d`'s sits on the skip
+  convolution (PyTorch's default). The two placements give the same functions; only the starting
+  values differ.
+
+The differences are therefore four: the channel MLP in each layer (with its gated skip), the
+symmetric padding, the spectral initialisation with its bias, and the two-layer lifting and
+projection. `AblationFno` switches each on alone; tests show that with all four off it gives
+`FNO2d`'s outputs and with all four on NeuralOperator's, from copied weights, at 128x49 and
+256x97.

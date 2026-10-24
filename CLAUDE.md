@@ -106,7 +106,9 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
     `runs/predictions_lib/`, never `runs/predictions/`. Running it on a Colab GPU:
     `docs/notes/2026-10-22-colab-fno.md`. `scripts/probes/score_fno_libraries.py` scores those
     files with S4's code (`load_truth`, `load_contestants`, `score_rows` in `s4_score.py`), beside
-    S2's FNO, into `results/fno_lib/`, never `results/s4/`.
+    S2's FNO, into `results/fno_lib/`, never `results/s4/`. `scripts/probes/fno_ablation.py` switches NeuralOperator's
+    four differences from `FNO2d` on one at a time (`--library ablate --factors MPIL`), for the
+    transfer ablation (`docs/notes/2026-10-24-fno-transfer-ablation.md`).
 - **POD** (`models/pod.py`): a linear basis whose mode weights are interpolated over the inputs by
   a thin-plate-spline RBF.
 - **PINN**: the PINN has two formulations, selected by `PinnConfig.formulation`.

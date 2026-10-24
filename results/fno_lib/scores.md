@@ -16,8 +16,14 @@ best_val is loss A on the validation cases at 128x49; transfer is the relative L
 | apno-n896-s1 | apno 0.1.0 | cuda | 881 | 3555476 | 191 | 160 | 0.02035 | 0.04464 | 0.03547 | 260.8 | 1.365 | 0.001097 |
 | apno-n896-s1-nopatience | apno 0.1.0 | cuda | 881 | 3555476 | 300 | 293 | 0.01264 | 0.04059 | 0.03551 | 408.4 | 1.361 | 0.001129 |
 | apno-n896-s2 | apno 0.1.0 | cuda | 881 | 3555476 | 300 | 294 | 0.01169 | 0.04238 | 0.03808 | 408.6 | 1.362 | 0.0009714 |
+| apno-n896-s3-nopatience | apno 0.1.0 | cuda | 881 | 3555476 | 300 | 288 | 0.01265 | 0.03961 | 0.03389 | 407.2 | 1.357 | 0.001612 |
+| apno-n896-s4-nopatience | apno 0.1.0 | cuda | 881 | 3555476 | 300 | 288 | 0.01324 | 0.04681 | 0.04511 | 408.6 | 1.362 | 0.000977 |
 | neuralop-n896-s0 | neuralop 2.0.0 | cuda | 881 | 3568468 | 183 | 152 | 0.0245 | 0.05083 | 0.02594 | 243.3 | 1.33 | 0.002119 |
 | neuralop-n896-s0-nopatience | neuralop 2.0.0 | cuda | 881 | 3568468 | 300 | 294 | 0.01225 | 0.04222 | 0.0271 | 398.1 | 1.327 | 0.002333 |
+| neuralop-n896-s1-nopatience | neuralop 2.0.0 | cuda | 881 | 3568468 | 300 | 299 | 0.01219 | 0.04062 | 0.0271 | 400.5 | 1.335 | 0.002691 |
+| neuralop-n896-s2-nopatience | neuralop 2.0.0 | cuda | 881 | 3568468 | 300 | 289 | 0.01161 | 0.04051 | 0.02562 | 396.9 | 1.323 | 0.001731 |
+| neuralop-n896-s3-nopatience | neuralop 2.0.0 | cuda | 881 | 3568468 | 300 | 299 | 0.01248 | 0.04121 | 0.02546 | 406.6 | 1.355 | 0.001733 |
+| neuralop-n896-s4-nopatience | neuralop 2.0.0 | cuda | 881 | 3568468 | 300 | 290 | 0.01162 | 0.0413 | 0.02215 | 400 | 1.333 | 0.001737 |
 | physicsnemo-n896-s0 | physicsnemo 2.2.2 | cuda | 881 | 7095452 | 300 | 282 | 0.02432 | 0.05583 | 0.04681 | 424.4 | 1.415 | 0.00119 |
 | fno-n896-s0 | S2 FNO2d | mps | 881 |  | 300 | 278 | 0.0126 |  | 0.03477 | 2160 | 7.2 | 0.0536 |
 | fno-n896-s1 | S2 FNO2d | mps | 881 |  | 300 | 293 | 0.01274 |  | 0.03548 | 2242 | 7.474 | 0.01032 |
@@ -74,9 +80,21 @@ x_floor is the contestant's mean near-field relative L2 over the floor's (SU2 at
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0.2491 | 0.06511 | 3.826 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0.01032 | 0.007953 | 1.298 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0.03977 | 0.02413 | 1.648 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0.2835 | 0.06511 | 4.355 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0.01024 | 0.007953 | 1.288 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0.03721 | 0.02413 | 1.542 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0.2648 | 0.06511 | 4.067 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0.01027 | 0.007953 | 1.291 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0.0388 | 0.02413 | 1.608 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0.2563 | 0.06511 | 3.936 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0.04217 | 0.007953 | 5.302 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0.06093 | 0.02413 | 2.525 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0.2894 | 0.06511 | 4.445 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0.04137 | 0.007953 | 5.202 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0.05614 | 0.02413 | 2.326 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0.2661 | 0.06511 | 4.088 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0.04239 | 0.007953 | 5.33 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0.07294 | 0.02413 | 3.023 |
 | fno | neuralop | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0.2733 | 0.06511 | 4.197 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0.01888 | 0.007953 | 2.374 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0.05578 | 0.02413 | 2.311 |
@@ -86,9 +104,33 @@ x_floor is the contestant's mean near-field relative L2 over the floor's (SU2 at
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0.2396 | 0.06511 | 3.681 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0.01171 | 0.007953 | 1.472 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0.03943 | 0.02413 | 1.634 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0.2551 | 0.06511 | 3.919 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0.01149 | 0.007953 | 1.445 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0.04175 | 0.02413 | 1.73 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_ext | supercritical | 14 | 0.2307 | 0.06511 | 3.544 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | subcritical | 37 | 0.01122 | 0.007953 | 1.411 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | supercritical | 24 | 0.03902 | 0.02413 | 1.617 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0.2887 | 0.06511 | 4.434 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0.01217 | 0.007953 | 1.53 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0.03987 | 0.02413 | 1.652 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0.2491 | 0.06511 | 3.826 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0.01104 | 0.007953 | 1.388 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0.03688 | 0.02413 | 1.528 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 0.2338 | 0.06511 | 3.592 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | subcritical | 37 | 0.01796 | 0.007953 | 2.258 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | supercritical | 24 | 0.04445 | 0.02413 | 1.842 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0.2455 | 0.06511 | 3.771 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0.01771 | 0.007953 | 2.226 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0.04383 | 0.02413 | 1.816 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_ext | supercritical | 14 | 0.2243 | 0.06511 | 3.445 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | subcritical | 37 | 0.01848 | 0.007953 | 2.323 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | supercritical | 24 | 0.04304 | 0.02413 | 1.784 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0.2774 | 0.06511 | 4.261 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0.02458 | 0.007953 | 3.09 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0.04449 | 0.02413 | 1.843 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0.2356 | 0.06511 | 3.618 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0.01545 | 0.007953 | 1.942 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0.03613 | 0.02413 | 1.497 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0.3019 | 0.06511 | 4.637 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0.01262 | 0.007953 | 1.587 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0.06405 | 0.02413 | 2.654 |
@@ -163,9 +205,21 @@ x_floor is the contestant's mean near-field relative L2 over the floor's (SU2 at
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0 | 0.2491 | 0.243 | 184.4 | 1.22 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0 | 0 | 0.01032 | 0.007651 | 12.01 | 0.2442 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0 | 0 | 0.03977 | 0.02831 | 35.49 | 0.3741 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0 | 0.2835 | 0.1676 | 194.4 | 1.238 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0 | 0 | 0.01024 | 0.009814 | 7.568 | 0.2441 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0 | 0 | 0.03721 | 0.03221 | 33.46 | 0.3984 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0 | 0.2648 | 0.2114 | 202.3 | 1.245 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0 | 0 | 0.01027 | 0.008797 | 14.08 | 0.2439 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0 | 0 | 0.0388 | 0.03196 | 57.96 | 0.4097 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0 | 0.2563 | 0.2436 | 171.7 | 1.281 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0 | 0 | 0.04217 | 0.02778 | 35.34 | 0.2343 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0 | 0 | 0.06093 | 0.04505 | 32.41 | 0.5294 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0 | 0.2894 | 0.1618 | 197.6 | 1.299 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0 | 0 | 0.04137 | 0.0348 | 22.31 | 0.2486 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0 | 0 | 0.05614 | 0.035 | 27.47 | 0.4735 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0 | 0.2661 | 0.2079 | 185.5 | 1.253 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0 | 0 | 0.04239 | 0.03146 | 28.69 | 0.2496 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0 | 0 | 0.07294 | 0.03276 | 72 | 0.4744 |
 | fno | neuralop | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0 | 0.2733 | 0.2089 | 242.3 | 1.18 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0 | 0.01888 | 0.01194 | 23.19 | 0.2514 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0 | 0.05578 | 0.05646 | 78.92 | 0.416 |
@@ -175,9 +229,33 @@ x_floor is the contestant's mean near-field relative L2 over the floor's (SU2 at
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0 | 0.2396 | 0.2019 | 217.1 | 1.174 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0 | 0.01171 | 0.01052 | 9.813 | 0.2455 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0 | 0.03943 | 0.02282 | 38.78 | 0.3416 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0 | 0.2551 | 0.193 | 255 | 1.139 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0 | 0 | 0.01149 | 0.01159 | 9.001 | 0.2458 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0 | 0 | 0.04175 | 0.03211 | 61.14 | 0.361 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_ext | supercritical | 14 | 0 | 0 | 0.2307 | 0.189 | 209.7 | 1.092 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | subcritical | 37 | 0 | 0 | 0.01122 | 0.01092 | 6.903 | 0.2447 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | supercritical | 24 | 0 | 0 | 0.03902 | 0.02373 | 46.73 | 0.3426 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0 | 0.2887 | 0.2641 | 319.3 | 1.263 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0 | 0 | 0.01217 | 0.01298 | 7.704 | 0.2441 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0 | 0 | 0.03987 | 0.03336 | 52.14 | 0.3334 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0 | 0.2491 | 0.2169 | 186 | 1.197 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0 | 0 | 0.01104 | 0.008586 | 6.982 | 0.2447 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0 | 0 | 0.03688 | 0.02109 | 33.66 | 0.3257 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0 | 0.2338 | 0.2126 | 243.6 | 1.187 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | subcritical | 37 | 0 | 0 | 0.01796 | 0.01519 | 20.49 | 0.4171 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | supercritical | 24 | 0 | 0 | 0.04445 | 0.02348 | 47.5 | 0.4359 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0 | 0.2455 | 0.1885 | 271.2 | 1.164 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0 | 0 | 0.01771 | 0.01936 | 22.83 | 0.4191 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0 | 0 | 0.04383 | 0.03258 | 67.39 | 0.4373 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_ext | supercritical | 14 | 0 | 0 | 0.2243 | 0.1951 | 236.3 | 1.142 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | subcritical | 37 | 0 | 0 | 0.01848 | 0.01862 | 22.13 | 0.3949 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | supercritical | 24 | 0 | 0 | 0.04304 | 0.02062 | 59.92 | 0.4285 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0 | 0.2774 | 0.2713 | 341.1 | 1.281 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0 | 0 | 0.02458 | 0.01634 | 30.95 | 0.3784 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0 | 0 | 0.04449 | 0.03407 | 61.93 | 0.4132 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0 | 0.2356 | 0.2283 | 199.6 | 1.257 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0 | 0 | 0.01545 | 0.01256 | 21.07 | 0.3451 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0 | 0 | 0.03613 | 0.01937 | 39.84 | 0.3751 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0 | 0.3019 | 0.2469 | 137.3 | 0.9838 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0 | 0.01262 | 0.0114 | 11.39 | 0.2471 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0 | 0.06405 | 0.03037 | 45.71 | 0.4712 |
@@ -242,16 +320,40 @@ Pooled over every (case, surface) where the truth has a shock; a miss is a predi
 | fno | apno | 256x97 | 896 | 2 | test_in | supercritical | 24 | 24 | 27 | 1 | 0.009002 | 0.05773 | -0.06985 | 0.5073 | 0.3826 | 0.8511 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03302 | 0.2614 | -0.0797 | 0.4957 | 1.065 | 1.521 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06924 | -0.01931 | 0.2902 | 0.2527 | 0.9327 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04233 | 0.2124 | -0.01696 | 0.5144 | 1.026 | 1.569 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.04576 | -0.04338 | 0.2834 | 0.3007 | 1.114 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03552 | 0.2858 | -0.1037 | 0.3365 | 1.065 | 1.509 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06924 | -0.03316 | 0.2788 | 0.3145 | 1.181 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03494 | 0.2621 | -0.09358 | 0.3921 | 1.114 | 1.521 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 24 | 27 | 2 | 0.01166 | 0.05773 | -0.08742 | 0.3704 | 0.5369 | 1.009 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04265 | 0.2131 | -0.1244 | 0.4707 | 1.086 | 1.569 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 24 | 27 | 1 | 0.007279 | 0.04598 | -0.07544 | 0.4533 | 0.4448 | 1.155 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03985 | 0.2743 | -0.1588 | 0.4066 | 1.075 | 1.509 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 24 | 27 | 1 | 0.01088 | 0.05773 | -0.09141 | 0.4667 | 0.4044 | 0.945 |
 | fno | neuralop | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04876 | 0.2614 | -0.1493 | 0.5134 | 1.05 | 1.537 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.05842 | -0.05398 | 0.2725 | 0.297 | 1.236 |
 | fno | neuralop | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04657 | 0.2499 | -0.1742 | 0.5427 | 0.9947 | 1.537 |
 | fno | neuralop | 256x97 | 896 | 0 | test_in | supercritical | 24 | 24 | 27 | 0 | 0.01034 | 0.06815 | -0.1028 | 0.3112 | 0.4707 | 1.179 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03544 | 0.2614 | -0.1039 | 0.4113 | 0.963 | 1.531 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06924 | -0.04971 | 0.2796 | 0.26 | 0.8703 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.02989 | 0.2614 | -0.05665 | 0.499 | 0.9151 | 1.587 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06924 | -0.07658 | 0.2983 | 0.2658 | 1.058 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.02989 | 0.2369 | -0.1307 | 0.4442 | 0.9345 | 1.539 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06924 | -0.04352 | 0.2955 | 0.2413 | 1.121 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04789 | 0.2858 | -0.09782 | 0.3708 | 1.122 | 1.562 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 24 | 27 | 1 | 0 | 0.06924 | -0.0559 | 0.2872 | 0.2251 | 0.9803 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03544 | 0.2858 | -0.04347 | 0.4792 | 0.9973 | 1.547 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.04576 | -0.07408 | 0.4907 | 0.2588 | 0.7704 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03516 | 0.2499 | -0.1407 | 0.3684 | 1.005 | 1.531 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06955 | -0.05443 | 0.2447 | 0.3536 | 0.7525 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.02746 | 0.2499 | -0.1267 | 0.4843 | 0.9216 | 1.598 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.08145 | -0.07081 | 0.2511 | 0.2978 | 0.88 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.02746 | 0.2376 | -0.1663 | 0.4153 | 0.9434 | 1.589 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.06955 | -0.08114 | 0.269 | 0.301 | 0.9761 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04894 | 0.2743 | -0.1314 | 0.3792 | 1.152 | 1.626 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 24 | 27 | 1 | 0 | 0.06955 | -0.05054 | 0.2611 | 0.3352 | 0.8296 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.03516 | 0.2621 | -0.07483 | 0.3927 | 1.121 | 1.607 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 24 | 27 | 0 | 0 | 0.04598 | -0.05797 | 0.4065 | 0.3101 | 0.6599 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04745 | 0.2614 | -0.04931 | 0.5441 | 0.7896 | 1.507 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | supercritical | 24 | 24 | 27 | 0 | 0.01173 | 0.105 | -0.07888 | 0.3547 | 0.4128 | 1.053 |
 | fno | physicsnemo | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 14 | 21 | 0 | 0.04193 | 0.2621 | -0.1359 | 0.3882 | 0.8968 | 1.493 |
@@ -322,9 +424,21 @@ Mass flux is |net flux| through closed grid line j. n_nonpositive_state counts c
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0.102 | 0.1844 | 0.001934 | 0.003119 | 0.03581 | 0.09825 | 0.01276 | 0.02448 | 4 | 0.00153 | 0.005311 | 12 | 0.001347 | 0.008231 | 24 | 0.004708 | 0.02073 | 36 | 0.02081 | 0.05352 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0 | 0.01907 | 0.04609 | 1.481e-06 | 1.44e-05 | 0.0007868 | 0.002619 | 0.0008255 | 0.002693 | 4 | 8.992e-05 | 0.0004368 | 12 | 0.0001115 | 0.0005846 | 24 | 0.0002478 | 0.001531 | 36 | 0.001399 | 0.005379 |
 | fno | apno-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0 | 0.04222 | 0.09458 | 7.132e-05 | 0.002103 | 0.005675 | 0.02563 | 0.002605 | 0.01138 | 4 | 0.0002456 | 0.001152 | 12 | 0.0003465 | 0.001621 | 24 | 0.0009427 | 0.007795 | 36 | 0.004745 | 0.02384 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0.1083 | 0.2333 | 0.001422 | 0.003955 | 0.02749 | 0.1246 | 0.01351 | 0.03029 | 4 | 0.001437 | 0.005981 | 12 | 0.001934 | 0.007641 | 24 | 0.003449 | 0.0107 | 36 | 0.009527 | 0.03538 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0 | 0.01803 | 0.04635 | 1.074e-06 | 2.113e-05 | 0.0007648 | 0.002572 | 0.0008901 | 0.002235 | 4 | 0.0001004 | 0.0003808 | 12 | 7.205e-05 | 0.0006255 | 24 | 0.0002476 | 0.001581 | 36 | 0.001822 | 0.0058 |
+| fno | apno-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0 | 0.0402 | 0.09922 | 0.0001026 | 0.002348 | 0.005976 | 0.01863 | 0.002496 | 0.01635 | 4 | 0.000353 | 0.00187 | 12 | 0.0003003 | 0.00322 | 24 | 0.0008949 | 0.005197 | 36 | 0.002793 | 0.01264 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0.1232 | 0.1939 | 0.002538 | 0.007546 | 0.02915 | 0.1021 | 0.01187 | 0.03866 | 4 | 0.002471 | 0.008774 | 12 | 0.001419 | 0.008838 | 24 | 0.00487 | 0.04365 | 36 | 0.01949 | 0.05613 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0 | 0.01876 | 0.04462 | 6.77e-08 | 4.365e-05 | 0.0007299 | 0.002382 | 0.0008346 | 0.002866 | 4 | 8.885e-05 | 0.0008983 | 12 | 8.9e-05 | 0.0006039 | 24 | 0.0002544 | 0.00125 | 36 | 0.001881 | 0.004278 |
+| fno | apno-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0 | 0.04248 | 0.1008 | 9.809e-05 | 0.002191 | 0.007719 | 0.02193 | 0.002895 | 0.01452 | 4 | 0.0002955 | 0.003139 | 12 | 0.0005246 | 0.00532 | 24 | 0.0007086 | 0.006153 | 36 | 0.00179 | 0.01305 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0.1017 | 0.1795 | 0.002111 | 0.003205 | 0.03395 | 0.08876 | 0.01901 | 0.02876 | 8 | 0.001478 | 0.004522 | 24 | 0.001302 | 0.008007 | 48 | 0.004787 | 0.0225 | 72 | 0.01493 | 0.05181 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0 | 0.01794 | 0.04387 | 1.013e-06 | 1.88e-05 | 0.001131 | 0.002608 | 0.01406 | 0.01857 | 8 | 0.0002485 | 0.0007631 | 24 | 0.0001003 | 0.0008224 | 48 | 0.0007311 | 0.002207 | 72 | 0.00622 | 0.01238 |
 | fno | apno-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0 | 0.0408 | 0.09428 | 7.18e-05 | 0.002155 | 0.006433 | 0.02246 | 0.0143 | 0.01918 | 8 | 0.0003882 | 0.001478 | 24 | 0.000566 | 0.001772 | 48 | 0.001352 | 0.00989 | 72 | 0.008694 | 0.01879 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0.1028 | 0.2388 | 0.001252 | 0.003616 | 0.02883 | 0.1238 | 0.02052 | 0.03445 | 8 | 0.001446 | 0.006995 | 24 | 0.001212 | 0.008681 | 48 | 0.006859 | 0.01535 | 72 | 0.01259 | 0.03691 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0 | 0.01772 | 0.04389 | -9.428e-07 | 2.042e-05 | 0.001858 | 0.002774 | 0.01376 | 0.01851 | 8 | 0.0005924 | 0.001269 | 24 | 0.0002344 | 0.00109 | 48 | 0.0007602 | 0.00193 | 72 | 0.002548 | 0.008585 |
+| fno | apno-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0 | 0.04217 | 0.1022 | 0.0001106 | 0.002061 | 0.006454 | 0.01897 | 0.01384 | 0.02044 | 8 | 0.0008186 | 0.001949 | 24 | 0.0006848 | 0.002932 | 48 | 0.001009 | 0.008975 | 72 | 0.002864 | 0.01262 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0.1314 | 0.193 | 0.002535 | 0.007606 | 0.03138 | 0.09383 | 0.01803 | 0.04092 | 8 | 0.001871 | 0.00904 | 24 | 0.00391 | 0.01527 | 48 | 0.006749 | 0.04986 | 72 | 0.0196 | 0.0941 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0 | 0.01812 | 0.04234 | -1.266e-06 | 5.931e-05 | 0.001279 | 0.002335 | 0.01412 | 0.01924 | 8 | 0.000381 | 0.001697 | 24 | 0.0002318 | 0.0006866 | 48 | 0.0003681 | 0.0015 | 72 | 0.004275 | 0.009511 |
+| fno | apno-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0 | 0.04401 | 0.1116 | 0.0001351 | 0.002185 | 0.007945 | 0.0262 | 0.01357 | 0.01906 | 8 | 0.001298 | 0.003136 | 24 | 0.0004946 | 0.006932 | 48 | 0.0007362 | 0.01425 | 72 | 0.004374 | 0.01267 |
 | fno | neuralop | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0.1042 | 0.1562 | 0.001932 | 0.003938 | 0.028 | 0.1175 | 0.01534 | 0.04152 | 4 | 0.002475 | 0.008578 | 12 | 0.004677 | 0.016 | 24 | 0.009488 | 0.0239 | 36 | 0.0502 | 0.09651 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0.01893 | 0.04482 | 9.082e-06 | 8.073e-05 | 0.001785 | 0.004627 | 0.002968 | 0.00613 | 4 | 0.001324 | 0.002396 | 12 | 0.0004618 | 0.002685 | 24 | 0.0009241 | 0.00305 | 36 | 0.004897 | 0.01411 |
 | fno | neuralop | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0.04412 | 0.1121 | 0.0001244 | 0.002639 | 0.007174 | 0.02628 | 0.005318 | 0.01135 | 4 | 0.002197 | 0.00419 | 12 | 0.001081 | 0.005315 | 24 | 0.001074 | 0.008293 | 36 | 0.003202 | 0.04449 |
@@ -334,9 +448,33 @@ Mass flux is |net flux| through closed grid line j. n_nonpositive_state counts c
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0.09693 | 0.1492 | 0.001888 | 0.003902 | 0.02579 | 0.1153 | 0.01468 | 0.04554 | 4 | 0.002749 | 0.007582 | 12 | 0.002949 | 0.01079 | 24 | 0.01047 | 0.03046 | 36 | 0.06546 | 0.1173 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0.01835 | 0.04306 | 2.183e-06 | 2.513e-05 | 0.001304 | 0.003328 | 0.001054 | 0.002228 | 4 | 9.551e-05 | 0.001295 | 12 | 0.0001804 | 0.0005396 | 24 | 0.0004336 | 0.001467 | 36 | 0.003372 | 0.009191 |
 | fno | neuralop-nopatience | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0.04125 | 0.1109 | 8.006e-05 | 0.002613 | 0.006209 | 0.03261 | 0.002614 | 0.007626 | 4 | 0.0004784 | 0.002858 | 12 | 0.0006762 | 0.004052 | 24 | 0.0007703 | 0.004146 | 36 | 0.003181 | 0.02333 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0.112 | 0.1549 | 0.001664 | 0.003677 | 0.03507 | 0.1626 | 0.01318 | 0.06036 | 4 | 0.001494 | 0.01129 | 12 | 0.004927 | 0.01904 | 24 | 0.01309 | 0.06185 | 36 | 0.03343 | 0.1121 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | subcritical | 37 | 0 | 0.019 | 0.04482 | 1.061e-06 | 3.731e-05 | 0.001072 | 0.00348 | 0.001121 | 0.002882 | 4 | 0.0001908 | 0.001769 | 12 | 0.0001741 | 0.001129 | 24 | 0.0005971 | 0.002524 | 36 | 0.002912 | 0.006287 |
+| fno | neuralop-nopatience | 128x49 | 896 | 1 | test_in | supercritical | 24 | 0 | 0.03998 | 0.1153 | 6.04e-05 | 0.002649 | 0.006253 | 0.02764 | 0.002578 | 0.01148 | 4 | 0.0003752 | 0.003948 | 12 | 0.0005216 | 0.003921 | 24 | 0.001163 | 0.007837 | 36 | 0.005368 | 0.01721 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_ext | supercritical | 14 | 0 | 0.1013 | 0.1511 | 0.002399 | 0.003394 | 0.02701 | 0.04285 | 0.01361 | 0.02256 | 4 | 0.002007 | 0.009023 | 12 | 0.002833 | 0.02237 | 24 | 0.006285 | 0.02449 | 36 | 0.008219 | 0.05997 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | subcritical | 37 | 0 | 0.01853 | 0.0459 | 4.086e-06 | 2.329e-05 | 0.001035 | 0.002841 | 0.0009895 | 0.002575 | 4 | 8.768e-05 | 0.0007358 | 12 | 0.0001894 | 0.000829 | 24 | 0.0002527 | 0.001347 | 36 | 0.001994 | 0.01211 |
+| fno | neuralop-nopatience | 128x49 | 896 | 2 | test_in | supercritical | 24 | 0 | 0.04228 | 0.1093 | 0.0001379 | 0.00254 | 0.005885 | 0.01846 | 0.002582 | 0.01155 | 4 | 0.0002929 | 0.002043 | 12 | 0.000471 | 0.003151 | 24 | 0.0008899 | 0.004987 | 36 | 0.003716 | 0.01684 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0.1053 | 0.1772 | 0.001944 | 0.003813 | 0.0292 | 0.05731 | 0.01211 | 0.03702 | 4 | 0.00245 | 0.007637 | 12 | 0.002219 | 0.007218 | 24 | 0.004478 | 0.01968 | 36 | 0.01101 | 0.04931 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | subcritical | 37 | 0 | 0.01911 | 0.04568 | 1.708e-06 | 3.055e-05 | 0.001155 | 0.004403 | 0.001059 | 0.003176 | 4 | 0.0001995 | 0.0007866 | 12 | 0.0002018 | 0.0006974 | 24 | 0.0005511 | 0.001442 | 36 | 0.003283 | 0.01124 |
+| fno | neuralop-nopatience | 128x49 | 896 | 3 | test_in | supercritical | 24 | 0 | 0.04139 | 0.1239 | 7.691e-05 | 0.002837 | 0.007258 | 0.03382 | 0.002559 | 0.007918 | 4 | 0.0003885 | 0.003219 | 12 | 0.0005943 | 0.004085 | 24 | 0.0009508 | 0.004845 | 36 | 0.004212 | 0.05195 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0.1075 | 0.1468 | 0.001801 | 0.002886 | 0.02489 | 0.03946 | 0.01556 | 0.05452 | 4 | 0.002804 | 0.009881 | 12 | 0.008184 | 0.02127 | 24 | 0.004617 | 0.03131 | 36 | 0.009278 | 0.0363 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | subcritical | 37 | 0 | 0.01832 | 0.04469 | -7.781e-07 | 1.376e-05 | 0.001107 | 0.003965 | 0.0009506 | 0.003381 | 4 | 0.00017 | 0.0005494 | 12 | 0.0001493 | 0.0006591 | 24 | 0.000394 | 0.001138 | 36 | 0.002005 | 0.01229 |
+| fno | neuralop-nopatience | 128x49 | 896 | 4 | test_in | supercritical | 24 | 0 | 0.03941 | 0.1262 | 9.45e-05 | 0.002352 | 0.007639 | 0.02499 | 0.002366 | 0.009143 | 4 | 0.0004233 | 0.002252 | 12 | 0.0003959 | 0.002713 | 24 | 0.0007601 | 0.006933 | 36 | 0.003756 | 0.02886 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0.1064 | 0.1544 | 0.001922 | 0.003979 | 0.02724 | 0.1125 | 0.01526 | 0.04166 | 8 | 0.002468 | 0.01008 | 24 | 0.003567 | 0.01037 | 48 | 0.01021 | 0.03066 | 72 | 0.0658 | 0.1192 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | subcritical | 37 | 0 | 0.01908 | 0.04455 | 1.704e-06 | 2.434e-05 | 0.001853 | 0.003998 | 0.006339 | 0.008263 | 8 | 0.0003097 | 0.001664 | 24 | 0.0002216 | 0.000616 | 48 | 0.0004558 | 0.001589 | 72 | 0.003076 | 0.009273 |
 | fno | neuralop-nopatience | 256x97 | 896 | 0 | test_in | supercritical | 24 | 0 | 0.04299 | 0.1191 | 8.49e-05 | 0.002606 | 0.006716 | 0.0327 | 0.00665 | 0.01086 | 8 | 0.0006342 | 0.002012 | 24 | 0.0003447 | 0.005002 | 48 | 0.001323 | 0.006729 | 72 | 0.002868 | 0.02233 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_ext | supercritical | 14 | 0 | 0.1153 | 0.1548 | 0.001687 | 0.003748 | 0.03771 | 0.1516 | 0.01347 | 0.06325 | 8 | 0.00175 | 0.01243 | 24 | 0.004714 | 0.01906 | 48 | 0.01393 | 0.06434 | 72 | 0.03456 | 0.1155 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | subcritical | 37 | 0 | 0.0192 | 0.04508 | 1.52e-06 | 3.53e-05 | 0.001982 | 0.00774 | 0.007401 | 0.01126 | 8 | 0.000549 | 0.002687 | 24 | 0.0001908 | 0.001268 | 48 | 0.000622 | 0.002706 | 72 | 0.002385 | 0.007615 |
+| fno | neuralop-nopatience | 256x97 | 896 | 1 | test_in | supercritical | 24 | 0 | 0.04428 | 0.1284 | 6.157e-05 | 0.002677 | 0.007863 | 0.02679 | 0.00766 | 0.0104 | 8 | 0.0005606 | 0.003021 | 24 | 0.0005204 | 0.003984 | 48 | 0.001021 | 0.009378 | 72 | 0.005335 | 0.01831 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_ext | supercritical | 14 | 0 | 0.1134 | 0.1573 | 0.002393 | 0.003356 | 0.02779 | 0.04136 | 0.01574 | 0.02402 | 8 | 0.002184 | 0.009098 | 24 | 0.002575 | 0.02391 | 48 | 0.01024 | 0.02935 | 72 | 0.01451 | 0.06981 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | subcritical | 37 | 0 | 0.01808 | 0.04622 | 3.354e-06 | 1.979e-05 | 0.001721 | 0.005974 | 0.006757 | 0.01146 | 8 | 0.0003871 | 0.001315 | 24 | 0.0004978 | 0.001049 | 48 | 0.0003513 | 0.001541 | 72 | 0.00217 | 0.01439 |
+| fno | neuralop-nopatience | 256x97 | 896 | 2 | test_in | supercritical | 24 | 0 | 0.04483 | 0.1199 | 0.0001345 | 0.00252 | 0.006948 | 0.03009 | 0.007015 | 0.0104 | 8 | 0.0002842 | 0.002294 | 24 | 0.0004983 | 0.004568 | 48 | 0.00179 | 0.00739 | 72 | 0.003144 | 0.01098 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_ext | supercritical | 14 | 0 | 0.1086 | 0.1763 | 0.00197 | 0.003904 | 0.03562 | 0.05666 | 0.01295 | 0.03486 | 8 | 0.002418 | 0.007929 | 24 | 0.001977 | 0.008511 | 48 | 0.005704 | 0.01966 | 72 | 0.01127 | 0.06055 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | subcritical | 37 | 0 | 0.02017 | 0.0479 | 2.265e-06 | 2.802e-05 | 0.002058 | 0.007619 | 0.007077 | 0.01047 | 8 | 0.0003313 | 0.0011 | 24 | 0.0009279 | 0.001564 | 48 | 0.0008567 | 0.002041 | 72 | 0.003742 | 0.01253 |
+| fno | neuralop-nopatience | 256x97 | 896 | 3 | test_in | supercritical | 24 | 0 | 0.0456 | 0.125 | 8.713e-05 | 0.002837 | 0.008484 | 0.03583 | 0.007384 | 0.009472 | 8 | 0.0002409 | 0.003488 | 24 | 0.001128 | 0.004839 | 48 | 0.001418 | 0.00479 | 72 | 0.003972 | 0.06196 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_ext | supercritical | 14 | 0 | 0.1131 | 0.1513 | 0.001851 | 0.002893 | 0.02552 | 0.0392 | 0.01485 | 0.05371 | 8 | 0.002179 | 0.009058 | 24 | 0.008033 | 0.0221 | 48 | 0.00614 | 0.03022 | 72 | 0.01077 | 0.03765 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | subcritical | 37 | 0 | 0.01925 | 0.04639 | -1.014e-06 | 1.401e-05 | 0.002989 | 0.006524 | 0.006074 | 0.009461 | 8 | 0.0004129 | 0.0009117 | 24 | 0.0003861 | 0.001183 | 48 | 0.00051 | 0.001507 | 72 | 0.002803 | 0.01278 |
+| fno | neuralop-nopatience | 256x97 | 896 | 4 | test_in | supercritical | 24 | 0 | 0.04288 | 0.1322 | 8.94e-05 | 0.002337 | 0.008397 | 0.02988 | 0.006531 | 0.01036 | 8 | 0.0004856 | 0.001788 | 24 | 0.0005157 | 0.00244 | 48 | 0.0009827 | 0.007959 | 72 | 0.003235 | 0.02173 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_ext | supercritical | 14 | 0 | 0.1108 | 0.3078 | 0.001448 | 0.003932 | 0.08479 | 0.2304 | 0.0188 | 0.03325 | 4 | 0.001909 | 0.008656 | 12 | 0.005462 | 0.02372 | 24 | 0.008693 | 0.02109 | 36 | 0.02137 | 0.07256 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | subcritical | 37 | 0 | 0.0183 | 0.04527 | 1.117e-06 | 1.709e-05 | 0.001231 | 0.005184 | 0.001603 | 0.004569 | 4 | 0.0001434 | 0.001142 | 12 | 0.0001702 | 0.0009326 | 24 | 0.0003373 | 0.00149 | 36 | 0.001488 | 0.007589 |
 | fno | physicsnemo | 128x49 | 896 | 0 | test_in | supercritical | 24 | 0 | 0.04206 | 0.1149 | 7.565e-05 | 0.002788 | 0.01471 | 0.06824 | 0.003859 | 0.01296 | 4 | 0.0005319 | 0.004474 | 12 | 0.001186 | 0.004943 | 24 | 0.001101 | 0.01082 | 36 | 0.004635 | 0.02709 |

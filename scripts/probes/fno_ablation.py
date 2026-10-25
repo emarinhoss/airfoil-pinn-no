@@ -13,7 +13,10 @@ The factors, each "on" meaning NeuralOperator's choice:
      soft-gated skip from the block's input, then GELU (not after the last layer). Off: none.
 - P  padding: zero rows on both radial ends, a fixed fraction (4/49 of NJ each side, so 4 + 4 at
      128x49 and 8 + 8 at 256x97). Off: FNO2d's `radial_pad(NJ)` rows at the far end only, which
-     keeps the radial DFT period at 19/16 in eta at every NJ.
+     keeps the radial DFT period at 19/16 in eta at every NJ. Every layer commutes with a circular
+     shift of the padded column, so only the row count matters: P is FNO2d's padding at 128x49
+     (8 rows) and one row fewer at 256x97 (16 against 17). It changes evaluation, not training
+     (docs/findings.md, 2026-10-25).
 - I  spectral initialisation and bias placement: complex weights of standard deviation
      sqrt(2 / 2W) (0.144 at W 48), and the bias added to the spectral output, drawn with the same
      deviation; the skip has no bias. Off: deviation 1 / W^2 (4.3e-4), no spectral bias, the skip

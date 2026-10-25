@@ -1812,11 +1812,12 @@ evaluation grid on in-range cases, because less is lost between the 128x49 train
 it does not fit the training grid better, and it gives larger drag errors in extrapolation. Which of
 its differences causes the smaller transfer (the channel MLP in each layer, the symmetric padding,
 the forward-normalised FFT, the initialisation) is still not isolated: that needs runs that change
-one of them at a time. *(Corrected 2026-10-24: the forward-normalised FFT is not a difference, since
-both normalisations scale the transform pair by the same 1/N; the fourth difference is the two-layer
-lifting and projection. See the corrections entry of 2026-10-24.)* PhysicsNeMo was run once, with
-early stopping on (it did not fire), and is not part of this comparison. S4's results, which use
-S2's `FNO2d`, are unchanged.
+one of them at a time. *(Outcome 2026-10-25, ablation entry below: it is the padding, and only
+through its row count at 256x97.)* *(Corrected 2026-10-24: the forward-normalised FFT is not a
+difference, since both normalisations scale the transform pair by the same 1/N; the fourth
+difference is the two-layer lifting and projection. See the corrections entry of 2026-10-24.)*
+PhysicsNeMo was run once, with early stopping on (it did not fire), and is not part of this
+comparison. S4's results, which use S2's `FNO2d`, are unchanged.
 
 ## 2026-10-24 — corrections: what NeuralOperator's FNO differs in
 
@@ -1847,3 +1848,97 @@ symmetric padding, the spectral initialisation with its bias, and the two-layer 
 projection. `AblationFno` switches each on alone; tests show that with all four off it gives
 `FNO2d`'s outputs and with all four on NeuralOperator's, from copied weights, at 128x49 and
 256x97.
+
+## 2026-10-25 — the FNO transfer ablation, phase 1: one row of padding at 256x97
+
+The design, the runs and the planned analysis are in
+`docs/notes/2026-10-24-fno-transfer-ablation.md`, written before the runs; no prediction was
+recorded. By the author, on the Colab A100
+(A100-SXM4-80GB, torch 2.11.0+cu130, `NVIDIA_TF32_OVERRIDE` 0 in every record): the two controls
+`abl-none` (`FNO2d`) and `abl-MPIL` (NeuralOperator's FNO), and each of NeuralOperator's four
+differences added alone to `FNO2d` (`abl-M` channel MLP, `abl-P` symmetric padding, `abl-I`
+spectral initialisation, `abl-L` two-layer lifting and projection), seeds 0 to 4, 300 epochs,
+early stopping off:
+`python scripts/probes/probe_fno_libraries.py --library ablate --factors F --n-train 896 --seed S --epochs 300 --patience 300 --device cuda`.
+Scored with
+`python scripts/probes/score_fno_libraries.py --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2`
+and analysed with `python scripts/probes/fno_ablation.py summary` (commit 9780063,
+`results/fno_lib/ablation.md`): 7,575 case scores, all `ok`.
+
+**A failure first.** The first scoring (commit c5314bf) was made with the 30 runs' prediction
+files but without their training records, so the validation columns, the primary measure, were
+blank, and nothing said so. The scorer and the summary now name such runs (commit 7cfd328); the
+records were copied and everything rescored.
+
+**The stop rule fired for one control.** The plan's rule: stop if `abl-none`'s mean validation
+transfer falls outside `FNO2d`'s five-seed range (0.0339 to 0.0451) or `abl-MPIL`'s outside
+NeuralOperator's (0.0222 to 0.0271). `abl-none` passes at 0.0375. `abl-MPIL` fails at 0.0281.
+The two controls are not the same kind of check. `abl-none` builds its lifting, skips and
+projection in `FNO2d`'s order and so draws exactly `FNO2d`'s initial values for them (only its
+spectral weights, of deviation 4.3e-4, differ); it tracks `FNO2d` to 0.00029 in transfer on every
+seed. NeuralOperator builds its blocks before its lifting, so `abl-MPIL` shares only the
+projection's initial values with it and is a new sample of five; against NeuralOperator's five,
+p = 0.111. A mean inside another sample's five-seed range was a stricter test than a resample can
+be expected to pass. The rule is recorded as fired. The add-one effects below are measured
+against `abl-none`, which passed; only remove-one comparisons would rest on `abl-MPIL`.
+Commands:
+`python -c "import sys,torch; sys.path.insert(0,'scripts/probes'); import probe_fno_libraries as p, fno_ablation as ab; from apno.models.train_fno import FnoConfig; c=FnoConfig(width=48,modes_i=24,modes_j=8,layers=4); d=lambda b: (torch.manual_seed(0), b())[1]; f,a,n,m=d(lambda: p.build_model('apno',c)),d(lambda: ab.AblationFno(c,'')),d(lambda: p.NeuralopFno(c)),d(lambda: ab.AblationFno(c,'MPIL')); print('FNO2d/abl-none lift, skips, projection, spectral:', torch.equal(f.lift.weight[...,0],a.lift.fcs[0].weight), all(torch.equal(f.pointwise[k].weight[...,0],a.skips[k].conv.weight) for k in range(4)), torch.equal(f.proj[0].weight[...,0],a.proj.fcs[0].weight), torch.equal(torch.cat([f.spectral[0].w_neg,f.spectral[0].w_pos],2),a.convs[0].weight.tensor)); B=n.net.fno_blocks; print('NeuralOperator/abl-MPIL lift, skips, projection, spectral:', torch.equal(n.net.lifting.fcs[0].weight,m.lift.fcs[0].weight), torch.equal(B.fno_skips[0].conv.weight,m.skips[0].conv.weight), torch.equal(n.net.projection.fcs[0].weight,m.proj.fcs[0].weight), torch.equal(B.convs[0].weight.tensor,m.convs[0].weight.tensor))"`
+and
+`python -c "import sys,json; sys.path.insert(0,'scripts/probes'); from fno_ablation import permutation_p as P; r={x['tag']:x for x in json.load(open('results/fno_lib/scores.json'))['runs']}; t=lambda tags: [r[x]['transfer_val_rel_l2'] for x in tags]; F=t(['apno-n896-s0','apno-n896-s1-nopatience','apno-n896-s2','apno-n896-s3-nopatience','apno-n896-s4-nopatience']); N=t([f'neuralop-n896-s{s}-nopatience' for s in range(5)]); A=lambda c: t([f'abl-{c}-n896-s{s}' for s in range(5)]); print('abl-none vs FNO2d, largest per-seed difference', round(max(abs(a-b) for a,b in zip(A('none'),F)),5)); print('abl-MPIL vs NeuralOperator p', round(P(A('MPIL'),N),3)); print('abl-P vs NeuralOperator p', round(P(A('P'),N),3), '| abl-P vs abl-MPIL p', round(P(A('P'),A('MPIL')),3)); print('best val abl-P minus abl-none per seed', [round(r[f'abl-P-n896-s{s}']['best_val']-r[f'abl-none-n896-s{s}']['best_val'],6) for s in range(5)])"`.
+
+| configuration | validation transfer, seeds 0 to 4 | mean | best val loss | x floor 256x97 in range sub / sup | x floor 128x49 in range sub |
+|---|---|---|---|---|---|
+| `abl-none` (`FNO2d`) | 0.0348, 0.0355, 0.0380, 0.0342, 0.0451 | 0.0375 | 0.01262 | 5.36 / 2.56 | 1.29 |
+| `abl-P` | 0.0206, 0.0205, 0.0216, 0.0203, 0.0245 | **0.0215** | 0.01263 | **2.18 / 1.68** | 1.30 |
+| `abl-M` | 0.0463, 0.0491, 0.0450, 0.0526, 0.0589 | 0.0504 | 0.01270 | 5.76 / 2.92 | 1.34 |
+| `abl-I` | 0.0467, 0.0348, 0.0338, 0.0371, 0.0493 | 0.0404 | 0.01313 | 4.95 / 2.84 | 1.39 |
+| `abl-L` | 0.0431, 0.0435, 0.0424, 0.0484, 0.0474 | 0.0449 | 0.01451 | 4.80 / 2.77 | 1.40 |
+| `abl-MPIL` (NeuralOperator) | 0.0299, 0.0298, 0.0301, 0.0256, 0.0249 | 0.0281 | 0.01171 | 2.52 / 1.89 | 1.47 |
+
+Commands: transfer and validation loss,
+`python -c "import json,numpy as np; r={x['tag']:x for x in json.load(open('results/fno_lib/scores.json'))['runs']}; [print(c, [round(r[f'abl-{c}-n896-s{s}']['transfer_val_rel_l2'],4) for s in range(5)], round(np.mean([r[f'abl-{c}-n896-s{s}']['transfer_val_rel_l2'] for s in range(5)]),4), round(np.mean([r[f'abl-{c}-n896-s{s}']['best_val'] for s in range(5)]),5)) for c in ('none','P','M','I','L','MPIL')]"`;
+near field,
+`python -c "import sys,json,numpy as np; sys.path.insert(0,'scripts/probes'); from fno_ablation import permutation_p as P; X={(r['variant'],r['seed'],r['grid'],r['split'],r['regime']):r['x_floor'] for r in json.load(open('results/fno_lib/scores.json'))['floor_ratios'] if r['n_train']==896}; S={c:[(f'abl-{c}',s) for s in range(5)] for c in ('none','P','M','I','L','MPIL')}; S['neuralop']=[('neuralop-nopatience',s) for s in range(5)]; v=lambda k,g,sp,rg: [X[a+(g,sp,rg)] for a in S[k]]; [print(g, sp, rg, {k: round(float(np.mean(v(k,g,sp,rg))),2) for k in S}, 'p P-none', round(P(v('P',g,sp,rg),v('none',g,sp,rg)),3), 'p P-neuralop', round(P(v('P',g,sp,rg),v('neuralop',g,sp,rg)),3)) for g,sp,rg in (('256x97','test_in','subcritical'),('256x97','test_in','supercritical'),('256x97','test_ext','supercritical'),('128x49','test_in','subcritical'))]"`.
+The add-one effects and their p values are in `results/fno_lib/ablation.md`.
+
+- **The padding alone accounts for the transfer.** Adding P to `FNO2d` lowers the mean transfer
+  from 0.0375 to 0.0215 (p = 0.008, no overlap). That is more than the 0.0119 gap it was meant to
+  explain: `abl-P` transfers better than NeuralOperator's FNO (0.0255, p = 0.016) and than
+  `abl-MPIL` (p = 0.008). On the test cases it takes in-range subcritical cases at 256x97 from
+  5.36 to 2.18 times the floor and supercritical ones from 2.56 to 1.68 (both p = 0.008), level
+  with NeuralOperator (p = 0.492 and 0.31).
+- **The other three, alone, leave the transfer as it is or make it worse:** the channel MLP by
+  0.0128 (p = 0.016), the two-layer lifting and projection by 0.0074 (p = 0.032), the
+  initialisation by 0.0028 (p = 0.444). They are where NeuralOperator's small deficit on the
+  128x49 training grid comes from (1.45 times the floor on in-range subcritical cases, against
+  1.30 for `abl-P`, p = 0.008; 1.34, 1.39 and 1.40 for M, I and L alone).
+- **P does not change the training at all, only the evaluation.** Every layer commutes with a
+  circular shift of the padded radial column, and the radial FFT treats that column as periodic.
+  So 4 + 4 rows at 128x49 are the same operator as `FNO2d`'s 8 at the far end, and 8 + 8 at
+  256x97 the same as 16 at the far end. With the same weights, the outputs agree to 5.4e-7 in
+  both cases, against 1.3e-3 for 8 + 8 against `FNO2d`'s 17 at 256x97. Pinned by
+  `tests/test_fno_ablation.py::test_p_is_a_circular_shift_of_one_sided_padding_with_the_same_row_count`.
+  Command:
+  `python -c "import sys,torch,torch.nn.functional as F; sys.path.insert(0,'scripts/probes'); import fno_ablation as ab; from apno.models.train_fno import FnoConfig; c=FnoConfig(width=48,modes_i=24,modes_j=8,layers=4); torch.manual_seed(0); a=ab.AblationFno(c,'').eval(); torch.manual_seed(0); b=ab.AblationFno(c,'P').eval(); [m.convs[k].weight.tensor.data.mul_(100) for m in (a,b) for k in range(4)]; e=lambda u,v: float((u-v).abs().max()/v.abs().max()); x1,x2=torch.randn(2,6,128,49),torch.randn(2,6,256,97); y1,y2=b(x1).detach(),b(x2).detach(); print('4+4 vs 8 at 128x49', e(y1,a(x1).detach()), '| 8+8 vs 17 at 256x97', e(y2,a(x2).detach())); a.padding.pad=lambda x: (setattr(a.padding,'_nj',x.shape[-1]), F.pad(x,(0,16)))[1]; print('8+8 vs 16 at 256x97', e(y2,a(x2).detach()))"`.
+  P adds no parameters, so `abl-P` and `abl-none` draw the same initial weights and train the same
+  way: their best validation losses differ by at most 1.2e-4 per seed (GPU arithmetic is not
+  bit-reproducible), and on the 128x49 test grid they score 1.30 and 1.29 (p = 0.841). `abl-P` is
+  `abl-none`'s models evaluated at 256x97 with 16 padding rows instead of 17.
+- **The forces move both ways.** In range at 256x97, `abl-P`'s mean |CL error| falls from 0.0168
+  to 0.0102 and its mean |CD error| rises from 16.7 to 20.1 counts (both p = 0.008). In
+  extrapolation its mean |CD error| is 101.2 counts against 84.5 (p = 0.063), and its near field
+  is level (3.81 against 3.97 times the floor, p = 0.444). Command:
+  `python -c "import sys,json,numpy as np; sys.path.insert(0,'scripts/probes'); from fno_ablation import permutation_p as P; R=json.load(open('results/fno_lib/scores.json'))['rows']; S={c:[(f'abl-{c}',s) for s in range(5)] for c in ('none','P','MPIL')}; S['neuralop']=[('neuralop-nopatience',s) for s in range(5)]; m=lambda v,s,sp,k,f: float(f([abs(r['score'][k]) for r in R if r['variant']==v and r['seed']==s and r['n_train']==896 and r['grid']=='256x97' and r['split']==sp])); q=lambda c,sp,k,f: [m(v,s,sp,k,f) for v,s in S[c]]; [print(sp, k, f.__name__, {c: round(float(np.mean(q(c,sp,k,f))),4) for c in S}, 'p P-none', round(P(q('P',sp,k,f),q('none',sp,k,f)),3)) for sp,k,f in (('test_in','cl_err',np.mean),('test_in','cd_err_counts',np.mean),('test_ext','cd_err_counts',np.mean),('test_ext','cd_err_counts',np.max))]"`.
+
+**What this does and does not show.** The smaller transfer of NeuralOperator's FNO comes from its
+radial padding rule, and only through the number of padding rows at the evaluation grid: 16 at
+256x97 where `FNO2d` uses 17. `FNO2d`'s rule was chosen (design §6.3, amended 2026-10-01) to
+keep the radial DFT period the same at both grids, 19/16 in η, on the argument that a learned
+radial mode then means the same physical mode, supported by a one-layer test on a wrap-periodic
+field. On the trained networks the matched period transfers worse than the 0.88 % mismatch of
+16 rows (period 113/96). Why is not shown here. Nor is 16 shown to be the best count: only 16
+and 17 were evaluated. Because P changes only the evaluation, other counts can be measured on
+the existing checkpoints without training, and NeuralOperator's model without P (phase 2's
+`abl-MIL`) needs no runs either. The design's padding rule and S4's results are unchanged: S4
+measured `FNO2d` as designed. These findings say that its error at 256x97, and the resolution
+transfer S4 charged to it, depend on a choice of one padding row.

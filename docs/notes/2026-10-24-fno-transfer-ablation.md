@@ -112,3 +112,22 @@ from earlier runs might inform one, neither of them evidence about the cause. Ph
 its spectral weights at FNO2d's small scale and matches its padding, and it had the largest
 transfer of the three (0.0468, one seed). NeuralOperator's symmetric padding was expected
 (2026-10-21) to transfer worse, and it transferred better.
+
+## Outcome of phase 1 (added 2026-10-25)
+
+`docs/findings.md`, 2026-10-25. The padding alone accounts for the transfer, and it does so
+without changing the training. Every layer commutes with a circular shift of the padded radial
+column, so P's 4 + 4 rows at 128x49 are `FNO2d`'s 8. At 256x97, P's 8 + 8 rows are 16 one-sided
+rows against `FNO2d`'s 17. `abl-P` is `abl-none`'s trained models evaluated with one row fewer.
+
+The `abl-MPIL` control failed the stop rule narrowly. It turns out to be a fresh sample of
+NeuralOperator's initial weights (p = 0.111 against NeuralOperator's five), while `abl-none`
+shares most of `FNO2d`'s. The add-one comparisons rest on `abl-none`.
+
+**Phase 2 as planned is mostly moot.** Removing P from NeuralOperator (`abl-MIL`) changes only
+the evaluation, so it can be computed from the `abl-MPIL` checkpoints without training. Removing
+M, I or L would test factors that, added alone, made the transfer worse or left it unchanged.
+
+**What the result asks next** is how the error at 256x97 depends on the number of padding rows,
+which needs no training: evaluate existing checkpoints (S2's `fno-n896-s*`, the `abl-none` and
+`abl-MPIL` runs) at 256x97 with a range of row counts, and read the validation transfer and error.

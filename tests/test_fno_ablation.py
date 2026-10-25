@@ -215,3 +215,42 @@ def test_summary_flags_runs_scored_without_a_training_record():
     text = ab.summary(scores)
     assert "**1 run(s) have test scores but no training record**" in text and "abl-none-s1" in text
     assert "no training record" not in ab.summary(_scores({"none": [(0.03, 0.01, 5.0, 2.0)] * 2}))
+
+
+class _Rows(torch.nn.Module):
+    """One-sided radial padding with a fixed row count."""
+
+    def __init__(self, rows):
+        super().__init__()
+        self.rows = rows
+
+    def pad(self, x):
+        self.nj = x.shape[-1]
+        return torch.nn.functional.pad(x, (0, self.rows))
+
+    def unpad(self, x):
+        return x[..., : self.nj]
+
+
+def test_p_is_a_circular_shift_of_one_sided_padding_with_the_same_row_count():
+    """Every layer commutes with a circular shift of the padded radial column, so padding 4 + 4
+    rows is the same operator as 8 rows at the far end, and 8 + 8 the same as 16. P therefore
+    changes nothing at the 128x49 training grid (FNO2d pads 8 there too) and, at 256x97, only
+    the row count: 16 against FNO2d's 17. docs/findings.md, 2026-10-25."""
+    torch.manual_seed(0)
+    none = ab.AblationFno(SMALL, "").eval()
+    torch.manual_seed(0)
+    pad = ab.AblationFno(SMALL, "P").eval()
+    for a, b in zip(none.state_dict().values(), pad.state_dict().values()):
+        assert torch.equal(a, b)  # P adds no parameters, so the same draws
+    with torch.no_grad():
+        for p in pad.convs:  # spectral weights of a trained scale, so the padding matters
+            p.weight.tensor.mul_(100.0)
+        for p in none.convs:
+            p.weight.tensor.mul_(100.0)
+        x = torch.randn(2, 6, 128, 49)
+        assert _close(pad, none, x) < 1e-5  # 4 + 4 against 8: the training grid
+        x = torch.randn(2, 6, 256, 97)
+        assert _close(pad, none, x) > 1e-3  # 8 + 8 against 17
+        none.padding = _Rows(16)
+        assert _close(pad, none, x) < 1e-5  # 8 + 8 against 16

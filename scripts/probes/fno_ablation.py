@@ -217,6 +217,12 @@ def summary(scores):
                if c not in data]
     if missing:
         lines += ["", "Not yet run: " + ", ".join(f"abl-{c}" for c in missing) + "."]
+    unrecorded = sorted(f"abl-{c}-s{seed}" for c, runs in data.items() for seed, r in runs.items()
+                        if r["transfer"] is None)
+    if unrecorded:
+        lines[3:3] = [f"**{len(unrecorded)} run(s) have test scores but no training record**, so "
+                      "their validation columns are blank: " + ", ".join(unrecorded) + ". Copy "
+                      "their runs/fno_lib/<tag>/ folders and score again.", ""]
     return "\n".join(lines) + "\n"
 
 

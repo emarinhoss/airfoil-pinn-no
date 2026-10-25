@@ -165,6 +165,11 @@ def main(argv=None):
     lib_tags = sorted({tag for tag, *_ in libs})
     ref_tags = sorted({tag for tag, *_ in ref})
     runs = run_records(lib_tags, args.runs, ref_tags, args.s2_runs)
+    unrecorded = [r["tag"] for r in runs if r["source"] == "no record"]
+    if unrecorded:  # scored from its predictions, but its training record was not found
+        print(f"no train.json under {args.runs} for {len(unrecorded)} scored run(s): "
+              + ", ".join(unrecorded) + ". Their test scores are complete; their validation "
+              "figures are blank until the records are copied there and this is run again.")
 
     out.mkdir(parents=True, exist_ok=True)
     (out / "scores.json").write_text(json.dumps(

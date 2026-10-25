@@ -129,6 +129,13 @@ def test_runs_table_reads_the_probe_records_and_s2(staged):
     assert runs["fno-n896-s0"]["s_per_epoch"] == pytest.approx(7.2)
 
 
+def test_runs_scored_without_a_training_record_are_named(staged, capsys):
+    _module().main([])
+    out = capsys.readouterr().out
+    assert "no train.json under runs/fno_lib for 2 scored run(s)" in out
+    assert "apno-n896-s0-nopatience, neuralop-n896-s0." in out
+
+
 def test_a_missing_reference_is_reported_and_skipped(staged, capsys):
     assert _module().main(["--reference", "fno-n64-s0"]) == 0
     assert "reference fno-n64-s0: no runs/predictions/fno-n64-s0.h5" in capsys.readouterr().out

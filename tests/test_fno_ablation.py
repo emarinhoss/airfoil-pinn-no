@@ -205,3 +205,13 @@ def test_the_probe_trains_an_ablation_under_its_own_tag(tmp_path, monkeypatch):
 def test_the_probe_refuses_bad_factor_arguments(tmp_path, extra):
     with pytest.raises(SystemExit):
         probe.main([*extra, "--h5", str(tmp_path / "d.h5"), "--device", "cpu"])
+
+
+def test_summary_flags_runs_scored_without_a_training_record():
+    scores = _scores({"none": [(0.03, 0.01, 5.0, 2.0)] * 2})
+    for r in scores["runs"]:
+        if r["tag"] == "abl-none-n896-s1":
+            del r["transfer_val_rel_l2"], r["best_val"]
+    text = ab.summary(scores)
+    assert "**1 run(s) have test scores but no training record**" in text and "abl-none-s1" in text
+    assert "no training record" not in ab.summary(_scores({"none": [(0.03, 0.01, 5.0, 2.0)] * 2}))

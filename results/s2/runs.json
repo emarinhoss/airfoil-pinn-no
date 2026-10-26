@@ -24,8 +24,10 @@
       "seed": 0,
       "n_train": 896
     },
-    "transfer_val_rel_l2": 0.034766713110498636,
-    "query_s": 0.05359569026668494
+    "transfer_val_rel_l2": 0.020693374510989803,
+    "query_s": 0.05359569026668494,
+    "transfer_val_rel_l2_rows17": 0.034766713110498636,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n896-s1",
@@ -52,8 +54,10 @@
       "seed": 1,
       "n_train": 896
     },
-    "transfer_val_rel_l2": 0.035481466595819695,
-    "query_s": 0.010322104931182494
+    "transfer_val_rel_l2": 0.020577858051922675,
+    "query_s": 0.010322104931182494,
+    "transfer_val_rel_l2_rows17": 0.035481466595819695,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n896-s2",
@@ -80,8 +84,10 @@
       "seed": 2,
       "n_train": 896
     },
-    "transfer_val_rel_l2": 0.037884351621221855,
-    "query_s": 0.0107701338123622
+    "transfer_val_rel_l2": 0.02152863232609179,
+    "query_s": 0.0107701338123622,
+    "transfer_val_rel_l2_rows17": 0.037884351621221855,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n896-s0-lossB",
@@ -108,8 +114,10 @@
       "seed": 0,
       "n_train": 896
     },
-    "transfer_val_rel_l2": 0.05953904998831774,
-    "query_s": 0.01040437497741814
+    "transfer_val_rel_l2": 0.024292492212697202,
+    "query_s": 0.01040437497741814,
+    "transfer_val_rel_l2_rows17": 0.05953904998831774,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n64-s0",
@@ -136,8 +144,10 @@
       "seed": 0,
       "n_train": 64
     },
-    "transfer_val_rel_l2": 0.044254248432139015,
-    "query_s": 0.010498673375780048
+    "transfer_val_rel_l2": 0.02553577154981014,
+    "query_s": 0.010498673375780048,
+    "transfer_val_rel_l2_rows17": 0.044254248432139015,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n128-s0",
@@ -164,8 +174,10 @@
       "seed": 0,
       "n_train": 128
     },
-    "transfer_val_rel_l2": 0.04757988401720547,
-    "query_s": 0.010823667783798526
+    "transfer_val_rel_l2": 0.027140663206510495,
+    "query_s": 0.010823667783798526,
+    "transfer_val_rel_l2_rows17": 0.04757988401720547,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n256-s0",
@@ -192,8 +204,10 @@
       "seed": 0,
       "n_train": 256
     },
-    "transfer_val_rel_l2": 0.04742963688630165,
-    "query_s": 0.010763110346826619
+    "transfer_val_rel_l2": 0.02684615282809622,
+    "query_s": 0.010763110346826619,
+    "transfer_val_rel_l2_rows17": 0.04742963688630165,
+    "radial_rows_256x97": 16
   },
   {
     "tag": "fno-n512-s0",
@@ -220,7 +234,9 @@
       "seed": 0,
       "n_train": 512
     },
-    "transfer_val_rel_l2": 0.04309425853751954,
-    "query_s": 0.01252565677358327
+    "transfer_val_rel_l2": 0.02538939940175618,
+    "query_s": 0.01252565677358327,
+    "transfer_val_rel_l2_rows17": 0.04309425853751954,
+    "radial_rows_256x97": 16
   }
 ]

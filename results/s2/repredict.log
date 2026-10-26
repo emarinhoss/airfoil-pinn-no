@@ -1,0 +1,8 @@
+fno-n896-s0: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.161
+fno-n896-s1: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.141
+fno-n896-s2: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.168
+fno-n896-s0-lossB: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.289
+fno-n64-s0: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.153
+fno-n128-s0: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.151
+fno-n256-s0: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.153
+fno-n512-s0: 77 test cases at 16 rows; reproduced at 17 rows to 0.0e+00; largest change 0.136

@@ -1,0 +1,79 @@
+{
+  "rows": 16,
+  "rows_before": 17,
+  "reproduced_if_max_rel_diff_at_most": 0.0001,
+  "files": [
+    {
+      "tag": "fno-n896-s0",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.160510746059096
+    },
+    {
+      "tag": "fno-n896-s1",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.14068719927724674
+    },
+    {
+      "tag": "fno-n896-s2",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.16825598501088823
+    },
+    {
+      "tag": "fno-n896-s0-lossB",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.2892415246934749
+    },
+    {
+      "tag": "fno-n64-s0",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.15335709453950502
+    },
+    {
+      "tag": "fno-n128-s0",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.150819838118939
+    },
+    {
+      "tag": "fno-n256-s0",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.15333165464727905
+    },
+    {
+      "tag": "fno-n512-s0",
+      "reproduces_file_at_old_rows": {
+        "q": 0.0,
+        "q_128x49": 0.0
+      },
+      "reproduced": true,
+      "max_rel_change": 0.13578864046430636
+    }
+  ]
+}

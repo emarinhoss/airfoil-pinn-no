@@ -278,3 +278,30 @@ git add results/fno_drag && git commit -m "Probes: the FNO's drag offset against
 ```
 
 It writes `results/fno_drag/drag.md`, `drag.json` and `drag.png`.
+
+### Where on the wall the row count acts (added 2026-10-26)
+
+From 16 to 17 rows, the trained FNO's wall Cp rises behind the leading-edge stagnation point and
+drops at the trailing edge, with little change in between (`docs/findings.md`, 2026-10-26). On the
+stand-in data, an untrained FNO2d of the same sizes spreads its change along the wall instead. So
+the pattern looks learned, not a property of the grid or the features alone.
+
+`scripts/probes/probe_fno_drag_locate.py` tests which property of the trained network's own field,
+at each wall node, predicts the size of the change there:
+
+- the wall Cp;
+- wall minus far-field Cp;
+- the radial slope off the wall;
+- the sharpness along the wall;
+- the position feature.
+
+It records how the change spreads outward from the wall at the leading edge, mid-chord and trailing
+edge. `--untrained` adds the untrained control on the real validation cases. On the Mac:
+
+```bash
+git pull
+python scripts/probes/probe_fno_drag_locate.py --untrained
+git add results/fno_drag/locate.* && git commit -m "Probes: where the padding row acts on the FNO's wall pressure" && git push
+```
+
+It needs two predictions per checkpoint at 256x97, so about a minute on the Apple GPU.

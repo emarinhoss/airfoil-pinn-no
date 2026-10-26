@@ -1,0 +1,118 @@
+{
+ "rows": 16,
+ "reproduced_if_max_rel_diff_at_most": 0.0001,
+ "records": [
+  {
+   "tag": "fno-n128-s0",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n128-s0/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 2.5375960420060437,
+   "prediction": "runs/predictions_pad16/fno-n128-s0-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n256-s0",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n256-s0/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.792796207999345,
+   "prediction": "runs/predictions_pad16/fno-n256-s0-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n512-s0",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n512-s0/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.7318855409976095,
+   "prediction": "runs/predictions_pad16/fno-n512-s0-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n64-s0",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n64-s0/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.8007386669924017,
+   "prediction": "runs/predictions_pad16/fno-n64-s0-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n896-s0",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n896-s0/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.9643674999824725,
+   "prediction": "runs/predictions_pad16/fno-n896-s0-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n896-s1",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n896-s1/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.86306937498739,
+   "prediction": "runs/predictions_pad16/fno-n896-s1-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  },
+  {
+   "tag": "fno-n896-s2",
+   "source": "S2",
+   "checkpoint": "runs/fno/fno-n896-s2/best.pt",
+   "rows": 16,
+   "native_rows": 17,
+   "n_cases": 77,
+   "device": "mps",
+   "wall_s": 1.7624558329989668,
+   "prediction": "runs/predictions_pad16/fno-n896-s2-pad16.h5",
+   "reproduces_s2": {
+    "cases": 77,
+    "max_rel_diff": 0.0
+   },
+   "reproduced": true
+  }
+ ]
+}

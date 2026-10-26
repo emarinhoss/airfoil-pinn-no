@@ -1,17 +1,19 @@
 # FNO padding sweep at 256x97
 
-Command: `python scripts/probes/probe_fno_pad_sweep.py` (rows 0 to 34). Validation cases only. Each checkpoint is evaluated at 256x97 with each number of radial padding rows, its 128x49 prediction at its own padding (8 rows). Group means over seeds.
+Command: `python scripts/probes/probe_fno_pad_sweep.py` (rows 0 to 34). Validation cases only (126, of which 76 subcritical by SU2's 256x97 solution). Each checkpoint is evaluated at 256x97 with each number of radial padding rows, its 128x49 prediction at its own padding (8 rows). The near field is S4's measure against SU2 at 256x97, the only solution the validation cases have. Group means over seeds.
 
 ## Best row count per group
 
-| group | checkpoints | own rows at 256x97 | val L2 at 128x49 | val L2 at 256x97, own rows | best rows (val L2) | val L2 there | transfer, own rows | best rows (transfer) | transfer there |
-|---|---|---|---|---|---|---|---|---|---|
-| S2 fno-n896 | 3 | 17 | 0.0124 | 0.0411 | 16 | 0.0411 | 0.0360 | 16 | 0.0209 |
-| abl-MPIL-n896 | 5 | 16 | 0.0117 | 0.0420 | 16 | 0.0420 | 0.0281 | 16 | 0.0281 |
-| abl-none-n896 | 5 | 17 | 0.0126 | 0.0421 | 16 | 0.0410 | 0.0375 | 16 | 0.0215 |
-| neuralop-n896-nopatience | 5 | 16 | 0.0120 | 0.0412 | 16 | 0.0412 | 0.0255 | 16 | 0.0255 |
+Each cell: the best row count, its value, and the value at the group's own rows.
 
-## Validation L2 at 256x97, group means
+| group | checkpoints | own rows | 128x49: whole field / near field | whole field | transfer | near field | near field, sub | near field, sup |
+|---|---|---|---|---|---|---|---|---|
+| S2 fno-n896 | 3 | 17 | 0.0124 / 0.0136 | 16: 0.0411 (own 0.0411) | 16: 0.0209 (own 0.0360) | 16: 0.0195 (own 0.0423) | 16: 0.0126 (own 0.0380) | 16: 0.0299 (own 0.0489) |
+| abl-MPIL-n896 | 5 | 16 | 0.0117 / 0.0143 | 16: 0.0420 (own 0.0420) | 16: 0.0281 (own 0.0281) | 16: 0.0263 (own 0.0263) | 16: 0.0188 (own 0.0188) | 16: 0.0377 (own 0.0377) |
+| abl-none-n896 | 5 | 17 | 0.0126 / 0.0139 | 16: 0.0410 (own 0.0421) | 16: 0.0215 (own 0.0375) | 16: 0.0201 (own 0.0437) | 16: 0.0129 (own 0.0379) | 16: 0.0311 (own 0.0525) |
+| neuralop-n896-nopatience | 5 | 16 | 0.0120 / 0.0143 | 16: 0.0412 (own 0.0412) | 16: 0.0255 (own 0.0255) | 16: 0.0244 (own 0.0244) | 16: 0.0174 (own 0.0174) | 16: 0.0352 (own 0.0352) |
+
+## Whole-field error against SU2 at 256x97 (target space), group means
 
 | rows | S2 fno-n896 | abl-MPIL-n896 | abl-none-n896 | neuralop-n896-nopatience |
 |---|---|---|---|---|
@@ -44,3 +46,54 @@ Command: `python scripts/probes/probe_fno_pad_sweep.py` (rows 0 to 34). Validati
 | 24 | 0.2911 | 0.3642 | 0.2935 | 0.3553 |
 | 32 | 0.4880 | 0.5993 | 0.4916 | 0.5873 |
 | 34 | 0.5271 | 0.6420 | 0.5308 | 0.6306 |
+
+## Near field against SU2 at 256x97, all validation cases, group means
+
+| rows | S2 fno-n896 | abl-MPIL-n896 | abl-none-n896 | neuralop-n896-nopatience |
+|---|---|---|---|---|
+| 0 | 0.7284 | 1.4126 | 0.7193 | 1.5773 |
+| 8 | 0.3199 | 0.5620 | 0.3204 | 0.5978 |
+| 12 | 0.1543 | 0.2647 | 0.1559 | 0.2722 |
+| 14 | 0.0784 | 0.1363 | 0.0792 | 0.1372 |
+| 15 | 0.0434 | 0.0767 | 0.0436 | 0.0759 |
+| 16 | 0.0195 | 0.0263 | 0.0201 | 0.0244 |
+| 17 | 0.0423 | 0.0501 | 0.0437 | 0.0513 |
+| 18 | 0.0756 | 0.1017 | 0.0774 | 0.1027 |
+| 20 | 0.1427 | 0.2016 | 0.1450 | 0.2005 |
+| 24 | 0.2674 | 0.3724 | 0.2699 | 0.3664 |
+| 32 | 0.4643 | 0.6041 | 0.4682 | 0.5975 |
+| 34 | 0.5036 | 0.6439 | 0.5079 | 0.6392 |
+
+## Near field against SU2 at 256x97, subcritical cases, group means
+
+| rows | S2 fno-n896 | abl-MPIL-n896 | abl-none-n896 | neuralop-n896-nopatience |
+|---|---|---|---|---|
+| 0 | 0.7858 | 1.5731 | 0.7861 | 1.7355 |
+| 8 | 0.3395 | 0.5932 | 0.3403 | 0.6250 |
+| 12 | 0.1629 | 0.2713 | 0.1625 | 0.2777 |
+| 14 | 0.0814 | 0.1368 | 0.0811 | 0.1373 |
+| 15 | 0.0426 | 0.0745 | 0.0424 | 0.0734 |
+| 16 | 0.0126 | 0.0188 | 0.0129 | 0.0174 |
+| 17 | 0.0380 | 0.0467 | 0.0379 | 0.0481 |
+| 18 | 0.0740 | 0.1011 | 0.0736 | 0.1018 |
+| 20 | 0.1442 | 0.2044 | 0.1435 | 0.2021 |
+| 24 | 0.2719 | 0.3807 | 0.2711 | 0.3719 |
+| 32 | 0.4698 | 0.6162 | 0.4700 | 0.6051 |
+| 34 | 0.5090 | 0.6559 | 0.5093 | 0.6463 |
+
+## Near field against SU2 at 256x97, supercritical cases, group means
+
+| rows | S2 fno-n896 | abl-MPIL-n896 | abl-none-n896 | neuralop-n896-nopatience |
+|---|---|---|---|---|
+| 0 | 0.6412 | 1.1686 | 0.6177 | 1.3368 |
+| 8 | 0.2899 | 0.5146 | 0.2901 | 0.5564 |
+| 12 | 0.1413 | 0.2547 | 0.1458 | 0.2639 |
+| 14 | 0.0738 | 0.1355 | 0.0763 | 0.1372 |
+| 15 | 0.0448 | 0.0800 | 0.0454 | 0.0797 |
+| 16 | 0.0299 | 0.0377 | 0.0311 | 0.0352 |
+| 17 | 0.0489 | 0.0553 | 0.0525 | 0.0563 |
+| 18 | 0.0781 | 0.1026 | 0.0833 | 0.1042 |
+| 20 | 0.1403 | 0.1974 | 0.1472 | 0.1981 |
+| 24 | 0.2605 | 0.3597 | 0.2680 | 0.3580 |
+| 32 | 0.4559 | 0.5855 | 0.4655 | 0.5859 |
+| 34 | 0.4954 | 0.6258 | 0.5058 | 0.6283 |

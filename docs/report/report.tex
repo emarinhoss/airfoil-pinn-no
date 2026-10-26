@@ -1032,7 +1032,15 @@ What the table says:
   \item \textbf{The FNO's drag at $256\times97$ carries a padding offset.} In range its median $\CD$
     error is $-17$ counts, negative on 60 of 61 cases, for all three seeds. At $128\times49$ the
     same models' median is within 0.4 counts of zero. With 17 padding rows the offset was $+15$ to
-    $+17$ counts. So one padding row flips its sign, and the cause is not established here.
+    $+17$ counts. So one padding row flips its sign. Measured on the validation cases over 12 to
+    21 rows, the drag at $256\times97$ moves almost linearly with the row count, by about 34 counts
+    per row. It meets the $128\times49$ value at about 16.5 rows, which no whole row count reaches.
+    Nearly all of the change acts within 0.05 chord of the leading edge, where the wall $\Cp$ just
+    behind the stagnation point rises by up to 0.12 from 16 to 17 rows. Averaging the 16- and
+    17-row predictions cancels the drag offset but leaves a larger near-field error than 16 rows
+    alone, so 16 rows remains the rule. The same optimum between 16 and 17 rows appears in a
+    single spectral layer and in an untrained network, whenever the field is non-zero at the
+    far-field row where the padding begins.
   \item \textbf{The PINN is not competitive in any column}: 65 and 26 times the floor on the near
     field.
 \end{itemize}
@@ -1577,7 +1585,9 @@ baseline exactly where that baseline is weak, at moving shocks. But it reaches t
 its own training grid and only in range. Its resolution transfer is $O(h)$, not exact: the padded
 field jumps to zero at the wrap, and that jump aliases differently at each resolution. How much it
 loses is sensitive to one row of padding: 17 rows at $256\times97$ more than doubled its in-range
-subcritical error, and changing 17 rows to 16 flips a drag offset of 17 counts. In
+subcritical error, and changing 17 rows to 16 flips a drag offset of 17 counts at the leading
+edge. The best row count lies near 16.5, which an integer padding cannot reach, so the operator's
+evaluation at a new resolution would itself have to change to remove the offset. In
 extrapolation its errors are biased in a way no in-range score would reveal. Economically it
 repays its training only after about as many new cases as the campaign that trained it, as
 predicted.

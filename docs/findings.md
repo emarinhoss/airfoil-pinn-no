@@ -2275,3 +2275,73 @@ entry's figures for the FNO at 256x97. That covers its data-efficiency table and
 sentence, the results table and the bullets under it, the seeds table, loss B, the shocks table
 and paragraph, and the failures list. Also the S5 gate entry's 0.30 %. The README's summary, the
 report's text and figures, and `CLAUDE.md` are updated to the new rule and figures.
+
+## 2026-10-26 — the FNO's drag offset at 256x97: the right row count lies between 16 and 17
+
+The previous entry found an in-range drag offset at 256x97 of about 17 counts, whose sign flips
+between 16 and 17 padding rows, while the same models at 128x49 have none. This entry measures what
+the committed records and the network without training can show. Commands, at commit 3b7b2b5:
+`python scripts/probes/probe_fno_drag.py --from-scores --synthetic`, which wrote
+`results/fno_drag/from_scores.*` and `synthetic.*`. `--from-scores` reads the test scores at
+17 rows from `git show 7b39c58:results/s4/scores.json`, and at 16 rows and 128x49 from the current
+file.
+
+**In range, every S2 run's drag crosses its own 128x49 value at 16.5 rows.** Per case, take the
+line through the 16- and 17-row drag errors and find where it meets the same model's 128x49 error.
+Over the 61 in-range cases the median crossing is 16.48 to 16.54 rows, for all eight final runs:
+three seeds, 64 to 512 cases, and loss B. The interquartile ranges lie within 16.41 to 16.62. The
+change from 16 to 17 rows is +31 to +36 counts at the median. The mean of the 16- and 17-row errors
+is within 1.8 counts of the 128x49 error at the median (−1.8 to +0.6). So at 256x97 the drag sits
+about half a row's change, 15 to 18 counts, either side of the model's own 128x49 drag: high at 17
+rows, low at 16. Two points per case cannot show that the dependence is a straight line. That is
+measured next.
+
+**In extrapolation the pattern is weaker.** The change from 16 to 17 rows is smaller: +5 to +20
+counts at the median, and +60 for loss B. The crossings spread from 16.2 to 18.0, with wide
+interquartile ranges. There the drag error is mostly the model's own: −69 to −167 counts at the
+median at 128x49 already.
+
+**Every measure is V-shaped in the row count, with no odd/even effect.** In the committed padding
+sweep (`results/fno_lib/pad_sweep.json`), the validation transfer and near field fall steadily to a
+minimum at 16 rows and rise from 17. For S2's three models the near field is 0.1157, 0.0784,
+0.0434, 0.0195, 0.0423, 0.0756, 0.1094, 0.1427 at 13 to 20 rows. Straight branches through the two
+points either side of the transfer's minimum meet at 16.34 to 16.36 rows, for all four groups of
+the sweep. Command:
+`python -c "import json,numpy as np; R=json.load(open('results/fno_lib/pad_sweep.json'))['records']; G=sorted({r['group'] for r in R}); [print(g, [round(float(np.mean([r['rows'][str(k)]['near_field'] for r in R if r['group']==g])),4) for k in range(13,21)]) for g in G]"`.
+The vertex is `_vertex` in `probe_fno_drag.py`, applied to the group means of `transfer` over 12 to
+22 rows.
+
+**The same optimum appears without training** (`results/fno_drag/synthetic.md`):
+
+- **One spectral layer** at 128x49 (8 rows) against 256x97, at its shared nodes. On a radial field
+  that is smooth across the wrap of the padded column, the transfer is exact at 17 rows: 0.0000,
+  vertex 16.99. That is the period-matched rule's design case (spec §6.3, 2026-10-01). On fields
+  that are still non-zero at the far-field row, where the zero padding starts with a jump, the
+  minimum is at 16 rows and the vertex at 16.16 to 16.25. The fields were a constant, 1 + η and
+  exp(−3η).
+- **An untrained `FNO2d`** (S2's sizes, spectral weights scaled by 20, 50 and 150, three seeds),
+  on the stand-in dataset's input features: vertex 16.28 at every scale.
+
+Every input and output channel of the real problem is non-zero at the far-field row (free stream,
+position). So the padding starts with a jump, and the one-layer case suggests why no whole row
+count is right. 17 rows matches the DFT period, 114 spacings of the 256x97 grid, as at 128x49. 16
+rows nearly matches the share of the period that holds data: 97/113 = 0.858 against 49/57 = 0.860.
+This is offered as a reading of these measurements; it is not established.
+
+**What this establishes.** The drag offset is the same row-count mismatch the near field and the
+transfer show, seen in a quantity with a sign. Their minimum lies between 16 and 17 rows. A norm
+shows the mismatch as a residual error at either neighbour, and the drag shows it as an offset of
+opposite sign at each. It is a property of the operator on a field cut off by the padding, not of
+the training.
+
+**Not yet established:**
+
+- whether the drag is a straight line in the row count;
+- where on the wall the change from 16 to 17 rows acts;
+- whether averaging the 16- and 17-row predictions helps beyond the drag. That average's drag
+  error is the mean of the two by arithmetic, since forces are linear in the wall pressure. For
+  one spectral layer, though, the averaged output transfers worse than 16 rows alone (0.0240
+  against 0.0144 for the constant field; inline check, not in a script).
+
+`python scripts/probes/probe_fno_drag.py` measures these on the validation cases from S2's
+checkpoints (`docs/notes/2026-10-24-fno-transfer-ablation.md`).

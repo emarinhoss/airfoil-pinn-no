@@ -108,6 +108,9 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
     of row counts, without training, into `results/fno_lib/pad_sweep.*`.
     `scripts/probes/probe_fno_pad_predict.py` re-predicts S2's test cases with another row count
     into `runs/predictions_pad<rows>/`.
+    `scripts/probes/probe_fno_drag.py` measures the drag at 256x97 against the row count, from
+    S2's checkpoints on the validation cases, into `results/fno_drag/`; `--from-scores` and
+    `--synthetic` need no data.
   - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and

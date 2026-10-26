@@ -251,3 +251,30 @@ git commit -m "S2/S4: S2's FNO re-predicted at 16 padding rows, S4 and S5 rescor
 
 On the Apple GPU, the re-prediction takes a few minutes. The findings, README and report text are
 updated from the committed results afterwards.
+
+## The drag offset at 256x97 (added 2026-10-26)
+
+At 256x97 the FNO's in-range drag is about 17 counts off its own 128x49 value, high at 17 rows and
+low at 16 (`docs/findings.md`, 2026-10-26). From the committed records the crossing is at 16.5 rows,
+and an untrained network shows the same optimum between 16 and 17
+(`python scripts/probes/probe_fno_drag.py --from-scores --synthetic`, `results/fno_drag/`).
+
+`scripts/probes/probe_fno_drag.py` takes the next step on the validation cases, from S2's
+checkpoints:
+
+- the drag offset (CD at 256x97 minus the same model's CD at 128x49; no truth involved) at every
+  row count from 12 to 21;
+- a straight line through it per case over 14 to 19 rows: slope, crossing and largest residual;
+- the prediction averaged over 16 and 17 rows: its near field, transfer and drag;
+- where on the wall the change from 16 to 17 rows acts: the mean wall-Cp change along x/c, and its
+  drag by region.
+
+On the Mac it takes a few minutes on the Apple GPU:
+
+```bash
+git pull
+python scripts/probes/probe_fno_drag.py
+git add results/fno_drag && git commit -m "Probes: the FNO's drag offset against the padding rows" && git push
+```
+
+It writes `results/fno_drag/drag.md`, `drag.json` and `drag.png`.

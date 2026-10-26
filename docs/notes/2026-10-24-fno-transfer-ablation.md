@@ -171,3 +171,21 @@ the command line, e.g. `--rows 8-24 runs/fno_lib/abl-L-n896-s*/best.pt`.
 It writes `results/fno_lib/pad_sweep.md` (the best row count per group by validation error and by
 transfer, and both curves at selected row counts), `pad_sweep.json` (every number) and
 `pad_sweep.png` (both curves against the row count, 16 and 17 marked).
+
+### The validation near field (added 2026-10-26)
+
+The first sweep's two validation measures disagreed with S4's test near field for `FNO2d`
+(`docs/findings.md`, 2026-10-26). The sweep now also records S4's near-field measure on the
+validation cases: `score_case`'s `near_field_rel_l2`, against SU2 at 256x97, the only solution
+the validation cases have. It records the mean over all 126 cases, and over the subcritical and
+supercritical ones by SU2's own largest surface Mach number. It is computed the same way at 128x49
+for reference. A test checks it against `score_case` case by case at both grids.
+
+Cache files from the first sweep lack the new measure, so every checkpoint is swept again. That
+takes about 20 minutes on the Mac's GPU, as before.
+
+```bash
+git pull
+python scripts/probes/probe_fno_pad_sweep.py
+git add results/fno_lib/pad_sweep.* && git commit -m "Probes: the padding sweep with the validation near field" && git push
+```

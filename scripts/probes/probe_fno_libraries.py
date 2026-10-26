@@ -62,6 +62,7 @@ from apno.data.sampling import case_specs, prefix_indices
 from apno.geometry.ogrid import TRAIN, Section, grid
 from apno.models.fno import FNO2d, radial_pad
 from apno.models.targets import Standardiser, features, from_targets, to_targets
+from apno.physics.flow import local_mach
 from apno.models.train_fno import (
     FnoConfig, _tensors, finite_or_none, load_features_only, load_split, loss_fn, relative_l2,
 )
@@ -316,6 +317,9 @@ def write_standin(path, counts):
             g["xy"] = np.asarray(xy, dtype=np.float32)
             g["q"] = np.asarray(q, dtype=np.float32)
             g["inputs"] = np.array([[s.mach, s.alpha_deg, s.t, s.m] for s in specs])
+            g["max_surface_mach"] = np.array([  # as data/build.py records it, at the wall row
+                float(local_mach(*(qq[:, 0, k] for k in range(4)), s.mach).max())
+                for qq, s in zip(q, specs)])
             g.create_dataset("case_id", data=[s.case_id for s in specs],
                              dtype=h5py.string_dtype())
     return path

@@ -16,7 +16,12 @@ read, so a row count chosen here can be scored on it afterwards):
 - `val_rel_l2_256x97`: the mean over cases of the relative L2 error against SU2 at 256x97, in
   target space, as the probe's `train.json` records it;
 - `transfer`: the relative L2 difference between the 256x97 prediction at every second node and
-  the 128x49 one, as S2 and the probe record it.
+  the 128x49 one, as S2 and the probe record it;
+- `near_field`: S4's near-field measure (`score_case`'s `near_field_rel_l2`: the state less the
+  free stream, weighted by node area within 2.5 chords of mid-chord), against SU2 at 256x97, the
+  only solution the validation cases have. Its mean over all cases, and over the subcritical and
+  supercritical ones (by the SU2 256x97 solution's largest surface Mach number). It was added on
+  2026-10-26 because the whole-field error and S4's test near field disagreed (docs/findings.md).
 
     python scripts/probes/probe_fno_pad_sweep.py                       # the default checkpoints
     python scripts/probes/probe_fno_pad_sweep.py --rows 8-24 runs/fno_lib/abl-L-n896-s*/best.pt
@@ -39,10 +44,16 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import h5py
+
 import probe_fno_libraries as probe
+from apno.data.build import regime
+from apno.geometry.ogrid import TRAIN, Section, grid
 from apno.models.fno import FNO2d, radial_pad
 from apno.models.targets import Standardiser, to_targets
 from apno.models.train_fno import FnoConfig, load_split, relative_l2
+from apno.physics.flow import freestream_q
+from apno.score.metrics import NEAR_RADIUS, node_areas
 
 EVAL_NJ = 97  # the 256x97 grid's radial size
 DEFAULT_CHECKPOINTS = (
@@ -52,6 +63,8 @@ DEFAULT_CHECKPOINTS = (
     "runs/fno_lib/neuralop-n896-s*-nopatience/best.pt",    # NeuralOperator's own class, five
 )
 CACHE = Path("runs/fno_lib/pad_sweep")
+RECORD_VERSION = 2  # 2: near field added (2026-10-26); older cache files are swept again
+NEAR = ("near_field", "near_field_subcritical", "near_field_supercritical")
 OUT = Path("results/fno_lib")
 
 
@@ -145,21 +158,57 @@ def group_of(tag, source):
 
 # ---------------------------------------------------------------- the sweep
 
+def near_field_setup(inputs, sub=1):
+    """Per case, S4's near-field mask, node-area weights and free stream, on the 256x97 grid built
+    as S4 builds it (sub=2: its 128x49 subgrid)."""
+    out = []
+    for mach, alpha, t, m in np.asarray(inputs, dtype=float):
+        X, Y = grid(Section(t, m), TRAIN)
+        X, Y = X[::sub, ::sub], Y[::sub, ::sub]
+        near = np.hypot(X - 0.5, Y) <= NEAR_RADIUS
+        out.append((near, node_areas(X, Y)[near][:, None], freestream_q(alpha)))
+    return out
+
+
+def near_field_rel_l2(pred_q, true_q, setup):
+    """`score_case`'s near_field_rel_l2 for each case (tests/test_fno_pad_sweep.py checks it)."""
+    vals = []
+    for p, t, (near, w, q_inf) in zip(pred_q, true_q, setup):
+        dp, dt = p[near] - q_inf, t[near] - q_inf
+        den = np.sqrt(np.sum(w * dt * dt))
+        vals.append(float(np.sqrt(np.sum(w * (dp - dt) ** 2)) / den) if den else 0.0)
+    return np.array(vals)
+
+
+def _near_means(per_case, regimes, prefix="near_field"):
+    out = {prefix: float(per_case.mean())}
+    for reg in ("subcritical", "supercritical"):
+        sel = regimes == reg
+        out[f"{prefix}_{reg}"] = float(per_case[sel].mean()) if sel.any() else None
+    return out
+
+
 def sweep_one(model, std, val, rows, device):
-    """{rows: {"val_rel_l2_256x97", "transfer"}} and the native 128x49 error, on the val split."""
+    """{rows: {"val_rel_l2_256x97", "transfer", "near_field", ...}} and the native 128x49 errors,
+    on the val split. val carries "regime", one per case."""
     model = model.to(device)
-    xy, inputs = val["xy"], val["inputs"]
+    xy, inputs, regimes = val["xy"], val["inputs"], np.asarray(val["regime"])
     y_true = to_targets(val["q"], inputs)
+    fine_nf = val.get("_near_fine") or near_field_setup(inputs)
+    coarse_nf = val.get("_near_coarse") or near_field_setup(inputs, sub=2)
     q_coarse, _ = probe.predict(model, std, xy[:, ::2, ::2], inputs)
     out = {"val_rel_l2_128x49": float(relative_l2(
-        torch.from_numpy(to_targets(q_coarse, inputs)), torch.from_numpy(y_true[:, :, ::2, ::2])))}
+        torch.from_numpy(to_targets(q_coarse, inputs)), torch.from_numpy(y_true[:, :, ::2, ::2]))),
+        **_near_means(near_field_rel_l2(q_coarse, val["q"][:, ::2, ::2], coarse_nf), regimes,
+                      "near_field_128x49")}
     per = {}
     for r in rows:
         with rows_at(model, r):
             q_fine, _ = probe.predict(model, std, xy, inputs)
         per[r] = {"val_rel_l2_256x97": float(relative_l2(
             torch.from_numpy(to_targets(q_fine, inputs)), torch.from_numpy(y_true))),
-            "transfer": probe.transfer_rel_l2(q_fine, q_coarse, inputs)}
+            "transfer": probe.transfer_rel_l2(q_fine, q_coarse, inputs),
+            **_near_means(near_field_rel_l2(q_fine, val["q"], fine_nf), regimes)}
     out["rows"] = per
     return out
 
@@ -168,11 +217,17 @@ def _cached(path, rows):
     if not path.exists():
         return None
     rec = json.loads(path.read_text())
+    if rec.get("version") != RECORD_VERSION:
+        return None
     return rec if set(rows) <= {int(r) for r in rec["rows"]} else None
 
 
 def run(checkpoints, rows, h5_path, device, cache=CACHE, log=print):
     val = load_split(h5_path, "val")
+    with h5py.File(h5_path) as f:  # SU2's own largest surface Mach number, per validation case
+        val["regime"] = [regime(m) for m in f["val"]["max_surface_mach"][...]]
+    val["_near_fine"] = near_field_setup(val["inputs"])
+    val["_near_coarse"] = near_field_setup(val["inputs"], sub=2)
     cache.mkdir(parents=True, exist_ok=True)
     records = []
     for path in checkpoints:
@@ -182,7 +237,9 @@ def run(checkpoints, rows, h5_path, device, cache=CACHE, log=print):
         if rec is None:
             t0 = time.perf_counter()
             res = sweep_one(model, std, val, rows, device)
-            rec = {"tag": tag, "source": source, "group": group_of(tag, source),
+            rec = {"version": RECORD_VERSION, "tag": tag, "source": source,
+                   "group": group_of(tag, source),
+                   "n_subcritical": int(sum(r == "subcritical" for r in val["regime"])),
                    "checkpoint": str(path), "native_rows": native_rows(model),
                    "n_val": len(val["inputs"]), "device": str(device),
                    "wall_s": time.perf_counter() - t0, **res}
@@ -206,43 +263,69 @@ def group_curves(records, rows):
     for g, recs in groups.items():
         out[g] = {"n": len(recs), "native_rows": sorted({r["native_rows"] for r in recs}),
                   "val_rel_l2_128x49": float(np.mean([r["val_rel_l2_128x49"] for r in recs]))}
-        for m in ("val_rel_l2_256x97", "transfer"):
-            out[g][m] = [float(np.mean([r["rows"][k][m] for r in recs])) for k in rows]
+        for m in NEAR:
+            vals = [r.get(f"near_field_128x49{m[len('near_field'):]}") for r in recs]
+            out[g][f"{m}_128x49"] = (float(np.mean(vals)) if all(v is not None for v in vals)
+                                     else None)
+        for m in ("val_rel_l2_256x97", "transfer", *NEAR):
+            vals = [[r["rows"][k].get(m) for r in recs] for k in rows]
+            out[g][m] = [float(np.mean(v)) if all(x is not None for x in v) else None
+                         for v in vals]
     return out
+
+
+METRICS = (("val_rel_l2_256x97", "Whole-field error against SU2 at 256x97 (target space)"),
+           ("transfer", "Transfer (256x97 at every second node against 128x49)"),
+           ("near_field", "Near field against SU2 at 256x97, all validation cases"),
+           ("near_field_subcritical", "Near field against SU2 at 256x97, subcritical cases"),
+           ("near_field_supercritical", "Near field against SU2 at 256x97, supercritical cases"))
+SHORT = {"val_rel_l2_256x97": "whole field", "transfer": "transfer", "near_field": "near field",
+         "near_field_subcritical": "near field, sub", "near_field_supercritical": "near field, sup"}
+
+
+def _fmt(v):
+    return "" if v is None else f"{v:.4f}"
 
 
 def report(records, rows):
     curves = group_curves(records, rows)
     show = sorted({r for r in (0, 8, 12, 14, 15, 16, 17, 18, 20, 24, 32) if r in rows}
                   | {rows[0], rows[-1]})
+    n_sub = {r.get("n_subcritical") for r in records} - {None}
     lines = ["# FNO padding sweep at 256x97", "",
              "Command: `python scripts/probes/probe_fno_pad_sweep.py` (rows "
-             f"{rows[0]} to {rows[-1]}). Validation cases only. Each checkpoint is evaluated at "
-             "256x97 with each number of radial padding rows, its 128x49 prediction at its own "
-             "padding (8 rows). Group means over seeds.", "",
-             "## Best row count per group", "",
-             "| group | checkpoints | own rows at 256x97 | val L2 at 128x49 "
-             "| val L2 at 256x97, own rows | best rows (val L2) | val L2 there "
-             "| transfer, own rows | best rows (transfer) | transfer there |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             f"{rows[0]} to {rows[-1]}). Validation cases only "
+             f"({records[0]['n_val'] if records else 0}, of which "
+             f"{', '.join(map(str, sorted(n_sub))) or '?'} subcritical by SU2's 256x97 solution). "
+             "Each checkpoint is evaluated at 256x97 with each number of radial padding rows, its "
+             "128x49 prediction at its own padding (8 rows). The near field is S4's measure "
+             "against SU2 at 256x97, the only solution the validation cases have. Group means "
+             "over seeds.",
+             "", "## Best row count per group", "",
+             "Each cell: the best row count, its value, and the value at the group's own rows.", "",
+             "| group | checkpoints | own rows | 128x49: whole field / near field | "
+             + " | ".join(SHORT[m] for m, _ in METRICS) + " |",
+             "|---|---|---|---|" + "---|" * len(METRICS)]
     for g, c in sorted(curves.items()):
         own = c["native_rows"][0]
-
-        def at(m, r, c=c):
-            return c[m][rows.index(r)] if r in rows else float("nan")
-        bl, bt = (int(np.argmin(c[m])) for m in ("val_rel_l2_256x97", "transfer"))
-        lines.append(f"| {g} | {c['n']} | {own} | {c['val_rel_l2_128x49']:.4f} | "
-                     f"{at('val_rel_l2_256x97', own):.4f} | {rows[bl]} | "
-                     f"{c['val_rel_l2_256x97'][bl]:.4f} | {at('transfer', own):.4f} | {rows[bt]} | "
-                     f"{c['transfer'][bt]:.4f} |")
-    for m, name in (("val_rel_l2_256x97", "Validation L2 at 256x97"),
-                    ("transfer", "Transfer (256x97 at every second node against 128x49)")):
+        cells = []
+        for m, _ in METRICS:
+            vals = c[m]
+            if any(v is None for v in vals):
+                cells.append("")
+                continue
+            k = int(np.argmin(vals))
+            at_own = _fmt(vals[rows.index(own)]) if own in rows else ""
+            cells.append(f"{rows[k]}: {vals[k]:.4f} (own {at_own})")
+        lines.append(f"| {g} | {c['n']} | {own} | {c['val_rel_l2_128x49']:.4f} / "
+                     f"{_fmt(c.get('near_field_128x49'))} | " + " | ".join(cells) + " |")
+    for m, name in METRICS:
         lines += ["", f"## {name}, group means", "",
                   "| rows | " + " | ".join(sorted(curves)) + " |",
                   "|---|" + "---|" * len(curves)]
         for r in show:
             k = rows.index(r)
-            lines.append(f"| {r} | " + " | ".join(f"{curves[g][m][k]:.4f}"
+            lines.append(f"| {r} | " + " | ".join(_fmt(curves[g][m][k])
                                                   for g in sorted(curves)) + " |")
     return "\n".join(lines) + "\n", curves
 
@@ -251,17 +334,19 @@ def plot(curves, rows, path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4), constrained_layout=True)
-    for ax, (m, name) in zip(axes, (("val_rel_l2_256x97", "validation L2 at 256x97"),
-                                    ("transfer", "transfer, 256x97 against 128x49"))):
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8), constrained_layout=True)
+    axes = axes.ravel()
+    for ax, (m, name) in zip(axes, METRICS):
         for g, c in sorted(curves.items()):
-            ax.plot(rows, c[m], marker=".", label=f"{g} ({c['n']})")
+            if all(v is not None for v in c[m]):
+                ax.plot(rows, c[m], marker=".", label=f"{g} ({c['n']})")
         for r, style in ((16, ":"), (17, "--")):
             ax.axvline(r, color="grey", linestyle=style, linewidth=0.8)
-        ax.set_xlabel("radial padding rows at 256x97 (FNO2d's rule: 17; NeuralOperator: 16)")
-        ax.set_ylabel(name)
+        ax.set_xlabel("radial padding rows at 256x97 (FNO2d's rule 17, NeuralOperator 16)")
+        ax.set_title(name, fontsize=9)
         ax.set_yscale("log")
     axes[0].legend(fontsize=7)
+    axes[-1].axis("off")
     fig.savefig(path, dpi=120)
     plt.close(fig)
 

@@ -140,3 +140,64 @@ def test_missing_inputs_exit_2(tmp_path):
     assert sweep.main(["--h5", str(tmp_path / "none.h5")]) == 2
     probe.write_standin(tmp_path / "d.h5", {"train": 2, "val": 2})
     assert sweep.main([str(tmp_path / "nothing/*.pt"), "--h5", str(tmp_path / "d.h5")]) == 2
+
+
+
+def test_the_near_field_is_score_cases():
+    """The sweep's near field is S4's `score_case` near_field_rel_l2, case by case, at 256x97
+    and on the 128x49 subgrid."""
+    import numpy as np
+    from apno.data.sampling import case_specs
+    from apno.geometry.ogrid import TRAIN, Section, grid
+    from apno.score.metrics import FLUX_LINES, score_case
+    specs = case_specs("val", TRAIN)[:3]
+    inputs = np.array([[s.mach, s.alpha_deg, s.t, s.m] for s in specs])
+    rng = np.random.default_rng(0)
+    true = np.stack([probe.standin_fields(*grid(Section(s.t, s.m), TRAIN), s.mach, s.alpha_deg,
+                                          s.t) for s in specs])
+    pred = true + 0.01 * rng.standard_normal(true.shape)
+    for sub in (1, 2):
+        got = sweep.near_field_rel_l2(pred[:, ::sub, ::sub], true[:, ::sub, ::sub],
+                                      sweep.near_field_setup(inputs, sub))
+        for k, s in enumerate(specs):
+            X, Y = (a[::sub, ::sub] for a in grid(Section(s.t, s.m), TRAIN))
+            flux = tuple(j // sub for j in FLUX_LINES)  # S4's lines on each grid
+            ref = score_case(pred[k, ::sub, ::sub], true[k, ::sub, ::sub], X, Y, s.mach,
+                             s.alpha_deg, "subcritical", flux)["near_field_rel_l2"]
+            assert got[k] == pytest.approx(ref, rel=1e-12)
+
+
+def test_the_sweep_records_the_near_field_by_regime(tmp_path, monkeypatch):
+    import h5py
+    monkeypatch.chdir(tmp_path)
+    h5, _ = _trained(tmp_path, "apno", "", "apno-n4-s0")
+    with h5py.File(h5, "r+") as f:  # one supercritical validation case
+        m = f["val"]["max_surface_mach"][...]
+        m[0] = 1.2
+        f["val"]["max_surface_mach"][...] = m
+    assert sweep.main(["runs/fno_lib/*/best.pt", "--rows", "16,17", "--h5", str(h5),
+                       "--device", "cpu", "--out", str(tmp_path / "out")]) == 0
+    rec = json.loads((tmp_path / "out/pad_sweep.json").read_text())["records"][0]
+    assert rec["version"] == sweep.RECORD_VERSION and rec["n_subcritical"] == 2
+    row = rec["rows"]["17"]
+    assert row["near_field"] == pytest.approx(
+        (2 * row["near_field_subcritical"] + row["near_field_supercritical"]) / 3)
+    assert rec["near_field_128x49"] > 0 and rec["near_field_128x49_supercritical"] > 0
+    md = (tmp_path / "out/pad_sweep.md").read_text()
+    assert "## Near field against SU2 at 256x97, subcritical cases, group means" in md
+    assert "of which 2 subcritical" in md
+
+
+def test_a_cache_from_before_the_near_field_is_swept_again(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    h5, _ = _trained(tmp_path, "apno", "", "apno-n4-s0")
+    args = ["runs/fno_lib/*/best.pt", "--rows", "16,17", "--h5", str(h5), "--device", "cpu",
+            "--out", str(tmp_path / "out")]
+    assert sweep.main(args) == 0
+    cfile = Path("runs/fno_lib/pad_sweep/apno-apno-n4-s0.json")
+    old = json.loads(cfile.read_text())
+    del old["version"]
+    cfile.write_text(json.dumps(old))
+    capsys.readouterr()
+    assert sweep.main(args) == 0 and "cached" not in capsys.readouterr().out
+    assert json.loads(cfile.read_text())["version"] == sweep.RECORD_VERSION

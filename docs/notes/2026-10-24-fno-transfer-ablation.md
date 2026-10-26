@@ -189,3 +189,26 @@ git pull
 python scripts/probes/probe_fno_pad_sweep.py
 git add results/fno_lib/pad_sweep.* && git commit -m "Probes: the padding sweep with the validation near field" && git push
 ```
+
+## Rescoring S2's FNO2d on the test cases with 16 rows (added 2026-10-26)
+
+`scripts/probes/probe_fno_pad_predict.py` re-evaluates S2's own checkpoints, without retraining,
+on the test cases at 256x97 with 16 padding rows. By default it takes the seven loss-A runs: three
+seeds at 896 cases, and 64 to 512 cases. Test inputs are read through `load_features_only`. Each
+checkpoint also predicts at its own 17 rows, compared with S2's committed file, so the only change
+is the row count. If any checkpoint's difference exceeds 1e-4 relative, the script exits 4 and its
+files should not be scored. The new files go to `runs/predictions_pad16/` (variant `pad16`), never
+`runs/predictions/`.
+
+On the Mac:
+
+```bash
+git pull
+python scripts/probes/probe_fno_pad_predict.py
+python scripts/probes/score_fno_libraries.py --pred-dir runs/predictions_pad16 --out results/fno_pad16 --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2 --reference fno-n64-s0 --reference fno-n128-s0 --reference fno-n256-s0 --reference fno-n512-s0
+git add results/fno_pad16 && git commit -m "Probes: S2's FNO2d rescored on the test cases with 16 rows" && git push
+```
+
+The scorer will report that the `pad16` files have no training record. They are S2's models, so
+their records are S2's. Predicting 76 test cases twice per checkpoint takes seconds to a minute
+each on the Apple GPU.

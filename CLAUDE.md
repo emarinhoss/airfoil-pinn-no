@@ -101,6 +101,8 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
     the padded span instead and was replaced on 2026-10-01 (spec §6.3, amended by the final
     review). The 2026-10-25 ablation found that, on the trained networks, 16 rows at
     256x97 transfer much better than this rule's 17 (`docs/findings.md`); the rule is unchanged.
+    `scripts/probes/probe_fno_pad_sweep.py` evaluates existing checkpoints at 256x97 over a range
+    of row counts, without training, into `results/fno_lib/pad_sweep.*`.
   - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and

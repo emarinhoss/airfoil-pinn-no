@@ -114,7 +114,7 @@ class PhysicsnemoFno(nn.Module):
     def forward(self, x):
         pad = radial_pad(x.shape[-1])
         enc = self.net.spec_encoder
-        enc.pad, enc.ipad = [0, pad], [None, -pad]
+        enc.pad, enc.ipad = [0, pad], [None, -pad if pad else None]  # -0 would crop all
         return self.net(x)
 
 

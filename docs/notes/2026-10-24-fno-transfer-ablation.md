@@ -131,3 +131,43 @@ M, I or L would test factors that, added alone, made the transfer worse or left 
 **What the result asks next** is how the error at 256x97 depends on the number of padding rows,
 which needs no training: evaluate existing checkpoints (S2's `fno-n896-s*`, the `abl-none` and
 `abl-MPIL` runs) at 256x97 with a range of row counts, and read the validation transfer and error.
+
+## The padding sweep (added 2026-10-25)
+
+`scripts/probes/probe_fno_pad_sweep.py` evaluates existing checkpoints on the validation cases
+at 256x97 with every row count in `--rows` (default 0 to 34). Each checkpoint's 128x49 prediction
+keeps its own 8 rows. It needs no training. Only the row count is varied, since the rows' position
+does not matter. It records, per checkpoint and row count, the validation error against SU2 at
+256x97 and the transfer, both computed as the probe records them. The test set is not read, so
+a row count chosen here can be scored on it afterwards.
+
+**What the tests establish** (`tests/test_fno_pad_sweep.py`):
+
+- At a model's own row count, the override reproduces its output, for `FNO2d`, every ablation
+  variant, NeuralOperator's class and PhysicsNeMo's.
+- Any other count changes the 256x97 output and leaves 128x49 alone, and the model is restored
+  afterwards.
+- `FNO2d` evaluated with 16 rows is the ablation's P, from the same weights.
+- At the native rows, the sweep reproduces the probe's recorded validation error, transfer and
+  128x49 error exactly.
+
+The default checkpoints are S2's `fno-n896-s0` to `s2` from `runs/fno/`, and the five seeds each
+of `abl-none`, `abl-MPIL` and `neuralop-n896-*-nopatience` from `runs/fno_lib/`: 18 in all. On
+the Mac:
+
+```bash
+git pull
+python scripts/probes/probe_fno_pad_sweep.py
+git add results/fno_lib/pad_sweep.* && git commit -m "Probes: the FNO padding sweep" && git push
+```
+
+On a 4-core CPU, a full-size forward pass at 256x97 takes 85 ms per case for `FNO2d` and 136 ms
+for NeuralOperator's model. That is 6 to 10 minutes per checkpoint for 35 row counts, and 2 to 3 hours
+for the default set. On the Apple GPU (`--device auto`) it should take tens of minutes, from S2's
+recorded query times. On a Colab A100 it takes minutes. Each checkpoint's sweep is cached in
+`runs/fno_lib/pad_sweep/`, so an interrupted run resumes. Other checkpoints and row counts go on
+the command line, e.g. `--rows 8-24 runs/fno_lib/abl-L-n896-s*/best.pt`.
+
+It writes `results/fno_lib/pad_sweep.md` (the best row count per group by validation error and by
+transfer, and both curves at selected row counts), `pad_sweep.json` (every number) and
+`pad_sweep.png` (both curves against the row count, 16 and 17 marked).

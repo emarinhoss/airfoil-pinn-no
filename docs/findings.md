@@ -2345,3 +2345,54 @@ the training.
 
 `python scripts/probes/probe_fno_drag.py` measures these on the validation cases from S2's
 checkpoints (`docs/notes/2026-10-24-fno-transfer-ablation.md`).
+
+## 2026-10-26 — the drag offset measured on the validation cases: a leading-edge pressure error, near-linear in the row count
+
+By the author, on the Mac's Apple GPU: `python scripts/probes/probe_fno_drag.py` (code at commit
+3b7b2b5, outputs committed at ed1205e: `results/fno_drag/drag.md`, `drag.json`, `drag.png`). It ran
+S2's `fno-n896-s0` to `s2` on the 126 validation cases (76 subcritical), at 12 to 21 padding rows
+at 256x97. The drag offset is CD at 256x97 minus the same model's CD at 128x49, so no truth is
+involved. At 128x49 the models' drag is within 1.0 counts of SU2's 256x97 solution at the median.
+Every figure below is in `drag.md` unless a command is given.
+
+**The offset is smooth, monotonic and nearly straight around 16 and 17 rows.** The subcritical mean
+offset of `fno-n896-s0` runs −169, −135, −96, −57, −19, +17, +50, +77, +100, +119 counts from 12 to
+21 rows. The other two seeds are within 10 counts of it. The step per row is largest between 13
+and 17 rows (36 to 39 counts) and falls to 19 at the ends of the range. Per case, a straight line
+over 14 to 19 rows misses by at most 5.1 to 5.6 counts (median), against a span of about 170.
+
+- The line's slope is +34 counts per row for subcritical cases (all three seeds) and +23 to +29 for
+  supercritical ones.
+- It crosses zero at 16.58 to 16.62 rows for subcritical cases and 16.70 to 16.81 for supercritical
+  ones.
+- From the 16- and 17-row points alone, as the test cases were read, the crossing is 16.49 to 16.53
+  rows (median per seed). That matches the test cases' 16.48 to 16.54. The line over 14 to 19 rows
+  crosses later because the curve bends. Command:
+  `python -c "import json,numpy as np; d=json.load(open('results/fno_drag/drag.json')); [print(r['tag'], round(float(np.median(16-np.array(r['_offsets']['16'])/(np.array(r['_offsets']['17'])-np.array(r['_offsets']['16'])))),2)) for r in d['records']]"`.
+
+**It is a leading-edge pressure error.** Going from 16 to 17 rows changes the drag by +32.0 to +34.2
+counts (mean over all cases). Of that, +34.3 to +34.8 comes from the wall within 0.05 chord of the
+leading edge. The rest of the wall nets −2.8 to −0.1. The mean wall-Cp change over the subcritical cases
+peaks at +0.117 to +0.127 just behind the stagnation point (x/c ≈ 0.003). It is +0.004 to +0.006
+along the rest of the surfaces. There is also a sharp drop of −0.15 to −0.27 at the trailing-edge
+nodes, which carries almost no drag (−0.3 to −0.5 counts), because the wall normal there points
+nearly across the stream. Command:
+`python -c "import json,numpy as np; d=json.load(open('results/fno_drag/drag.json')); [print(r['tag'], {k: round(v,1) for k,v in r['change_16_to_17']['by_region_mean_subcritical'].items()}, round(r['change_16_to_17']['drag_counts_mean'],1), round(float(max(c for c,x in zip(r['change_16_to_17']['wall_cp_mean_subcritical'], r['change_16_to_17']['wall_x_mean']) if x<0.05)),3), round(float(min(c for c,x in zip(r['change_16_to_17']['wall_cp_mean_subcritical'], r['change_16_to_17']['wall_x_mean']) if x>0.95)),3)) for r in d['records']]"`.
+So, against its own 128x49 prediction, the model at 256x97 under-predicts the nose pressure with
+16 rows and over-predicts it with 17. Both ends of the section, where the wall pressure departs most
+from free stream, are where the row count acts on the wall. Why it acts there is not established.
+
+**Averaging the 16- and 17-row predictions removes the drag offset but not the error.** The averaged
+prediction's mean drag offset is −0.9 / +0.3 / +0.3 counts (subcritical) and −4.5 / −7.0 / −3.0
+(supercritical). Its transfer is 0.0149 / 0.0135 / 0.0183, against 0.0207 / 0.0206 / 0.0215 at
+16 rows. But its near field against SU2 at 256x97 is worse than 16 rows alone: 0.0206 / 0.0206 /
+0.0221 subcritical against 0.0124 / 0.0118 / 0.0135, and 0.0364 / 0.0350 / 0.0381 supercritical
+against 0.0307 / 0.0288 / 0.0302. The 16- and 17-row predictions are not errors of opposite sign
+about the truth across the near field; they are only in the drag and the transfer. One spectral
+layer showed the same (previous entry). So the 16-row rule stays the better whole-field choice, and
+its in-range drag sits about 17 counts low.
+
+**What remains.** Every model, and the untrained network, puts the best row count between 16 and
+17. With an integer row count, the 256x97 evaluation cannot reproduce the 128x49 operator exactly
+for a field cut off by the padding. A fix would have to change the evaluation, not the row count:
+for example resampling the padded column, or training at both resolutions. None is tried here.

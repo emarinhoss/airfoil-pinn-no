@@ -44,8 +44,9 @@ Near-field error on the test sets, against the floor:
 
 The FNO's radial padding at 256×97 is 16 rows, since the design was amended on 2026-10-26
 (spec §6.3). With the original 17 rows, its three figures above were 5.3×, 2.4× and 3.6×. One
-padding row also flips a drag bias of about 17 counts on the in-range cases, from high to low. The
-record is in the findings, 2026-10-24 to 2026-10-26.
+padding row also flips a drag bias of about 17 counts on the in-range cases, from high to low: a
+leading-edge pressure error, with the best row count near 16.5 for every model. The record is in the
+findings, 2026-10-24 to 2026-10-26.
 
 The scope changed twice during the work. Both changes are dated amendments in the spec:
 

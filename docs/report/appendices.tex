@@ -307,7 +307,7 @@ Without it, every layer's output would be a smooth, band-limited field.
 \caption{The FNO as implemented, with tensor shapes (batch, channels, $i$, $j$) for a batch of 8 at
 the $128\times49$ training resolution, with the selected width of 48. The projection is two
 $1\times1$ convolutions with a GELU between them. At $256\times97$ the same
-weights see $8\times48\times256\times114$ after padding, and the same $48\times8$ retained modes.
+weights see $8\times48\times256\times113$ after padding, and the same $48\times8$ retained modes.
 Bottom: one Fourier layer.}
 \label{fig:fnoarch}
 \end{figure}
@@ -353,22 +353,26 @@ mean the same thing at $128$ and at $256$ nodes.
 
 \paragraph{Outward, the field is not periodic.}
 A plain FFT along $j$ would wrap the outer boundary onto the wall. Zero-padding by $P$ rows puts a
-buffer between them. The discrete period in $\eta$ is $(N_J + P)\,\Delta\eta = (N_J + P)/(N_J - 1)$,
-and for a learned radial mode to mean the same physical frequency at both resolutions that period
-must agree:
+buffer between them:
 \begin{equation}
-  P = \mathrm{round}\!\bigl(\tfrac{3}{16}(N_J - 1)\bigr) - 1:\qquad
-  \frac{49 + 8}{48} = \frac{97 + 17}{96} = \frac{19}{16}.
+  P = \tfrac{1}{6}(N_J - 1):\qquad
+  \frac{48 + 8}{48} = \frac{96 + 16}{96} = \frac{7}{6},
 \end{equation}
-The padded rows are zero only on entry. The layers write into them, and they are cropped once,
-before the projection.
+so the padded column spans the same $\eta$ at both resolutions. The discrete period in $\eta$ is
+$(N_J + P)\,\Delta\eta = (N_J + P)/(N_J - 1)$, and it differs slightly: 57/48 against 113/96.
+From 1 to 26 October the rule was $P = \mathrm{round}\bigl(\tfrac{3}{16}(N_J - 1)\bigr) - 1$ (8 and
+17 rows), which makes the period $19/16$ at both, so that a learned radial mode means the same
+physical frequency. On the trained networks 16 rows transferred better than 17, and the rule was
+changed back (\cref{sec:fno}). The padded rows are zero only on entry. The layers write into them,
+and they are cropped once, before the projection.
 
 \paragraph{The transfer is still only first-order.}
 At the end of the padding the field jumps back to the wall row's values, and that jump aliases
 differently at the two resolutions. The measured transfer error is therefore not zero: on the
 validation cases, the selected model's prediction at $128\times49$ differs from its prediction at
-$256\times97$ by a relative L2 of 0.035. In the test scores this is the factor of four between the
-two grids on in-range subcritical cases (\cref{tab:results}).
+$256\times97$ by a relative L2 of 0.021 (0.035 with 17 rows). In the test scores this is the
+factor of 1.7 between the two grids on in-range subcritical cases (\cref{tab:results}); with 17
+rows it was 4.
 
 \subsection{Inputs and outputs}
 
@@ -469,8 +473,10 @@ training, normalisation or model selection by accident.
 \begin{enumerate}[label=Q\arabic*., leftmargin=*]
 \item \textit{Why does a learned mode along $i$ mean the same thing at 128 and 256 nodes, while the $j$
 direction needed a padding rule?}\newline
-Along $i$ the grid is periodic with a period of one circuit at any $N_I$. Along $j$ the period is
-set by the $N_J + P$ padded samples, and has to be made equal in $\eta$ by choosing $P$.
+Along $i$ the grid is periodic with a period of one circuit at any $N_I$. Along $j$ the field is
+not periodic, so it is padded; the period is then set by the $N_J + P$ padded samples and depends
+on the choice of $P$. Matching the period exactly turned out to transfer worse on the trained
+networks than matching the padded span.
 \item \textit{How many complex weights does one Fourier layer hold, and why two tensors?}\newline
 $2\times48\times48\times24\times8 = 884{,}736$. The real FFT halves only the $j$ axis, so positive
 and negative $i$-frequencies are distinct modes, each with its own weights.
@@ -478,7 +484,7 @@ and negative $i$-frequencies are distinct modes, each with its own weights.
 Forces depend only on wall pressure, while a field loss is dominated by the many off-wall nodes.
 Loss B adds the wall row with weight 10. In practice it was worse almost everywhere, and stopped
 early at epoch 81 (\cref{sec:results}).
-\item \textit{Why is the FNO's in-range error four times smaller on its training grid?}\newline
+\item \textit{Why is the FNO's in-range subcritical error 1.7 times smaller on its training grid?}\newline
 The resolution transfer is only first-order, because of the padding wrap; the same weights see
 differently aliased fields at $256\times97$.
 \end{enumerate}

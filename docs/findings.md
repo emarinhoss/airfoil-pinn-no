@@ -407,6 +407,11 @@ error of the FNO trained at 128 x 49 and evaluated on the 256 x 97 validation fi
 | fno-n64 / n128 / n256 / n512 (s0) | 0.0443 / 0.0476 / 0.0474 / 0.0431 |
 | tune-0 ... tune-7 | 0.0637 / 0.0535 / 0.0538 / 0.0458 / 0.0527 / 0.0456 / 0.0436 / 0.0558 |
 
+*(Amended 2026-10-26: these transfers are at the design's padding rule of the time, 17 rows at
+256 x 97. Under the amended rule (16 rows) the final runs' transfers are 0.0207 / 0.0206 / 0.0215,
+0.0243 (loss B) and 0.0255 / 0.0271 / 0.0268 / 0.0254, and `runs.json` keeps these as
+`transfer_val_rel_l2_rows17`. The tuning runs' stay at 17 rows; see the 2026-10-26 entry on the amended padding rule.)*
+
 **POD (`pod.json`; modes chosen from 8...256, smoothing from 0, 1e-6, 1e-4, 1e-2, on validation).**
 
 | n | cases | modes | smoothing | val rel L2 | wall s | CPU s |
@@ -674,6 +679,14 @@ read from the re-written file through the keys named in each command.)* Every
 figure below is read from those files; the per-case figures come from `scores.json`'s `rows`, e.g.
 `python -c "import json; [print(r['tag'], r['case_id'], r['score']['cl_err'], r['score']['cl_true']) for r in json.load(open('results/s4/scores.json'))['rows'] if r['method']=='pinn']"`.
 
+*(Amended 2026-10-26: this entry's figures for the FNO at 256x97 were made with the padding rule of
+the time, 17 rows. On 2026-10-26 the rule became 16 rows (spec §6.3). S2's predictions were remade
+from the same checkpoints and S4 was rerun, so `results/s4/` now holds the 16-row scores, and the
+commands below reproduce those, not the figures quoted. To reproduce the 17-row figures, read
+`git show 7b39c58:results/s4/scores.json`. Each affected figure is marked, and the new ones are in
+the 2026-10-26 entry on the amended padding rule. The figures at 128x49, and those for SU2, POD and the PINN, the costs and the break-even, are
+unchanged.)*
+
 **Four things the brief for this stage predates, stated before any result.**
 
 1. **The PINN is the full-potential formulation** (author's decision 2026-10-04), not the Euler PINN
@@ -760,7 +773,9 @@ the floor at every n and is still falling at 896:
 
 (The campaign column is `campaign_cpu_s[n] / su2.per`; every n pays for all 128 validation cases.) A
 smaller training set would break even sooner — about 199 cases at n = 64, which is arithmetic on
-these figures, not a measured curve — but at 7.6x the floor rather than 3.4x. Command for the table (prints the mean per tag and the case count):
+these figures, not a measured curve — but at 7.6x the floor rather than 3.4x. *(Amended
+2026-10-26, 16 padding rows: the FNO column is 0.0918, 0.0634, 0.0460, 0.0310 and 0.0256, 6.4x to
+1.8x the floor; the clause still does not fire, and the break-even is unchanged.)* Command for the table (prints the mean per tag and the case count):
 `python -c "import json,collections as c; R=json.load(open('results/s4/scores.json'))['rows']; d=c.defaultdict(list); [d[r['tag']].append(r['score']['near_field_rel_l2']) for r in R if r['grid']=='256x97' and r['split']=='test_in']; [print(t, sum(v)/len(v), len(v)) for t,v in sorted(d.items())]"`.
 
 **Prediction 3 — "Without the Kutta condition, the PINN's residuals will look acceptable while its
@@ -800,15 +815,23 @@ regime, test_in only).
 | | FNO 128x49 | 0.2320 | 0.1876 | 178.3 | 0.1966 |
 | | POD | 0.5151 | 0.3483 | 530.2 | 0.3512 |
 
+*(Amended 2026-10-26, 16 padding rows: the FNO 256x97 rows are 0.0169 / 0.0181 / 41.6 / 0.0432
+(subcritical), 0.0391 / 0.0403 / 64.6 / 0.0491 (supercritical) and 0.2238 / 0.1835 / 203.5 / 0.1933
+(extrapolation); see the 2026-10-26 entry on the amended padding rule.)*
+
 What this says:
 - **In range and subcritical the FNO at its own 128x49 resolution is near the floor** (near field
   1.3x, CL 1.3x, CD 1.1x), **but evaluated at 256x97 it is 5.3x the floor** and POD beats it there on the near field, CL and CD
   (not on wall-Cp RMS, 0.0371 against 0.0358). The resolution transfer costs the FNO more than any other single factor in range.
+  *(Amended 2026-10-26: at 16 padding rows it is 2.1x the floor at 256x97, level with POD on the
+  near field; POD's lift and drag errors are smaller.)*
 - **Supercritical, in range, the FNO beats POD by 2.5x** on the near field and 3x on CD at 256x97,
-  and is 2.4x the floor.
+  and is 2.4x the floor. *(Amended 2026-10-26: at 16 padding rows, 3.7x better than POD on the
+  near field and 1.9x on CD, and 1.6x the floor.)*
 - **Extrapolation is where every surrogate fails**: the FNO is 3.6x the floor on the near field and
   its CD error reaches 181 counts (5.6x the floor's 32); POD is 7.9x and 530 counts. The FNO's CD
-  errors on test_ext are biased, not scattered: median −78 counts at 256x97.
+  errors on test_ext are biased, not scattered: median −78 counts at 256x97. *(Amended
+  2026-10-26: at 16 padding rows, 3.4x the floor, CD error up to 204 counts, median −102.)*
 - **The PINN is not competitive on any column**: 0.52-0.63 near field, 65x and 26x the floor
   (0.5155 / 0.007953 = 64.8 and 0.6273 / 0.02413 = 26.0; corrected 2026-10-06 from "64x"; command:
   `python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; f=lambda m,v: {(x['split'],x['regime']): x['near_field_rel_l2_mean'] for x in G if x['method']==m and x['variant']==v and x['grid']=='256x97' and x['split']=='test_in'}; fl,pi=f('su2-256x97','floor'),f('pinn','pure'); [print(k, pi[k], fl[k], pi[k]/fl[k]) for k in pi]"`).
@@ -843,6 +866,9 @@ these cases are 0.0003-0.0086.
 
 The near-field spread is a few per cent of its value; the extrapolation CL maximum varies by 40 %
 between seeds, so a single-seed extrapolation CL figure is not reliable to better than that.
+*(Amended 2026-10-26: the 256x97 rows are at 17 padding rows. At 16, in-range shocks missed are 0
+for every seed, the subcritical near-field spread is 12 % and the extrapolation CL maximum still
+varies by 40 %; see the 2026-10-26 entry on the amended padding rule.)*
 
 **Loss A against loss B (n = 896, seed 0).** Loss B (A plus the wall row weighted 10) is **worse than
 loss A on the near field and CD in every set and regime at both grids, and on CL in every one except
@@ -857,6 +883,9 @@ against 40 counts; near field 0.1660 against 0.0575 (supercritical), 0.0694 agai
 in range subcritical (0.0337 against 0.0358 at 256x97, 0.0333 against 0.0334 at 128x49) and worse
 in every other set and regime. Loss B stopped early by
 patience at epoch 81 (S2 entry); the comparison is of the runs as made, not of converged runs.
+*(Amended 2026-10-26: at 16 padding rows, loss B is worse at 256x97 on the near field and CL in
+every set and regime, and on CD in every one except in-range subcritical, CD max 37.2 against 41.6
+counts.)*
 
 **Shocks** (scores.md, "Shocks"; 27 true shocks on the 24 test_in supercritical cases, 21 on the 14
 test_ext cases; position error in chords; "overshoot" is the largest |ΔCp| within 0.05 chord of the
@@ -879,6 +908,8 @@ The FNO places in-range shocks at the floor's median accuracy (0 chords) but mis
 smears them (overshoot median twice the floor's); out of range its position errors reach 0.21 chord.
 POD never misses but places them 0.06-0.11 chord off at the median. At n = 64 the FNO misses up to 3
 of 27 in range. The PINN misses one of its four shocks, and the gradnorm run misses its only one.
+*(Amended 2026-10-26: at 16 padding rows the FNO at 256x97 misses no in-range shock at n = 896
+(any seed), overshoot 0.36 / 0.85; loss B misses 1; n = 64 misses 1.)*
 
 **Physics checks on SU2 itself** (the truth row, `su2-512x193`, sampled onto the 256x97 nodes; and
 the floor):
@@ -901,23 +932,26 @@ These are the scale against which the contestants' checks below are read.
 - **Non-positive density or pressure in the near field (test_ext):** POD on 2, 5, 5, 6 and **7 of 14**
   cases at n = 64, 128, 256, 512, 896 — it gets worse with more data; the FNO on 4-5 of 14 at n = 64
   and 128, and on none at n ≥ 256. Where these occur the enthalpy deviation explodes (POD n = 512
-  worst 5,770; FNO n = 64 worst 543 at 256x97). No method has one in range.
+  worst 5,770; FNO n = 64 worst 543 at 256x97). No method has one in range. *(Amended 2026-10-26:
+  at 16 padding rows the FNO has 5 and 4 such cases at n = 64 and 128, worst deviation 702.)*
 - **Entropy decrease:** the subcritical near-field mean entropy is **below free stream** on 9-24 of 37
   cases for the FNO (9 for the n = 896 seed-0 run; 16 and 19 for seeds 1 and 2) and 10-23 of 37 for
-  POD, against 0 of 37 for SU2 at either grid. Command (counts per tag; tags with no case are absent):
+  POD, against 0 of 37 for SU2 at either grid. *(Amended 2026-10-26: at 16 padding rows the FNO's
+  counts are 8-21, and 8, 14 and 20 for the three seeds.)* Command (counts per tag; tags with no case are absent):
   `python -c "import json,collections as c; R=json.load(open('results/s4/scores.json'))['rows']; d=c.Counter(r['tag'] for r in R if r['regime']=='subcritical' and r['grid']=='256x97' and (r['score'].get('physics') or {}).get('entropy_mean',0)<0); print(sorted(d.items()))"`. That is an unphysical entropy
   decrease somewhere in the field, but it is **not an expansion-shock test**: the scorer has no
   check for an entropy decrease across a compression, so whether any surrogate predicts an expansion
   shock is **not measured**. For the potential PINN entropy is identically constant, so an expansion
   shock (which isentropic potential flow admits) could not be detected by any entropy check at all.
-- **Missed shocks:** FNO up to 3 of 27 in range (n = 64), 1-2 at n = 896; PINN 1 of 4 (`pure`) and 1
+- **Missed shocks:** FNO up to 3 of 27 in range (n = 64), 1-2 at n = 896 *(amended 2026-10-26: at
+  16 padding rows, 1 at n = 64 and none at n = 896)*; PINN 1 of 4 (`pure`) and 1
   of 1 (`gradnorm`); POD and the floor none.
 - **Wrong lift from the wrong circulation:** the PINN's CL is 64-101 % low on five of six `pure` runs
   (table above).
 - **PINN wall tangency and mass**, which the potential formulation enforces only softly: wall-normal
   RMS 0.011 median (subcritical) and 0.020 (supercritical) against SU2's 1e-8; mass-flux medians at
   j = 48 and 72 of 0.019-0.069 (`pure`), one to two orders above the FNO at n = 896 (4e-4 to 7e-3
-  at 256x97) and three to five above SU2's truth.
+  at 256x97; 3e-4 to 5e-3 at 16 padding rows, amended 2026-10-26) and three to five above SU2's truth.
 - **A PINN run that did not converge:** `gradnorm` on test_in-0004 ended with residual 9.11 after
   L-BFGS made it about 380x worse than Adam left it (S3 entry), and scores CL −0.33 against 1.01,
   near field 1.27. The six `pure` runs and `nokutta` ended with residual losses 1.1e-3 to 2.4e-2; no
@@ -1483,7 +1517,8 @@ Apple GPU, T1 to T4 in order. Scores: `python scripts/s5_score.py > results/s5/s
   near-field relative L2 error is 1.32 to 1.33.
 - **A uniform stream scores 5.2 % on the gate's metric.** RMAE divides by the field's range, and
   most of the RMAE box is near free stream. For scale, on step-3 case `test_in-0004` the metric
-  gives 0.30 % for the FNO at 256x97 and 1.23 % for S3's potential PINN.
+  gives 0.30 % for the FNO at 256x97 and 1.23 % for S3's potential PINN. *(Amended 2026-10-26:
+  0.13 % for the FNO at the amended 16 padding rows.)*
 - **The scorer's collapse flag is False for all four.** Its test, the largest wall speed below half
   the truth's, catches fluid at rest. A uniform stream at 0.93 U∞ passes it. The gate's verdict does
   not depend on the flag.
@@ -2131,3 +2166,112 @@ not change: one padding row fewer is a slightly cheaper evaluation, not a differ
 records and the README's summary describe `FNO2d` as designed, with 17 rows. They are unchanged, and
 so is the design's rule. Amending the rule, and with it S4's figures for `FNO2d` at 256x97, is the
 author's decision.
+
+## 2026-10-26 — the padding rule amended to 16 rows: S2 re-predicted, S4 and S5 rescored
+
+**The decision.** The author amended the design's radial padding rule to (NJ − 1)/6 rows, 8 at
+128x49 and 16 at 256x97 (spec §6.3, amended 2026-10-26; commit 7b39c58). The evidence is the three
+entries above. The test cases had been scored at 16 rows before the choice was made, so the test
+figures below are not a blind test of it. The old rule is kept as `radial_pad_period_matched` for the
+probes whose records used it.
+
+**S2 re-predicted, not retrained.** Both rules pad 8 rows at 128x49, where `FNO2d` trains, so S2's
+checkpoints, training costs and 128x49 predictions stand. By the author, on the Mac's Apple GPU:
+`python scripts/s2_operator.py repredict` remade the 256x97 test predictions of S2's eight final
+runs (`results/s2/repredict.log`, `repredict_2026-10-26.json`). The 17-row files are kept in
+`runs/predictions_rows17/`.
+
+- Before each file was replaced, its own checkpoint reproduced it under the old rule exactly
+  (largest relative difference 0.0, at 256x97 and 128x49, all eight).
+- The largest relative change at 16 rows is 0.136 to 0.168 for the loss-A runs and 0.289 for loss B.
+  Command: `python -c "import json; [print(e['tag'], e['reproduces_file_at_old_rows'], round(e['max_rel_change'],3)) for e in json.load(open('results/s2/repredict_2026-10-26.json'))['files']]"`.
+- **The validation transfer** (S2 entry, 2026-10-05) falls from 0.0348 / 0.0355 / 0.0379 to
+  0.0207 / 0.0206 / 0.0215 for seeds 0 / 1 / 2 at 896 cases. Loss B's goes from 0.0595 to 0.0243.
+  At 64, 128, 256 and 512 cases it goes from 0.0443 / 0.0476 / 0.0474 / 0.0431 to
+  0.0255 / 0.0271 / 0.0268 / 0.0254. `runs.json` keeps the old values as
+  `transfer_val_rel_l2_rows17`. The tuning runs' transfers in `tuning.json` stay at 17 rows. The
+  tuning selected on validation loss at 128x49, which the padding does not change. Command:
+  `python -c "import json; [print(r['tag'], round(r['transfer_val_rel_l2_rows17'],4), round(r['transfer_val_rel_l2'],4)) for r in json.load(open('results/s2/runs.json'))]"`.
+
+Then `python scripts/s4_score.py`, `python scripts/s5_score.py` and
+`python docs/report/make_figures.py` (commit 19199e5). S4's FNO groups at 256x97 equal the
+2026-10-26 rescore's `pad16` groups exactly, for the seven loss-A runs. Loss B is new here.
+`costs.json` and `break_even.png` did not change, and neither did anything at 128x49 or for SU2,
+POD or the PINN.
+
+**S4 at 256x97, 896 cases, seed 0, beside the floor and POD** (17-row values from the S4 entry in
+brackets):
+
+| set / regime | near field | ×floor | CL max | CD max (counts) | CD median (counts) | Cp RMS |
+|---|---|---|---|---|---|---|
+| test_in subcritical | 0.0169 (0.0423) | 2.1 (5.3) | 0.0181 (0.0312) | 41.6 (31.3) | −17.1 (+16.5) | 0.0432 (0.0358) |
+| test_in supercritical | 0.0391 (0.0575) | 1.6 (2.4) | 0.0403 (0.0431) | 64.6 (40.4) | −19.2 (+12.6) | 0.0491 (0.0521) |
+| test_ext supercritical | 0.2238 (0.2318) | 3.4 (3.6) | 0.1835 (0.1847) | 203.5 (180.6) | −101.8 (−78.2) | 0.1933 (0.2038) |
+
+Floor: near field 0.0080, 0.0241 and 0.0651. POD: 0.0168, 0.1462 and 0.5151. Command:
+`python -c "import json; G=json.load(open('results/s4/scores.json'))['groups']; [print(x['method'], x['variant'], x['grid'], x['seed'], x['split'], x['regime'], round(x['near_field_rel_l2_mean'],4), round(x['cl_err_absmax'],4), round(x['cd_err_counts_absmax'],1), round(x['cd_err_counts_median'],1), round(x['cp_l2_mean'],4)) for x in G if x['n_train'] in (0, 896) and x['method'] in ('fno', 'pod', 'su2-256x97')]"`.
+The bracketed values are the same command on the file at commit 7b39c58
+(`git show 7b39c58:results/s4/scores.json`).
+
+- **In range, subcritical, the FNO at 256x97 is level with POD on the near field** (2.1x the floor
+  each; 0.0169 against 0.0168). POD's lift and drag errors are smaller (CL max 0.0097, CD max 14.2
+  counts). At 17 rows POD beat it on all three.
+- **In range, supercritical, the FNO beats POD by 3.7x on the near field** (2.5x at 17 rows) and
+  1.9x on the CD maximum (3x at 17 rows).
+- **In extrapolation it barely moves**: 3.4x the floor against POD's 7.9x. Its largest drag error
+  rises from 181 to 204 counts.
+- **The in-range drag error changes sign with the padding.** At 256x97 the median in-range CD error
+  is +15.0 / +16.9 / +17.4 counts at 17 rows (5 of 61 cases negative, every seed), and
+  −17.4 / −17.9 / −16.9 at 16 rows (60 of 61 negative). At 128x49 the same models' median is −0.2 /
+  +0.1 / +0.4 counts, and the floor's +0.2. So at 256x97 an offset of about 17 counts sits on the
+  FNO's drag, and one padding row flips its sign. This entry does not establish the cause. The
+  largest in-range drag errors rise for that reason, while the near field, lift and moment improve.
+  Command:
+  `python -c "import json,numpy as np; R=json.load(open('results/s4/scores.json'))['rows']; [print(g, s, round(float(np.median(v)),1), sum(c<0 for c in v), len(v)) for g in ('256x97','128x49') for s in range(3) for v in [[r['score']['cd_err_counts'] for r in R if r['tag']==f'fno-n896-s{s}' and r['grid']==g and r['split']=='test_in']]]"`,
+  and the same on the file at commit 7b39c58.
+- **Seeds** (896 cases, 256x97, seeds 0 / 1 / 2). The in-range near field is 0.0161 to 0.0181
+  subcritical (12 % spread, against 4 % at 17 rows) and 0.0391 to 0.0409 supercritical. The
+  extrapolation CL maximum still varies by 40 % (0.171 to 0.238). Same command as the table.
+- **Loss B against loss A at 256x97.** Loss B is worse on the near field and CL in every set and
+  regime. It is worse on CD in every one except in-range subcritical, where its CD maximum is
+  37.2 counts against loss A's 41.6. At 17 rows the exception was CL, not CD. The 128x49
+  comparison is unchanged. Same command as the table.
+
+**Shocks at 256x97** (scores.md, "Shocks"). Command:
+`python -c "import json; [print(g['variant'], g['grid'], g['n_train'], g['seed'], g['split'], g['n_missed'], round(g['abs_x_err_median'],4), round(g['abs_x_err_max'],4), round(g['overshoot_median'],2), round(g['overshoot_max'],2)) for g in json.load(open('results/s4/scores.json'))['shock_groups'] if g['method']=='fno' and g['grid']=='256x97']"`.
+
+- **In range**, the three loss-A seeds at 896 cases miss none of their 27 shocks each (2, 2 and 1 at
+  17 rows). Seed 0's position error is 0 / 0.058 chord (median / max), unchanged. Its overshoot is
+  0.36 / 0.85 (0.42 / 1.05), against the floor's 0.19 / 0.54. Loss B misses 1 (2). Across the
+  training-set sizes, only n = 64 misses one (3 at 17 rows).
+- **In extrapolation** none is missed at any n, as before. Seed 0's position error is 0.040 / 0.213
+  chord, and its overshoot is 1.07 / 1.56 (1.13 / 1.58).
+
+**Data efficiency** (S4 entry's command, unchanged; mean near field over the 61 test_in cases at
+256x97, seed 0, floor 0.01432). For n = 64, 128, 256, 512 and 896 it is 0.0918, 0.0634, 0.0460,
+0.0310 and 0.0256: 6.4x, 4.4x, 3.2x, 2.2x and 1.8x the floor, where S4 recorded 7.6x to 3.4x. It is
+below POD at every n. **Prediction 2 is unchanged: held.** The break-even is still 1,126 new cases,
+since the costs are unchanged. The "unless" clause still does not fire: the curve is still falling
+at 896 cases and is 1.8x the floor there.
+
+**Physics checks on the FNO at 256x97** (the S4 entry's commands, on the new file):
+
+- Non-positive density or pressure on test_ext: 5 of 14 cases at n = 64 (4 at 17 rows), 4 at
+  n = 128 (4), none at n ≥ 256 (none). The worst enthalpy deviation at n = 64 is 702 (543).
+- Subcritical mean entropy below free stream: 8 to 21 of 37 cases across the FNO's runs (9 to 24),
+  with 8 / 14 / 20 for the three 896-case seeds (9 / 16 / 19).
+- Mass-flux medians at j = 48 and 72, 896 cases, in range: 2.8e-4 to 5.4e-3 (4.3e-4 to 7.4e-3).
+  Command: `python -c "import json; [print(g['seed'], g['split'], g['regime'], [f\"{g[f'mass_flux_line{k}_median']:.1e}\" for k in (2, 3)]) for g in json.load(open('results/s4/scores.json'))['physics_groups'] if g['method']=='fno' and g['grid']=='256x97' and g['n_train']==896 and g['variant']=='']"`.
+
+**S5's comparison columns** (`results/s5/scores.md`). S5 stopped after its gate, so P6 and P7
+remain untested, and only the FNO's reference columns move. At 256x97, the FNO's mean near-field
+ratio to the floor on the three step-3 cases goes from 2.71 to 1.75 in range. In extrapolation it
+goes from 4.84 to 4.69. Its degradation factor therefore rises from 1.79 to 2.69. On
+`test_in-0004`, its gate-metric RMAE of Cp goes from 0.30 % to 0.13 %. Command:
+`grep -E "^\| (fno-256|test_in-0004 \| fno-256) " results/s5/scores.md`.
+
+**Figures marked in place** with a pointer here: the S2 entry's transfer table, and the S4
+entry's figures for the FNO at 256x97. That covers its data-efficiency table and the "unless"
+sentence, the results table and the bullets under it, the seeds table, loss B, the shocks table
+and paragraph, and the failures list. Also the S5 gate entry's 0.30 %. The README's summary, the
+report's text and figures, and `CLAUDE.md` are updated to the new rule and figures.

@@ -34,12 +34,18 @@ These predictions were recorded before any model ran:
 
 Near-field error on the test sets, against the floor:
 
-- **In range, subcritical**: the FNO is 1.3× the floor at its own 128×49 training grid and 5.3× at
-  the 256×97 evaluation grid. POD beats it at 256×97.
-- **In range, supercritical**: the FNO is 2.4× the floor, and 2.5× better than POD.
-- **Extrapolation**: the FNO is 3.6× the floor and POD 7.9×. The FNO's drag errors reach 181
+- **In range, subcritical**: the FNO is 1.3× the floor at its own 128×49 training grid and 2.1× at
+  the 256×97 evaluation grid. There it is level with POD on the near field, and POD's lift and drag
+  errors are smaller.
+- **In range, supercritical**: the FNO is 1.6× the floor, and 3.7× better than POD.
+- **Extrapolation**: the FNO is 3.4× the floor and POD 7.9×. The FNO's drag errors reach 204
   counts.
 - **PINN**: 26–65× the floor. It under-predicts lift on five of its six showcase cases.
+
+The FNO's radial padding at 256×97 is 16 rows, since the design was amended on 2026-10-26
+(spec §6.3). With the original 17 rows, its three figures above were 5.3×, 2.4× and 3.6×. One
+padding row also flips a drag bias of about 17 counts on the in-range cases, from high to low. The
+record is in the findings, 2026-10-24 to 2026-10-26.
 
 The scope changed twice during the work. Both changes are dated amendments in the spec:
 
@@ -86,7 +92,7 @@ finished work.
 | S0 | Check SU2's accuracy and cost; freeze the settings | `SU2_BIN_DIR=... python scripts/s0_check.py` |
 | S1 | Data campaign: 1,104 cases at 256×97 and 80 at 512×193 | `SU2_BIN_DIR=... python scripts/s1_campaign.py train`, then `fine` |
 | S1 | Build the HDF5 dataset and pick the PINN showcase cases | `python scripts/build_dataset.py` |
-| S2 | FNO tuning, final runs and seeds; POD | `python scripts/s2_operator.py tune`, `final`, `pod` |
+| S2 | FNO tuning, final runs and seeds; POD; FNO predictions under the current padding rule | `python scripts/s2_operator.py tune`, `final`, `pod`, `repredict` |
 | S3a | PINN cylinder warm-up | `python scripts/s3_warmup.py` |
 | S3 | PINN showcase runs (8 runs; shardable) | `python scripts/s3_pinn.py --shard K/N` |
 | S4 | Score everything; write tables, plots and costs | `python scripts/s4_score.py` |

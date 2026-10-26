@@ -53,8 +53,9 @@ Every contestant is scored on the same nodes against SU2 on a $512\times193$ gri
 integrator. Each error is shown beside \emph{the floor}: SU2's own $256\times97$ solution scored
 the same way.
 In range, the FNO's near-field error is 1.3 times the floor at its $128\times49$ training
-resolution and 5.3 times at $256\times97$ on subcritical cases, and 2.4 times on supercritical
-cases. In extrapolation every surrogate fails: the FNO is 3.6 times the floor and POD 7.9 times.
+resolution and 2.1 times at $256\times97$ on subcritical cases, level with POD, and 1.6 times on
+supercritical cases. In extrapolation every surrogate fails: the FNO is 3.4 times the floor and POD
+7.9 times.
 The PINN was first built on the Euler equations, and that version converged to fluid at rest. It
 was replaced by a full-potential PINN, which is 26--65 times the floor and under-predicts lift
 on five of six cases.
@@ -534,6 +535,7 @@ $K$ and the RBF smoothing were chosen on the validation set. The chosen values (
 smoothing $10^{-2}$) lie on the edges of the search grids, so the baseline may be under-tuned.
 
 \subsection{Fourier neural operator}
+\label{sec:fno}
 
 \Cref{app:fno} explains the network in detail, with its tensor shapes and parameter counts.
 The FNO works in the O-grid's index space. Around the airfoil the grid is periodic, so a Fourier
@@ -571,12 +573,26 @@ activations $\sigma$ (none after the last layer). A projection $w\to128\to4$ giv
 \paragraph{Radial padding.}
 Radially the field is not periodic, so it is zero-padded by
 \begin{equation}
-  P(N_J) = \mathrm{round}\bigl(3(N_J-1)/16\bigr) - 1
+  P(N_J) = (N_J-1)/6
 \end{equation}
-rows before the transform: 8 rows at $128\times49$ and 17 at $256\times97$. The discrete Fourier
-period, $(N_J+P)/(N_J-1) = 19/16$ in $\eta$, is then the same at both resolutions. An earlier
-padding of $(N_J-1)/6$ matched the padded span instead of the period, and one spectral layer then
-differed by 4--71\,\% between the two resolutions.
+rows before the transform: 8 rows at $128\times49$ and 16 at $256\times97$. The padded column
+then spans the same $7/6$ in $\eta$ at both resolutions.
+
+The rule was changed twice. From 1 to 26 October it was
+$P = \mathrm{round}\bigl(3(N_J-1)/16\bigr) - 1$, 8 and 17 rows. That rule makes the discrete
+Fourier period, $(N_J+P)/(N_J-1) = 19/16$ in $\eta$, the same at both resolutions. On a
+wrap-periodic field, one spectral layer then gives the same values at both, where $(N_J-1)/6$
+differed by 4--71\,\%.
+
+On the trained networks the reverse held. An ablation against NeuralOperator's FNO traced that
+library's smaller resolution transfer to its padding alone, which is 16 rows at $256\times97$.
+A sweep over row counts then found 16 rows better than 17 for every checkpoint, by the validation
+transfer and by the validation near field. So the design went back to $(N_J-1)/6$.
+
+The padding does not change training, since both rules pad 8 rows at $128\times49$. The trained
+models were re-evaluated, not retrained. Every FNO figure at $256\times97$ in this report is at
+16 rows. The test cases had already been scored at 16 rows when the rule was chosen, so those
+figures are not a blind test of it. The record is in the findings, 24--26 October.
 
 \paragraph{Loss and training.}
 Loss A is the per-sample relative L2 error of each output channel, averaged over channels; loss B
@@ -910,7 +926,7 @@ per phase (174--220$\times$, 2.24--2.34 orders): SU2 wins by more than predicted
 \addlinespace
 P2. The FNO beats ``just run SU2'' only after about as many new cases as trained it ($\sim$1,000). &
 \textbf{Held.} Break-even at $n^\ast = 1{,}126$ new cases. The data-efficiency curve is still
-3.4$\times$ the floor at $n = 896$, so the ``unless'' clause does not fire.\\
+1.8$\times$ the floor at $n = 896$ and still falling, so the ``unless'' clause does not fire.\\
 \addlinespace
 P3. Without the Kutta condition the PINN's residuals look acceptable while its lift is wrong. &
 \textbf{Partly.} Without the condition the residual is as small as with it ($1.8\times10^{-3}$
@@ -960,7 +976,8 @@ PINN (\texttt{pure}, mean of 6) & 0 & 20,201 & 36,464 & per phase: 36,464--46,12
 \centering\small
 \caption{Errors by set and regime, with the floor first. Near field: mean of
 \cref{eq:nearfield}; $\CL$ and $\CD$: largest absolute error in the group; $\Cp$: mean RMS wall
-error. FNO rows are seed 0, $n = 896$, loss A, scored on its $256\times97$ evaluation grid and on
+error. FNO rows are seed 0, $n = 896$, loss A, scored on its $256\times97$ evaluation grid (16
+padding rows) and on
 its $128\times49$ training grid (against the truth at every fourth fine node). PINN rows cover the
 three showcase cases of each regime.}
 \label{tab:results}
@@ -970,21 +987,21 @@ Set / regime & Method & Near field & $\CL$ max & $\CD$ max (counts) & $\Cp$ RMS\
 \midrule
 \multirow{5}{*}{\shortstack[l]{in range\\subcritical (37)}}
  & \textbf{floor} & \textbf{0.0080} & \textbf{0.0073} & \textbf{6.9} & \textbf{0.0357}\\
- & FNO $256\times97$ & 0.0423 & 0.0312 & 31.3 & 0.0358\\
+ & FNO $256\times97$ & 0.0169 & 0.0181 & 41.6 & 0.0432\\
  & FNO $128\times49$ & 0.0102 & 0.0095 & 7.5 & 0.0334\\
  & POD & 0.0168 & 0.0097 & 14.2 & 0.0371\\
  & PINN (3) & 0.5155 & 0.2461 & 41.1 & 0.1603\\
 \midrule
 \multirow{5}{*}{\shortstack[l]{in range\\supercritical (24)}}
  & \textbf{floor} & \textbf{0.0241} & \textbf{0.0140} & \textbf{17.2} & \textbf{0.0341}\\
- & FNO $256\times97$ & 0.0575 & 0.0431 & 40.4 & 0.0521\\
+ & FNO $256\times97$ & 0.0391 & 0.0403 & 64.6 & 0.0491\\
  & FNO $128\times49$ & 0.0374 & 0.0314 & 46.6 & 0.0470\\
  & POD & 0.1462 & 0.0750 & 122.2 & 0.1190\\
  & PINN (3) & 0.6273 & 1.4028 & 776.5 & 0.4045\\
 \midrule
 \multirow{4}{*}{\shortstack[l]{extrapolation\\supercritical (14)}}
  & \textbf{floor} & \textbf{0.0651} & \textbf{0.0247} & \textbf{32.4} & \textbf{0.0598}\\
- & FNO $256\times97$ & 0.2318 & 0.1847 & 180.6 & 0.2038\\
+ & FNO $256\times97$ & 0.2238 & 0.1835 & 203.5 & 0.1933\\
  & FNO $128\times49$ & 0.2320 & 0.1876 & 178.3 & 0.1966\\
  & POD & 0.5151 & 0.3483 & 530.2 & 0.3512\\
 \bottomrule
@@ -1004,14 +1021,18 @@ What the table says:
 \begin{itemize}
   \item \textbf{In range and subcritical, the FNO at its own resolution is near the floor}: 1.3
     times on the near field, 1.3 times on $\CL$ and 1.1 times on $\CD$. Evaluated at
-    $256\times97$ it is 5.3 times the floor, and POD beats it there on the near field, $\CL$ and
-    $\CD$. The resolution transfer costs the FNO more than any other single factor in range.
-  \item \textbf{In range and supercritical, the FNO beats POD by 2.5 times} on the near field and 3
-    times on $\CD$, at 2.4 times the floor. Shocks that move with the inputs are exactly where a
+    $256\times97$ it is 2.1 times the floor, level with POD on the near field. POD's $\CL$ and $\CD$
+    errors are smaller there. The resolution transfer is still the FNO's largest single loss in range.
+  \item \textbf{In range and supercritical, the FNO beats POD by 3.7 times} on the near field and
+    1.9 times on $\CD$, at 1.6 times the floor. Shocks that move with the inputs are exactly where a
     fixed linear basis struggles.
-  \item \textbf{Extrapolation is where every surrogate fails.} The FNO is 3.6 times the floor, and
-    its $\CD$ error reaches 181 counts, biased rather than scattered (median $-78$ counts); POD is
-    7.9 times the floor. Here the FNO is equally wrong at both resolutions.
+  \item \textbf{Extrapolation is where every surrogate fails.} The FNO is 3.4 times the floor, and
+    its $\CD$ error reaches 204 counts, biased rather than scattered (median $-102$ counts); POD is
+    7.9 times the floor. Here the FNO is about equally wrong at both resolutions.
+  \item \textbf{The FNO's drag at $256\times97$ carries a padding offset.} In range its median $\CD$
+    error is $-17$ counts, negative on 60 of 61 cases, for all three seeds. At $128\times49$ the
+    same models' median is within 0.4 counts of zero. With 17 padding rows the offset was $+15$ to
+    $+17$ counts. So one padding row flips its sign, and the cause is not established here.
   \item \textbf{The PINN is not competitive in any column}: 65 and 26 times the floor on the near
     field.
 \end{itemize}
@@ -1136,21 +1157,22 @@ and L-BFGS trades the residual for it.}
 \subsection{FNO: seeds, loss B and shocks}
 
 \paragraph{Seeds.}
-Across the three seeds at $n = 896$, the near field varies by a few per cent of its value. The
-extrapolation $\CL$ maximum, however, varies by 40\,\% (0.173--0.243), so a single-seed
+Across the three seeds at $n = 896$, the near field at $256\times97$ varies by up to 12\,\% of its
+value. The extrapolation $\CL$ maximum varies by 40\,\% (0.171--0.238), so a single-seed
 extrapolation lift figure is not reliable to better than that.
 
 \paragraph{Loss B.}
-Loss B is worse than loss A on the near field and $\CD$ in every set and regime, at both grids. It
-is worse on $\CL$ in every cell but one: in-range subcritical at $256\times97$, where it is 23\,\%
-better. It is worst on supercritical lift ($\CL$ maximum 0.249 against 0.043). It stopped early, at
+Loss B is worse than loss A on the near field and $\CL$ in every set and regime, at both grids. It
+is worse on $\CD$ in every cell but one: in-range subcritical at $256\times97$, where its largest
+error is 37 counts against 42. It is worst on supercritical lift ($\CL$ maximum 0.269 against
+0.040). It stopped early, at
 epoch 81, so this compares the runs as made, not converged runs.
 
 \paragraph{Shocks.}
 \Cref{tab:shocks} gives the shock scores.
 \begin{itemize}
-  \item In range, the FNO places shocks at the floor's median accuracy but misses 1--2 of 27 and
-    smears them, with twice the floor's median overshoot.
+  \item In range, the FNO at $n = 896$ places shocks at the floor's median accuracy and misses
+    none of 27, for every seed, but smears them, with about twice the floor's median overshoot.
   \item POD never misses a shock but places them 0.06--0.11 chord off at the median.
   \item Out of range, the FNO's position errors reach 0.21 chord.
 \end{itemize}
@@ -1166,14 +1188,14 @@ chord of the true shock.}
 Set & Method & Missed & $|\Delta x|$ median / max & Overshoot median / max\\
 \midrule
 in range & \textbf{floor} & \textbf{0} & \textbf{0 / 0.019} & \textbf{0.19 / 0.54}\\
- & FNO $256\times97$ & 2 & 0 / 0.058 & 0.42 / 1.05\\
+ & FNO $256\times97$ & 0 & 0 / 0.058 & 0.36 / 0.85\\
  & FNO $128\times49$ & 1 & 0 / 0.069 & 0.29 / 0.92\\
  & POD & 0 & 0.061 / 0.135 & 0.65 / 1.34\\
- & FNO loss B & 2 & 0.012 / 0.068 & 0.59 / 1.29\\
+ & FNO loss B & 1 & 0.012 / 0.062 & 0.53 / 1.43\\
  & PINN \texttt{pure} (3 cases, 4 shocks) & 1 & 0.046 / 0.181 & 0.74 / 1.67\\
 \midrule
 extrapolation & \textbf{floor} & \textbf{0} & \textbf{0.008 / 0.012} & \textbf{0.69 / 1.00}\\
- & FNO $256\times97$ & 0 & 0.042 / 0.213 & 1.13 / 1.58\\
+ & FNO $256\times97$ & 0 & 0.040 / 0.213 & 1.07 / 1.56\\
  & POD & 0 & 0.106 / 0.250 & 1.28 / 1.60\\
 \bottomrule
 \end{tabular}
@@ -1183,8 +1205,8 @@ extrapolation & \textbf{floor} & \textbf{0} & \textbf{0.008 / 0.012} & \textbf{0
 
 \Cref{fig:efficiency} and \cref{tab:efficiency} show the test error against the number of SU2 cases
 paid for. Both models are still improving at $n = 896$, and neither approaches the floor. A smaller
-training set would break even sooner, at about 199 cases for $n = 64$, but its answers would be 7.6
-times the floor rather than 3.4. \Cref{fig:breakeven} draws \cref{eq:breakeven}: the FNO and POD
+training set would break even sooner, at about 199 cases for $n = 64$, but its answers would be 6.4
+times the floor rather than 1.8. \Cref{fig:breakeven} draws \cref{eq:breakeven}: the FNO and POD
 lines cross SU2's at 1,126 and 1,094 new cases.
 
 \begin{table}[t]
@@ -1196,11 +1218,11 @@ lines cross SU2's at 1,126 and 1,094 new cases.
 \toprule
 $n$ & FNO (seed 0) & FNO / floor & POD & POD / floor & Campaign, SU2-case equivalents\\
 \midrule
-64 & 0.1088 & 7.6$\times$ & 0.1379 & 9.6$\times$ & 197\\
-128 & 0.0858 & 6.0$\times$ & 0.1044 & 7.3$\times$ & 257\\
-256 & 0.0698 & 4.9$\times$ & 0.0883 & 6.2$\times$ & 380\\
-512 & 0.0561 & 3.9$\times$ & 0.0753 & 5.3$\times$ & 690\\
-896 & 0.0483 & 3.4$\times$ & 0.0677 & 4.7$\times$ & 1,092\\
+64 & 0.0918 & 6.4$\times$ & 0.1379 & 9.6$\times$ & 197\\
+128 & 0.0634 & 4.4$\times$ & 0.1044 & 7.3$\times$ & 257\\
+256 & 0.0460 & 3.2$\times$ & 0.0883 & 6.2$\times$ & 380\\
+512 & 0.0310 & 2.2$\times$ & 0.0753 & 5.3$\times$ & 690\\
+896 & 0.0256 & 1.8$\times$ & 0.0677 & 4.7$\times$ & 1,092\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1241,7 +1263,7 @@ SU2 is not free of numerical artefacts:
     on 2 to 7 of the 14 extrapolation cases, and more as the training set grows. The FNO does so on
     4--5 cases at $n\le128$ and on none at $n\ge256$.
   \item \emph{Entropy decrease.} The subcritical near-field mean entropy falls below free stream on
-    9--24 of 37 cases for the FNO and 10--23 for POD, against none for SU2. Whether any surrogate
+    8--21 of 37 cases for the FNO and 10--23 for POD, against none for SU2. Whether any surrogate
     predicts an expansion shock is not measured: the scorer has no test for an entropy decrease
     across a compression.
   \item \emph{PINN wall tangency and mass.} The potential PINN enforces both only softly: its RMS
@@ -1492,7 +1514,7 @@ Three readings of these numbers matter beyond the verdict.
 \begin{itemize}
   \item \emph{A uniform stream scores only 5.2\,\% on the gate's metric.} RMAE divides by the
     field's range, and most of the box is near free stream. On step-3 case
-    \texttt{test\_in-0004} the same metric gives the FNO 0.30\,\% at $256\times97$ and this
+    \texttt{test\_in-0004} the same metric gives the FNO 0.13\,\% at $256\times97$ and this
     study's potential PINN 1.23\,\%. So 1\,\% is a demanding threshold, not a loose one.
   \item \emph{The collapse flag misses this failure.} It asks whether the largest wall speed is
     below half the truth's, which catches fluid at rest. A uniform stream at $0.93\,U_\infty$ passes
@@ -1553,7 +1575,9 @@ they are traps in practice, not slow descents.
 The FNO does what operators promise: it learns the family well enough to beat a strong linear
 baseline exactly where that baseline is weak, at moving shocks. But it reaches the floor only on
 its own training grid and only in range. Its resolution transfer is $O(h)$, not exact: the padded
-field jumps to zero at the wrap, and that jump aliases differently at each resolution. In
+field jumps to zero at the wrap, and that jump aliases differently at each resolution. How much it
+loses is sensitive to one row of padding: 17 rows at $256\times97$ more than doubled its in-range
+subcritical error, and changing 17 rows to 16 flips a drag offset of 17 counts. In
 extrapolation its errors are biased in a way no in-range score would reveal. Economically it
 repays its training only after about as many new cases as the campaign that trained it, as
 predicted.
@@ -1613,7 +1637,7 @@ study supports a narrower one. \emph{For many-query prediction inside a well-sam
 when the CFD campaign can be paid for, a data-trained surrogate is the better tool, and a per-case
 PINN is not competitive even with the CFD it would replace.} On that task the margin is wide:
 \begin{itemize}
-  \item in range, the FNO's near-field error is 1.3--5.3 times the floor, against 26--65 times for
+  \item in range, the FNO's near-field error is 1.3--2.1 times the floor, against 26--65 times for
     the PINN, whose lift is 64--101\,\% low on five of six cases (\cref{tab:results,tab:pinncl});
   \item a new case costs 0.054\,s with the FNO, against 5.6\,h with the PINN, which is 88--220 SU2
     runs (\cref{tab:costs}).
@@ -1636,12 +1660,13 @@ Five things keep this from being a general verdict on the two families.
     \begin{itemize}
       \item It repays its training only after 1,126 new cases; for fewer, running SU2 is cheaper
         (\cref{fig:breakeven}).
-      \item POD, a linear baseline, beats it on in-range subcritical cases at $256\times97$. The FNO
-        clearly earns its complexity only on supercritical cases, where shocks move with the inputs.
-      \item Outside the training range it fails: 3.6 times the floor, with drag errors up to 181
+      \item POD, a linear baseline, matches it on in-range subcritical cases at $256\times97$, with
+        smaller lift and drag errors. The FNO clearly earns its complexity only on supercritical
+        cases, where shocks move with the inputs.
+      \item Outside the training range it fails: 3.4 times the floor, with drag errors up to 204
         counts, biased rather than scattered.
       \item Its shocks are smeared, and its subcritical near-field entropy falls below free stream on
-        9--24 of 37 cases, which SU2's never does.
+        8--21 of 37 cases, which SU2's never does.
     \end{itemize}
   \item \textbf{This is the easy end of aerodynamics.} The problem is two-dimensional, steady and
     inviscid, one family of sections with four inputs, on one structured grid. Practical

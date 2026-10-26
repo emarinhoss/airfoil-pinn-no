@@ -84,3 +84,24 @@ def test_untrained_control_has_the_checkpoints_sizes(tmp_path, monkeypatch):
                     "--untrained"]) == 0
     tags = [r["tag"] for r in json.loads(Path("o2/locate.json").read_text())["records"]]
     assert tags == ["fno-n4-s0", "untrained"]
+
+
+def test_shift_fit_recovers_a_radial_shift():
+    """A field moved outward by eps rows changes by eps * dq/dj to first order, in every channel."""
+    ni, nj, eps = 64, 40, 0.3
+    i = np.arange(ni)[:, None]
+    for f in (lambda j: np.exp(-j / 6.0) * (1 + 0.5 * np.cos(2 * np.pi * i / ni)),
+              lambda j: np.sin(j / 9.0) * np.sin(2 * np.pi * i / ni) + 0.1 * j):
+        q = f(np.arange(nj)[None, :] + 0.0)
+        q_moved = f(np.arange(nj)[None, :] + eps)
+        for j in (0, 2, 8):
+            b, rsq = lo.shift_fit(q_moved[:, j] - q[:, j], lo.radial_difference(q, j))
+            assert b == pytest.approx(eps, rel=0.1) and rsq > 0.99
+
+
+def test_the_report_carries_the_shift_table(tmp_path, monkeypatch):
+    test_the_probe_runs_end_to_end(tmp_path, monkeypatch)
+    rec = json.loads(Path("o/locate.json").read_text())["records"][0]
+    assert set(rec["shift"]) == set(lo.CHANNELS)
+    assert len(rec["shift"]["p"]["b_median"]) == len(lo.SHIFT_ROWS)
+    assert "| p | " in Path("o/locate.md").read_text()

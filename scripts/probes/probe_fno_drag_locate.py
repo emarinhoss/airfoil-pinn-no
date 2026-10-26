@@ -16,7 +16,15 @@ the 16-row prediction (or the input features) at the same wall nodes:
 - `cp_along_wall`: |dCp/di| along the wall, how sharp the pressure is around the airfoil;
 - `dx_k`: the position feature dx*k at the wall (-0.41 at the leading edge, +0.41 at the trailing).
 
-For each, a straight line delta = a + b * candidate per case, and its R^2. The median over cases is
+For each, a straight line delta = a + b * candidate per case, and its R^2.
+
+`shift` tests one reading of the result. Lengthening the radial DFT by a row stretches every learned
+radial filter, and to first order that adds a term proportional to the field's radial gradient: a
+small radial shift. If that is what happens, the change in every channel q, at every row j, is
+delta_q = a + b * dq/dj, with the same b (the shift, in rows) for all four channels and a high R^2.
+dq/dj is the forward difference at the wall and the central one elsewhere, from the 16-row field.
+Per case, channel and row, b and R^2 are fitted over the wall-parallel line of nodes, and the
+medians over cases are reported. The median over cases is
 reported by regime, with all five together as an upper bound. The probe also records how the change
 spreads outward from the wall, per output channel, at the leading edge, mid-chord on each surface,
 and the trailing edge. Finally, it records how much of the wall's total |delta| lies in the leading-
@@ -52,6 +60,7 @@ from probe_fno_pad_sweep import load_checkpoint, rows_at
 CANDIDATES = ("cp_wall", "cp_wall_minus_far", "cp_off_wall", "cp_along_wall", "dx_k")
 CHANNELS = ("rho", "u", "v", "p")
 PROFILE_ROWS = (0, 1, 2, 4, 8, 16, 32, 48, 64, 80, 96)
+SHIFT_ROWS = (0, 1, 2, 4, 8, 16, 32)
 
 
 def candidates(q16, feat, mach):
@@ -70,6 +79,18 @@ def r2(y, cols):
     coef, *_ = np.linalg.lstsq(A, y, rcond=None)
     ss = np.sum((y - y.mean()) ** 2)
     return float(1 - np.sum((y - A @ coef) ** 2) / ss) if ss > 0 else float("nan")
+
+
+def radial_difference(q, j):
+    """dq/dj along row j of one channel's field q (NI, NJ): forward at the wall, central inside."""
+    return q[:, 1] - q[:, 0] if j == 0 else 0.5 * (q[:, j + 1] - q[:, j - 1])
+
+
+def shift_fit(delta, grad):
+    """(b, R^2) of delta = a + b * grad."""
+    A = np.column_stack([np.ones_like(grad), grad])
+    coef, *_ = np.linalg.lstsq(A, delta, rcond=None)
+    return float(coef[1]), r2(delta, [grad])
 
 
 def columns(xw):
@@ -98,7 +119,12 @@ def locate_one(model, std, val, device):
     feat = features(xy, inputs)
     fits = {c: [] for c in (*CANDIDATES, "all five")}
     share, profiles, deltas = [], {}, []
+    shifts = np.full((len(inputs), len(CHANNELS), len(SHIFT_ROWS), 2), np.nan)
     for k, (mach, *_rest) in enumerate(inputs):
+        for c in range(len(CHANNELS)):
+            for n, j in enumerate(SHIFT_ROWS):
+                shifts[k, c, n] = shift_fit(q17[k, :, j, c] - q16[k, :, j, c],
+                                            radial_difference(q16[k, :, :, c], j))
         delta = (pressure_coefficient(q17[k, :, 0, 3], mach)
                  - pressure_coefficient(q16[k, :, 0, 3], mach))
         deltas.append(delta)
@@ -120,7 +146,19 @@ def locate_one(model, std, val, device):
         r2_out[c] = {"subcritical": _med(v[sub]), "supercritical": _med(v[~sub]), "all": _med(v)}
     share = np.asarray(share)
     deltas = np.asarray(deltas)
+    shift = {}
+    for c, ch in enumerate(CHANNELS):
+        shift[ch] = {"rows": list(SHIFT_ROWS),
+                     "b_median": [_med(shifts[:, c, n, 0]) for n in range(len(SHIFT_ROWS))],
+                     "b_q25": [float(np.nanpercentile(shifts[:, c, n, 0], 25))
+                               for n in range(len(SHIFT_ROWS))],
+                     "b_q75": [float(np.nanpercentile(shifts[:, c, n, 0], 75))
+                               for n in range(len(SHIFT_ROWS))],
+                     "r2_median": [_med(shifts[:, c, n, 1]) for n in range(len(SHIFT_ROWS))],
+                     "r2_median_subcritical": [_med(shifts[sub, c, n, 1])
+                                               for n in range(len(SHIFT_ROWS))]}
     return {
+        "shift": shift,
         "r2_median": r2_out,
         "ends_share_of_abs_change": {"median": _med(share[:, 0]),
                                      "share_of_wall_nodes": _med(share[:, 1])},
@@ -152,6 +190,18 @@ def report(records):
             lines.append(f"| {c} | " + " | ".join(
                 "—" if v[k] is None else f"{v[k]:.2f}"
                 for k in ("subcritical", "supercritical", "all")) + " |")
+        if "shift" in rec:
+            sh = rec["shift"]
+            rows = sh["p"]["rows"]
+            lines += ["", "Shift fit, delta_q = a + b * dq/dj per case, channel and row j: "
+                      "median b (rows) [interquartile range] and median R^2:", "",
+                      "| channel | " + " | ".join(f"j = {j}" for j in rows) + " |",
+                      "|---|" + "---|" * len(rows)]
+            for ch, v in sh.items():
+                lines.append(f"| {ch} | " + " | ".join(
+                    "—" if b is None else f"{b:+.3f} [{lo:+.3f}, {hi:+.3f}], R^2 {r:.2f}"
+                    for b, lo, hi, r in zip(v["b_median"], v["b_q25"], v["b_q75"],
+                                            v["r2_median"])) + " |")
         lines += ["", "Mean |change| from 16 to 17 rows by row j (0 = wall), channel p:", "",
                   "| column | " + " | ".join(str(j) for j in rec["profile_rows"]) + " |",
                   "|---|" + "---|" * len(rec["profile_rows"])]

@@ -50,7 +50,8 @@ def test_parse_rows():
 def test_own_rows_reproduce_the_model_and_other_rows_change_only_256x97(library, factors):
     m = _model(library, factors)
     own = sweep.native_rows(m)
-    assert own == (16 if library == "neuralop" or "P" in factors else 17)
+    # FNO2d's rule gives 16 since 2026-10-26; the ablation's "off" and PhysicsNeMo's stay at 17
+    assert own == (16 if library in ("apno", "neuralop") or "P" in factors else 17)
     fine, coarse = torch.randn(1, 6, 256, 97), torch.randn(1, 6, 128, 49)
     with torch.no_grad():
         ref_fine, ref_coarse = m(fine), m(coarse)
@@ -110,13 +111,13 @@ def test_the_sweep_reproduces_the_probe_record_at_native_rows(tmp_path, monkeypa
     recs = {r["tag"]: r for r in out["records"]}
     assert recs["fno-n4-s0"]["source"] == "S2" and recs["fno-n4-s0"]["group"] == "S2 fno-n4"
     a = recs["apno-n4-s0"]
-    assert a["native_rows"] == 17 and sorted(a["rows"]) == ["15", "16", "17", "18"]  # JSON keys
-    assert a["rows"]["17"]["val_rel_l2_256x97"] == pytest.approx(rec_apno["val_rel_l2_256x97"],
+    assert a["native_rows"] == 16 and sorted(a["rows"]) == ["15", "16", "17", "18"]  # JSON keys
+    assert a["rows"]["16"]["val_rel_l2_256x97"] == pytest.approx(rec_apno["val_rel_l2_256x97"],
                                                                rel=1e-6)
-    assert a["rows"]["17"]["transfer"] == pytest.approx(rec_apno["transfer_val_rel_l2"], rel=1e-6)
+    assert a["rows"]["16"]["transfer"] == pytest.approx(rec_apno["transfer_val_rel_l2"], rel=1e-6)
     assert a["val_rel_l2_128x49"] == pytest.approx(rec_apno["val_rel_l2_128x49"], rel=1e-6)
     md = (tmp_path / "out/pad_sweep.md").read_text()
-    assert "| apno-n4 | 1 | 17 |" in md and (tmp_path / "out/pad_sweep.png").exists()
+    assert "| apno-n4 | 1 | 16 |" in md and (tmp_path / "out/pad_sweep.png").exists()
 
 
 def test_an_ablation_checkpoint_loads_with_factors_and_the_cache_is_reused(tmp_path, monkeypatch,

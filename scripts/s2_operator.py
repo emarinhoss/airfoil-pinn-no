@@ -3,6 +3,7 @@
     python scripts/s2_operator.py tune        # 8 configurations, picks one by validation loss
     python scripts/s2_operator.py final       # 3 seeds at 896, loss B, efficiency prefixes
     python scripts/s2_operator.py pod         # POD at every prefix
+    python scripts/s2_operator.py repredict   # FNO files under the current padding rule
 
 Tuning selects on validation only, so tuning runs write NO test predictions: only the final runs
 (fno-n896-s0, ...) and POD reach runs/predictions, each under its own tag. A run whose validation
@@ -10,19 +11,32 @@ loss is never finite is recorded as diverged, with no prediction file, and the o
 FNO run records its resolution transfer: the same model at 128x49 against 256x97 sampled at every
 second node, on the validation cases; final runs also store their test predictions at 128x49
 (dataset q_128x49) so S4 scores both resolutions.
+
+`repredict` brings the final runs' 256x97 predictions and recorded transfers to the current radial
+padding rule (spec 6.3, amended 2026-10-26: 16 rows at 256x97, where the runs were made with 17),
+from the same checkpoints, without training. Training at 128x49 pads 8 rows under both rules, so
+the models, their costs and their 128x49 predictions are unchanged. Each file must first be
+reproduced under the old rule, to 1e-4 relative, or it is left alone and the command exits 4. The
+old files are kept in runs/predictions_rows17/, outside S4's reach; the old transfers stay in
+runs.json as transfer_val_rel_l2_rows17. A file already under the current rule is skipped.
 """
 
 import argparse
+import datetime
 import itertools
 import json
+import os
+import shutil
+import sys
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
 
-from apno.data.predictions import write_predictions
+from apno.data.predictions import read_predictions, write_predictions
 from apno.data.sampling import PREFIXES, prefix_indices
+from apno.models.fno import radial_pad, radial_pad_period_matched
 from apno.models.pod import PodModel
 from apno.models.targets import Standardiser, from_targets, to_targets
 from apno.models.train_fno import (
@@ -32,6 +46,8 @@ from apno.models.train_fno import (
 
 H5 = Path("data/hdf5/256x97.h5")
 RUNS, PRED, RES = Path("runs/fno"), Path("runs/predictions"), Path("results/s2")
+ROWS17 = Path("runs/predictions_rows17")  # the final runs' files as made with 17 rows at 256x97
+REPRODUCED = 1e-4  # largest relative difference from the file still counted as reproduced
 TUNING = [FnoConfig(width=w, modes_i=mi, modes_j=mj, epochs=100)
           for w, mi, mj in itertools.product((32, 48), (16, 24), (8, 12))]
 
@@ -155,8 +171,82 @@ def pod():
     _dump(RES / "pod.json", rows)
 
 
+def _max_rel_diff(ids, q, ref):
+    b = np.stack([ref[c] for c in ids])
+    return float(np.abs(q - b).max() / np.abs(b).max())
+
+
+def repredict():
+    """The final runs' 256x97 test predictions and validation transfers under the current padding
+    rule; 0, or 4 if a file did not reproduce under the old rule (module docstring)."""
+    rows = json.loads((RES / "runs.json").read_text())
+    rows17, rows_now = radial_pad_period_matched(97), radial_pad(97)
+    log, bad = [], []
+    for row in rows:
+        tag, path = row["tag"], PRED / f"{row['tag']}.h5"
+        if row["status"] != "ok" or not path.exists():
+            continue
+        q_file, attrs = read_predictions(path)
+        qc_file, _ = read_predictions(path, "q_128x49")
+        model, std, _ = load_model(RUNS / tag / "best.pt")
+        if attrs.get("radial_rows_256x97") != rows_now:
+            model.pad_rule = radial_pad_period_matched
+            ids, q, qc = [], [], []
+            for split in ("test_in", "test_ext"):
+                f, a, b, _ = _predict_both(model, std, split)
+                ids += f["case_id"]
+                q.append(a)
+                qc.append(b)
+            check = {"q": _max_rel_diff(ids, np.concatenate(q), q_file),
+                     "q_128x49": _max_rel_diff(ids, np.concatenate(qc), qc_file)}
+            entry = {"tag": tag, "reproduces_file_at_old_rows": check,
+                     "reproduced": max(check.values()) <= REPRODUCED}
+            log.append(entry)
+            if not entry["reproduced"]:
+                bad.append(tag)
+                print(f"{tag}: NOT REPRODUCED at {rows17} rows {check}; left as it is", flush=True)
+                continue
+            model.pad_rule = radial_pad
+            q, secs = [], []
+            for split in ("test_in", "test_ext"):
+                f = load_features_only(H5, split)
+                a, sec = predict(model, std, f["xy"], f["inputs"])
+                q.append(a)
+                secs.append(sec)
+            q = np.concatenate(q)
+            entry["max_rel_change"] = _max_rel_diff(ids, q, q_file)
+            ROWS17.mkdir(parents=True, exist_ok=True)
+            if not (ROWS17 / path.name).exists():
+                shutil.copy2(path, ROWS17 / path.name)
+            tmp = path.with_suffix(".tmp")
+            write_predictions(tmp, ids, q, {
+                **attrs, "radial_rows_256x97": rows_now, "radial_rows_256x97_before": rows17,
+                "repredicted": datetime.date.today().isoformat(),
+                "repredict_query_s": float(np.mean(secs))},
+                extra={"q_128x49": np.stack([qc_file[c] for c in ids])})
+            os.replace(tmp, path)
+            print(f"{tag}: {len(ids)} test cases at {rows_now} rows; reproduced at {rows17} rows "
+                  f"to {max(check.values()):.1e}; largest change {entry['max_rel_change']:.3f}",
+                  flush=True)
+        if row.get("radial_rows_256x97") != rows_now:
+            f, qv, qvc, _ = _predict_both(model, std, "val")
+            row.setdefault("transfer_val_rel_l2_rows17", row["transfer_val_rel_l2"])
+            row["transfer_val_rel_l2"] = transfer_rel_l2(qv, qvc, f["inputs"])
+            row["radial_rows_256x97"] = rows_now
+            _dump(RES / "runs.json", rows)
+    if log:
+        _dump(RES / f"repredict_{datetime.date.today().isoformat()}.json",
+              {"rows": rows_now, "rows_before": rows17,
+               "reproduced_if_max_rel_diff_at_most": REPRODUCED, "files": log})
+    if bad:
+        print(f"not re-predicted: {', '.join(bad)}")
+        return 4
+    return 0
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("what", choices=("tune", "final", "pod"))
+    ap.add_argument("what", choices=("tune", "final", "pod", "repredict"))
     RES.mkdir(parents=True, exist_ok=True)
-    {"tune": tune, "final": final, "pod": pod}[ap.parse_args().what]()
+    sys.exit({"tune": tune, "final": final, "pod": pod,
+              "repredict": repredict}[ap.parse_args().what]())

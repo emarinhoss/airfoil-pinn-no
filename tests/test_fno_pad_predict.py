@@ -54,24 +54,25 @@ def _args(h5, *extra):
     return ["--h5", str(h5), "--device", "cpu", *extra]
 
 
-def test_own_rows_reproduce_s2_and_16_rows_differ(staged):
-    assert pp.main(_args(staged)) == 0
-    rec = json.loads(Path("results/fno_pad16/predict.json").read_text())["records"][0]
-    assert rec["tag"] == "fno-n4-s0" and rec["source"] == "S2" and rec["native_rows"] == 17
+def test_own_rows_reproduce_s2_and_17_rows_differ(staged):
+    """FNO2d's own rows are 16 since 2026-10-26; 17 is the rule its committed record used."""
+    assert pp.main(_args(staged, "--rows", "17")) == 0
+    rec = json.loads(Path("results/fno_pad17/predict.json").read_text())["records"][0]
+    assert rec["tag"] == "fno-n4-s0" and rec["source"] == "S2" and rec["native_rows"] == 16
     assert rec["reproduced"] and rec["reproduces_s2"]["cases"] == 5
     assert rec["reproduces_s2"]["max_rel_diff"] < 1e-6
-    new, attrs = read_predictions("runs/predictions_pad16/fno-n4-s0-pad16.h5")
+    new, attrs = read_predictions("runs/predictions_pad17/fno-n4-s0-pad17.h5")
     old, _ = read_predictions("runs/predictions/fno-n4-s0.h5")
     assert set(new) == set(old)
     diff = max(float(np.abs(new[c] - old[c]).max()) for c in new)
-    assert diff > 1e-4  # one row fewer at 256x97 moves the prediction
-    assert attrs["variant"] == "pad16" and attrs["rows"] == 16 and attrs["n_train"] == 4
-    assert attrs["source_tag"] == "fno-n4-s0" and attrs["native_rows"] == 17
+    assert diff > 1e-4  # one row more at 256x97 moves the prediction
+    assert attrs["variant"] == "pad17" and attrs["rows"] == 17 and attrs["n_train"] == 4
+    assert attrs["source_tag"] == "fno-n4-s0" and attrs["native_rows"] == 16
 
 
-def test_17_rows_is_s2s_prediction(staged):
-    assert pp.main(_args(staged, "--rows", "17")) == 0
-    new, _ = read_predictions("runs/predictions_pad17/fno-n4-s0-pad17.h5")
+def test_16_rows_is_s2s_prediction(staged):
+    assert pp.main(_args(staged)) == 0
+    new, _ = read_predictions("runs/predictions_pad16/fno-n4-s0-pad16.h5")
     old, _ = read_predictions("runs/predictions/fno-n4-s0.h5")
     assert max(float(np.abs(new[c] - old[c]).max()) for c in new) < 1e-6
 

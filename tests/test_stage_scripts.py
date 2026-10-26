@@ -157,6 +157,88 @@ def test_s2_then_s4(staged, monkeypatch, capsys):
         s4.main()
 
 
+def test_s2_repredict_moves_the_final_runs_to_the_current_padding_rule(staged, tmp_path,
+                                                                      monkeypatch, capsys):
+    """Runs made under the 17-row rule are re-predicted at 16 rows from their checkpoints: the
+    old file must reproduce first, the 128x49 predictions, costs and other attributes are kept,
+    the old files and transfers are kept aside, and a second run does nothing (spec 6.3,
+    amended 2026-10-26)."""
+    import torch
+
+    from apno.models import fno
+    from apno.models.train_fno import load_features_only, load_model, predict
+
+    root = tmp_path / "s2"
+    shutil.copytree(staged / "data", root / "data")
+    monkeypatch.chdir(root)
+    monkeypatch.setattr(train_fno, "default_device", lambda: "cpu")
+    s2 = _module("s2_operator")
+    tiny = dict(width=8, modes_i=4, modes_j=3, layers=2, epochs=2, patience=1, lr=0.0, batch=8)
+    monkeypatch.setattr(s2, "TUNING", [FnoConfig(**tiny)])
+    monkeypatch.setattr(s2, "PREFIXES", (64, 896))  # one efficiency prefix is enough here
+    s2.RES.mkdir(parents=True)
+    (s2.RES / "tuning.json").write_text(json.dumps({"rows": [], "selected": "tune-0"}))
+    with monkeypatch.context() as m:  # the runs as S2 made them, under the 17-row rule
+        m.setattr(fno, "radial_pad", fno.radial_pad_period_matched)
+        s2.final()
+        for ck in Path("runs/fno").glob("*/best.pt"):  # weights of a trained scale
+            state = torch.load(ck, weights_only=True)
+            state["model"] = {k: v * 50 if v.is_complex() else v
+                              for k, v in state["model"].items()}
+            torch.save(state, ck)
+        s2.final()  # re-predicts from the scaled checkpoints
+        assert load_model("runs/fno/fno-n896-s0/best.pt")[0].pad_rule(97) == 17
+    old_runs = {r["tag"]: r for r in json.loads(Path("results/s2/runs.json").read_text())}
+    tags = sorted(old_runs)
+    old = {}
+    for t in tags:
+        with h5py.File(f"runs/predictions/{t}.h5") as f:
+            old[t] = ({k: f[k][...] for k in ("q", "q_128x49")}, dict(f.attrs))
+    with h5py.File("runs/predictions/fno-n64-s0.h5", "r+") as f:  # not S2's file any more
+        f["q"][...] = f["q"][...] * 1.01
+
+    assert s2.repredict() == 4
+    assert "fno-n64-s0: NOT REPRODUCED" in capsys.readouterr().out
+    with h5py.File("runs/predictions/fno-n64-s0.h5") as f:
+        assert "radial_rows_256x97" not in f.attrs
+    assert not Path("runs/predictions_rows17/fno-n64-s0.h5").exists()
+    runs = {r["tag"]: r for r in json.loads(Path("results/s2/runs.json").read_text())}
+    for t in tags:
+        if t == "fno-n64-s0":
+            continue
+        with h5py.File(f"runs/predictions/{t}.h5") as f:
+            q, qc, attrs = f["q"][...], f["q_128x49"][...], dict(f.attrs)
+            ids = list(f["case_id"].asstr()[...])
+        q_old, a_old = old[t][0]["q"], old[t][1]
+        assert np.array_equal(qc, old[t][0]["q_128x49"])
+        assert float(np.abs(q - q_old).max() / np.abs(q_old).max()) > 1e-4
+        assert attrs["radial_rows_256x97"] == 16 and attrs["radial_rows_256x97_before"] == 17
+        for k in ("train_cpu_s", "train_wall_s", "query_s", "n_train", "seed", "variant"):
+            assert attrs[k] == a_old[k]
+        with h5py.File(f"runs/predictions_rows17/{t}.h5") as f:
+            assert np.array_equal(f["q"][...], q_old)
+        model, std, _ = load_model(f"runs/fno/{t}/best.pt")  # the current rule, from scratch
+        ref = np.concatenate([predict(model, std, g["xy"], g["inputs"])[0] for g in (
+            load_features_only("data/hdf5/256x97.h5", s) for s in ("test_in", "test_ext"))])
+        assert ids == [c for s in ("test_in", "test_ext") for c in
+                       load_features_only("data/hdf5/256x97.h5", s)["case_id"]]
+        assert np.allclose(q, ref, rtol=0, atol=1e-6 * np.abs(ref).max())
+        r = runs[t]
+        assert r["transfer_val_rel_l2_rows17"] == old_runs[t]["transfer_val_rel_l2"]
+        assert r["transfer_val_rel_l2"] != r["transfer_val_rel_l2_rows17"]
+        assert r["radial_rows_256x97"] == 16
+    assert "radial_rows_256x97" not in runs["fno-n64-s0"]
+    log = json.loads(next(Path("results/s2").glob("repredict_*.json")).read_text())
+    assert {e["tag"]: e["reproduced"] for e in log["files"]}["fno-n896-s0"] is True
+
+    Path("runs/predictions/fno-n64-s0.h5").unlink()  # a rerun skips what is done
+    before = {t: Path(f"runs/predictions/{t}.h5").stat().st_mtime_ns for t in tags
+              if t != "fno-n64-s0"}
+    assert s2.repredict() == 0
+    assert before == {t: Path(f"runs/predictions/{t}.h5").stat().st_mtime_ns for t in before}
+    assert json.loads(Path("results/s2/runs.json").read_text()) == list(runs.values())
+
+
 def _pinn(variant, wall_s, cpu_s=1.0, grid="256x97", device="mps", cid="test_in-0022", **extra):
     attrs = {"method": "pinn", "variant": variant, "train_device": device, "adam_device": device,
              "lbfgs_device": "cpu", "train_wall_s": wall_s, "train_cpu_s": cpu_s, **extra}

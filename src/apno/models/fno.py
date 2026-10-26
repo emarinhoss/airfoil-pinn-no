@@ -2,14 +2,21 @@
 
 i (around the airfoil) is periodic, so the FFT along it is exact, and a learned i-mode means the
 same physical wavenumber at 128 and 256 nodes. j (outward) is not periodic: the field is zero-padded
-by radial_pad(NJ) rows before the FFT and cropped after. What a learned j-mode means physically is
-set by the DFT PERIOD, (NJ + pad) samples of spacing 1/(NJ - 1) in eta, so the padding is chosen to
-make that period the same 19/16 in eta at every resolution: 8 rows at 128x49 (57 samples) and 17 at
-256x97 (114 samples). (NJ - 1)/6 rows, the earlier rule, matched the padded SPAN instead and gave
-periods 57/48 and 113/96, 0.88 % apart, so every learned radial mode was a different physical mode
-at 256x97. Even with matched periods the transfer is only O(h), not exact: the padded field jumps
-to zero at the wrap and wraps back onto the wall row, and that jump aliases differently at each
-resolution. Stage S2 measures the transfer error rather than assuming it is zero.
+by radial_pad(NJ) = (NJ - 1)/6 rows before the FFT and cropped after, 8 at 128x49 and 16 at
+256x97, so the padded domain spans the same eta at every resolution. The transfer between them is
+only O(h), not exact: the padded field jumps to zero at the wrap and wraps back onto the wall row,
+and that jump aliases differently at each resolution. Stage S2 measures the transfer error rather
+than assuming it is zero.
+
+The rule has changed twice (spec 6.3). From 2026-10-01 to 2026-10-26 it was
+radial_pad_period_matched, round(3(NJ - 1)/16) - 1 rows, 8 and 17, which keeps the radial DFT
+period at 19/16 in eta, so a learned radial mode is the same physical mode at both resolutions on
+a wrap-periodic field (tests/test_fno.py). On the trained networks, 16 rows at 256x97 transfer
+better than 17, by the validation transfer and near field of every checkpoint and by S4's test
+near field (docs/findings.md, 2026-10-25 and 2026-10-26), so the rule went back to (NJ - 1)/6.
+Training at 128x49 pads 8 rows under both rules, so models trained under either are the same
+models; only their 256x97 evaluation differs. The old rule is kept for the probes whose records
+were made with it, and a model evaluates with another rule through its `pad_rule` attribute.
 Truncating the modes smooths jumps: smeared shocks and overshoot are expected and measured, not
 fixed.
 """
@@ -43,7 +50,13 @@ class SpectralConv2d(nn.Module):
 
 
 def radial_pad(nj):
-    """Rows of zero padding so the radial DFT period is (NJ - 1) * 19/16 samples at every NJ."""
+    """Rows of zero padding at radial size NJ: (NJ - 1)/6, 8 at 128x49 and 16 at 256x97."""
+    return (nj - 1) // 6
+
+
+def radial_pad_period_matched(nj):
+    """The rule until 2026-10-26: the radial DFT period is (NJ - 1) * 19/16 samples at every NJ,
+    8 rows at 128x49 and 17 at 256x97."""
     return round((nj - 1) * 3 / 16) - 1
 
 
@@ -55,10 +68,11 @@ class FNO2d(nn.Module):
                                       for _ in range(layers))
         self.pointwise = nn.ModuleList(nn.Conv2d(width, width, 1) for _ in range(layers))
         self.proj = nn.Sequential(nn.Conv2d(width, 128, 1), nn.GELU(), nn.Conv2d(128, out_ch, 1))
+        self.pad_rule = radial_pad  # rows at radial size NJ; not a weight, not in the state dict
 
     def forward(self, x):
         nj = x.shape[-1]
-        pad = radial_pad(nj)
+        pad = self.pad_rule(nj)
         h = F.pad(self.lift(x), (0, pad))
         for k, (s, w) in enumerate(zip(self.spectral, self.pointwise)):
             h = s(h) + w(h)

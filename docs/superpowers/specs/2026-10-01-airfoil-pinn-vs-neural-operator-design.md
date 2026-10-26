@@ -284,7 +284,15 @@ loss. Each output channel is then standardised over the training set.
   layer then differed by 4–71 % between 128 × 49 and the shared nodes of 256 × 97 on a wrap-periodic
   field, against 10⁻¹⁴ with matched periods. The transfer is still only O(h), because the padded
   field jumps to zero at the wrap; stage S2 measures it at 128 × 49 against 256 × 97 sampled at
-  every second node, and S4 scores the FNO at both resolutions.)
+  every second node, and S4 scores the FNO at both resolutions.) (Amended 2026-10-26: the padding
+  is (NJ − 1)/6 rows again — 8 at 128 × 49 and 16 at 256 × 97. The period-matched rule held for an
+  idealised spectral layer, but on the trained networks 16 rows at 256 × 97 transfer better than
+  17. That held for every checkpoint swept, by the validation transfer and the validation near
+  field, and for S2's own models by S4's test near field (`docs/findings.md`, 2026-10-25 and
+  2026-10-26). Both rules pad 8 rows at 128 × 49, where the FNO trains, so S2's trained models
+  stand; their 256 × 97 predictions are remade from the same checkpoints
+  (`scripts/s2_operator.py repredict`) and S4 is rerun. The test cases had been scored at 16 rows
+  before this choice was made, so the amended test scores are not a blind test of it.)
 - Truncating the modes smooths jumps, so smeared shocks and overshoot are expected; §8 measures them.
 - Hyperparameters are tuned on the validation set within a budget of at most eight configurations,
   listed before tuning starts.

@@ -52,7 +52,7 @@ There is one entry point per stage. Each is resumable: a rerun skips finished wo
 | S0 | `SU2_BIN_DIR=... python scripts/s0_check.py` | `results/s0/`; exit 1 = scorer check failed, 2 = a case did not converge |
 | S1 | `SU2_BIN_DIR=... python scripts/s1_campaign.py train` (then `fine`) | `runs/su2/<level>/<case_id>/` |
 | S1 | `python scripts/build_dataset.py` | `data/hdf5/{256x97,512x193}.h5`, `results/s1/` |
-| S2 | `python scripts/s2_operator.py tune\|final\|pod` | `runs/fno/`, `runs/predictions/`, `results/s2/` |
+| S2 | `python scripts/s2_operator.py tune\|final\|pod\|repredict` | `runs/fno/`, `runs/predictions/`, `results/s2/` |
 | S3a | `python scripts/s3_warmup.py --device cpu --tag T` | `results/s3/warmup_T.json` |
 | S3 | `python scripts/s3_pinn.py --shard K/N --preflight-file results/s3/preflight.json` | `runs/predictions/pinn-*.h5`, `results/s3/` |
 | S4 | `python scripts/s4_score.py` | `results/s4/` |
@@ -95,15 +95,19 @@ The pipeline in `src/apno`: `data.sampling` → `su2` → `data.build` → `mode
 - **FNO** (`models/fno.py`, `train_fno.py`): trains at 128×49 (256×97 sampled every second node)
   and is evaluated at 256×97.
   - Final runs also store `q_128x49`, so S4 scores the resolution transfer separately.
-  - Radial padding is `radial_pad(NJ)` = round(3(NJ − 1)/16) − 1 rows, 8 at 128×49 and 17 at
-    256×97. It keeps the radial DFT period at 19/16 in η at every resolution, so a learned
-    radial mode is the same physical mode at every level. The earlier (NJ − 1)/6 rule matched
-    the padded span instead and was replaced on 2026-10-01 (spec §6.3, amended by the final
-    review). The 2026-10-25 ablation found that, on the trained networks, 16 rows at
-    256x97 transfer much better than this rule's 17 (`docs/findings.md`); the rule is unchanged.
-    `scripts/probes/probe_fno_pad_sweep.py` evaluates existing checkpoints at 256x97 over a range
-    of row counts, without training, into `results/fno_lib/pad_sweep.*`. `scripts/probes/probe_fno_pad_predict.py`
-    re-predicts S2's test cases with another row count into `runs/predictions_pad<rows>/`.
+  - Radial padding is `radial_pad(NJ)` = (NJ − 1)/6 rows, 8 at 128×49 and 16 at 256×97 (spec
+    §6.3, amended 2026-10-26). From 2026-10-01 to 2026-10-26 it was the period-matched
+    round(3(NJ − 1)/16) − 1, 8 and 17, now `radial_pad_period_matched`. The 2026-10-25 ablation
+    and the 2026-10-26 sweep and rescore found 16 rows at 256×97 better on the trained networks
+    (`docs/findings.md`). Training at 128×49 pads 8 under both rules, so S2's checkpoints stand;
+    `s2_operator.py repredict` remakes their 256×97 predictions and keeps the 17-row files in
+    `runs/predictions_rows17/`. A model evaluates with another rule through `FNO2d.pad_rule`.
+    The probes whose records were made at 17 rows (the ablation's "off" padding, the PhysicsNeMo
+    wrapper) stay on the old rule.
+  - `scripts/probes/probe_fno_pad_sweep.py` evaluates existing checkpoints at 256x97 over a range
+    of row counts, without training, into `results/fno_lib/pad_sweep.*`.
+    `scripts/probes/probe_fno_pad_predict.py` re-predicts S2's test cases with another row count
+    into `runs/predictions_pad<rows>/`.
   - `scripts/probes/probe_fno_libraries.py` trains the FNO of `neuraloperator` or
     `nvidia-physicsnemo` through the same pipeline, for comparison with `FNO2d`
     (`docs/notes/2026-10-21-fno-libraries.md`). Its outputs go to `runs/fno_lib/` and

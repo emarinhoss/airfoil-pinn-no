@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from apno.models.fno import FNO2d, SpectralConv2d, radial_pad
+from apno.models.fno import FNO2d, SpectralConv2d, radial_pad, radial_pad_period_matched
 from apno.models import train_fno
 from apno.models.train_fno import (
     FnoConfig, load_features_only, load_model, load_split, loss_fn, predict, relative_l2, train,
@@ -18,20 +18,47 @@ def test_shapes_at_both_resolutions():
         assert m(torch.randn(2, 6, ni, nj)).shape == (2, 4, ni, nj)
 
 
-def test_radial_dft_period_is_the_same_at_every_resolution():
-    assert [radial_pad(nj) for nj in (49, 97, 193)] == [8, 17, 35]
-    assert {(nj + radial_pad(nj)) / (nj - 1) for nj in (49, 97, 193)} == {19 / 16}
+def test_the_padded_span_is_the_same_at_every_resolution():
+    """The rule since 2026-10-26 (spec 6.3): (NJ - 1)/6 rows, the padded column spanning 7/6 in
+    eta at every resolution."""
+    assert [radial_pad(nj) for nj in (49, 97, 193)] == [8, 16, 32]
+    assert {(nj - 1 + radial_pad(nj)) / (nj - 1) for nj in (49, 97, 193)} == {7 / 6}
+
+
+def test_the_old_rule_keeps_the_radial_dft_period_the_same_at_every_resolution():
+    assert [radial_pad_period_matched(nj) for nj in (49, 97, 193)] == [8, 17, 35]
+    assert {(nj + radial_pad_period_matched(nj)) / (nj - 1) for nj in (49, 97, 193)} == {19 / 16}
+
+
+def test_the_rule_is_an_attribute_and_changes_only_the_finer_grid():
+    """Both rules pad 8 rows at 128x49, so a model trained under either is the same model; at
+    256x97 the 17-row rule gives another output, and the rule is not part of the weights."""
+    torch.manual_seed(0)
+    m = FNO2d(width=8, modes_i=4, modes_j=3, layers=2).eval()
+    with torch.no_grad():
+        for p in m.parameters():
+            if p.is_complex():
+                p.mul_(50.0)  # spectral weights of a trained scale, so the padding matters
+    assert m.pad_rule is radial_pad and "pad_rule" not in str(list(m.state_dict()))
+    coarse, fine = torch.randn(1, 6, 128, 49), torch.randn(1, 6, 256, 97)
+    with torch.no_grad():
+        a_c, a_f = m(coarse), m(fine)
+        m.pad_rule = radial_pad_period_matched
+        b_c, b_f = m(coarse), m(fine)
+    assert torch.equal(a_c, b_c)
+    assert float((a_f - b_f).abs().max() / a_f.abs().max()) > 1e-4
 
 
 @pytest.mark.parametrize("kj", (2, 6, 11))
 def test_a_wrap_smooth_radial_mode_transfers_from_128x49_to_256x97(kj):
-    """One spectral layer, on a field periodic over the padded radial period, gives the same values
-    at the shared nodes of both resolutions: the learned mode is the same physical mode."""
+    """Under the period-matched rule (spec 6.3 until 2026-10-26), one spectral layer, on a field
+    periodic over the padded radial period, gives the same values at the shared nodes of both
+    resolutions: the learned mode is the same physical mode."""
     torch.manual_seed(0)
     conv = SpectralConv2d(1, 1, modes_i=4, modes_j=kj + 1).double()
     outs = []
     for ni, nj in ((128, 49), (256, 97)):
-        pad = radial_pad(nj)
+        pad = radial_pad_period_matched(nj)
         eta = torch.arange(nj + pad, dtype=torch.float64) / (nj - 1)
         xi = torch.arange(ni, dtype=torch.float64) / ni
         period = (nj + pad) / (nj - 1)

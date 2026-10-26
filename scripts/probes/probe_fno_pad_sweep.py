@@ -1,11 +1,13 @@
 """How does an FNO's error at 256x97 depend on its radial padding there? No training: checkpoints.
 
-docs/findings.md (2026-10-25) found that NeuralOperator's smaller resolution transfer comes from
-its padding, and only through the row count at the 256x97 evaluation grid: 16 rows where `FNO2d`'s
-period-matched rule (`radial_pad`) uses 17. The padding does not change training at 128x49,
-where both pad 8 rows. So the dependence can be measured on the existing checkpoints: each is
-evaluated on the validation cases at 256x97 with every row count in `--rows`, its 128x49
-prediction kept at the native 8 rows, and compared with SU2's 256x97 solution.
+docs/findings.md (2026-10-25) found that NeuralOperator's smaller resolution transfer comes from its
+padding, and only through the row count at the 256x97 evaluation grid: 16 rows where `FNO2d`'s
+period-matched rule (`radial_pad_period_matched`) used 17. The padding does not change training at
+128x49, where both pad 8 rows. (Since 2026-10-26 FNO2d's own rule is 16 rows at 256x97, so its
+native rows are 16 in a sweep made after that; the committed sweep was made at 17.) So the
+dependence can be measured on the existing checkpoints: each is evaluated on the validation cases at
+256x97 with every row count in `--rows`, its 128x49 prediction kept at the native 8 rows, and
+compared with SU2's 256x97 solution.
 
 Only the row count at 256x97 is varied. Every layer commutes with a circular shift of the padded
 radial column, so where the rows go does not matter, only how many
@@ -49,7 +51,7 @@ import h5py
 import probe_fno_libraries as probe
 from apno.data.build import regime
 from apno.geometry.ogrid import TRAIN, Section, grid
-from apno.models.fno import FNO2d, radial_pad
+from apno.models.fno import FNO2d, radial_pad_period_matched
 from apno.models.targets import Standardiser, to_targets
 from apno.models.train_fno import FnoConfig, load_split, relative_l2
 from apno.physics.flow import freestream_q
@@ -100,14 +102,18 @@ class _FarEndRows(torch.nn.Module):
 @contextmanager
 def rows_at(model, rows, nj=EVAL_NJ):
     """Evaluate `model` with `rows` padding rows at radial size `nj` and its own rule elsewhere."""
-    def rule(n):
-        return rows if n == nj else radial_pad(n)
-
     if isinstance(model, FNO2d):
-        with mock.patch("apno.models.fno.radial_pad", rule):
+        own = model.pad_rule
+        model.pad_rule = lambda n: rows if n == nj else own(n)
+        try:
             yield
+        finally:
+            model.pad_rule = own
     elif isinstance(model, probe.PhysicsnemoFno):
-        with mock.patch.object(probe, "radial_pad", rule):
+        def rule(n):
+            return rows if n == nj else radial_pad_period_matched(n)
+
+        with mock.patch.object(probe, "radial_pad_period_matched", rule):
             yield
     else:
         holder, name = ((model.net, "domain_padding") if isinstance(model, probe.NeuralopFno)
@@ -121,12 +127,17 @@ def rows_at(model, rows, nj=EVAL_NJ):
 
 
 def native_rows(model, nj=EVAL_NJ):
-    """The rows the model pads at radial size nj on its own (17 for FNO2d's rule at 97)."""
+    """The rows the model pads at radial size nj on its own: 16 for FNO2d's rule at 97 (17 before
+    2026-10-26, and for the ablation's FNO2d padding and the PhysicsNeMo wrapper)."""
+    if isinstance(model, FNO2d):
+        return model.pad_rule(nj)
+    if isinstance(model, probe.PhysicsnemoFno):
+        return radial_pad_period_matched(nj)
     pad = getattr(model, "padding", None) or getattr(getattr(model, "net", None),
                                                      "domain_padding", None)
-    if pad is not None and hasattr(pad, "domain_padding"):  # NeuralOperator's DomainPadding
+    if hasattr(pad, "domain_padding"):  # NeuralOperator's DomainPadding
         return 2 * round(pad.domain_padding[-1] * nj)
-    return radial_pad(nj)
+    return pad.rule(nj)  # the ablation's one-sided padding
 
 
 # ---------------------------------------------------------------- checkpoints
@@ -342,7 +353,8 @@ def plot(curves, rows, path):
                 ax.plot(rows, c[m], marker=".", label=f"{g} ({c['n']})")
         for r, style in ((16, ":"), (17, "--")):
             ax.axvline(r, color="grey", linestyle=style, linewidth=0.8)
-        ax.set_xlabel("radial padding rows at 256x97 (FNO2d's rule 17, NeuralOperator 16)")
+        ax.set_xlabel("radial padding rows at 256x97 (FNO2d's rule 17 until 2026-10-26, "
+                      "NeuralOperator 16)")
         ax.set_title(name, fontsize=9)
         ax.set_yscale("log")
     axes[0].legend(fontsize=7)

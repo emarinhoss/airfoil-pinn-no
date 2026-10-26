@@ -212,3 +212,42 @@ git add results/fno_pad16 && git commit -m "Probes: S2's FNO2d rescored on the t
 The scorer will report that the `pad16` files have no training record. They are S2's models, so
 their records are S2's. Predicting 76 test cases twice per checkpoint takes seconds to a minute
 each on the Apple GPU.
+
+## The rule amended to 16 rows (added 2026-10-26)
+
+The design's rule is now (NJ − 1)/6 rows, 8 at 128x49 and 16 at 256x97 (spec §6.3, amended
+2026-10-26). `radial_pad` gives 16 at 256x97. The old rule is kept as `radial_pad_period_matched`
+for the probes whose records were made with it: the ablation's "off" padding and the PhysicsNeMo
+wrapper. A model evaluates with another rule through `FNO2d.pad_rule`. In a sweep or re-prediction
+made from now on, `FNO2d`'s own rows are 16.
+
+Both rules pad 8 rows at 128x49, so S2's checkpoints, training costs and 128x49 predictions stand.
+`python scripts/s2_operator.py repredict` remakes the final runs' 256x97 test predictions and
+validation transfers from the same checkpoints:
+
+- Each file is first reproduced under the old rule, to 1e-4 relative, for the 256x97 and 128x49
+  predictions. A file that does not reproduce is left alone, and the command exits 4.
+- The old files are kept in `runs/predictions_rows17/`, and the old transfers in `runs.json` as
+  `transfer_val_rel_l2_rows17`.
+- The new files carry `radial_rows_256x97` 16 and the date. Their `query_s` stays the one S2
+  measured, so the costs and break-even are unchanged. The re-prediction's own query time is
+  recorded beside it as `repredict_query_s`.
+- The check is logged to `results/s2/repredict_<date>.json`. A rerun skips files already
+  remade.
+
+S4, S5's comparison columns and the report's figures read these files, so they are regenerated.
+On the Mac:
+
+```bash
+git pull
+python -m pytest -q
+python scripts/s2_operator.py repredict 2>&1 | tee results/s2/repredict.log
+python scripts/s4_score.py
+python scripts/s5_score.py
+python docs/report/make_figures.py
+git add results/s2 results/s4 results/s5 docs/report/figures
+git commit -m "S2/S4: S2's FNO re-predicted at 16 padding rows, S4 and S5 rescored" && git push
+```
+
+On the Apple GPU, the re-prediction takes a few minutes. The findings, README and report text are
+updated from the committed results afterwards.

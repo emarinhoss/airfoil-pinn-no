@@ -10,8 +10,9 @@ the operator, not in the loop:
   padding of the same fraction as FNO2d's, applied symmetrically because that is the only mode it
   has;
 - `physicsnemo`: `physicsnemo.models.fno.FNO` (NVIDIA PhysicsNeMo), with its coordinate features
-  off and its fixed row padding reset at every forward pass to `radial_pad(NJ)`, so the radial DFT
-  period is the same at 128x49 and 256x97, as FNO2d's is.
+  off and its fixed row padding reset at every forward pass to `radial_pad_period_matched(NJ)`, so
+  the radial DFT period is the same at 128x49 and 256x97, as FNO2d's was when it ran (17 rows at
+  256x97; FNO2d's rule became 16 on 2026-10-26).
 
 Each one takes the same six feature channels and predicts the same four standardised targets, is
 trained at 128x49 (256x97 sampled at every second node) on the prefix training set of spec 5.3,
@@ -60,7 +61,7 @@ from apno.constants import GAMMA
 from apno.data.predictions import write_predictions
 from apno.data.sampling import case_specs, prefix_indices
 from apno.geometry.ogrid import TRAIN, Section, grid
-from apno.models.fno import FNO2d, radial_pad
+from apno.models.fno import FNO2d, radial_pad, radial_pad_period_matched
 from apno.models.targets import Standardiser, features, from_targets, to_targets
 from apno.physics.flow import local_mach
 from apno.models.train_fno import (
@@ -108,12 +109,13 @@ class PhysicsnemoFno(nn.Module):
         from physicsnemo.models.fno import FNO
         self.net = FNO(in_channels=IN_CH, out_channels=OUT_CH, dimension=2,
                        latent_channels=cfg.width, num_fno_layers=cfg.layers,
-                       num_fno_modes=[cfg.modes_i, cfg.modes_j], padding=[0, radial_pad(49)],
+                       num_fno_modes=[cfg.modes_i, cfg.modes_j],
+                       padding=[0, radial_pad_period_matched(49)],
                        coord_features=False, decoder_layers=1, decoder_layer_size=128,
                        decoder_activation_fn="gelu")
 
     def forward(self, x):
-        pad = radial_pad(x.shape[-1])
+        pad = radial_pad_period_matched(x.shape[-1])
         enc = self.net.spec_encoder
         enc.pad, enc.ipad = [0, pad], [None, -pad if pad else None]  # -0 would crop all
         return self.net(x)

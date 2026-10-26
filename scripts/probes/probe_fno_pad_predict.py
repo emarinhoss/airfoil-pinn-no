@@ -1,16 +1,18 @@
 """S2's FNO2d, re-evaluated on the test cases with a different number of padding rows at 256x97.
 
-The padding sweep (docs/findings.md, 2026-10-26) found that 16 radial padding rows at 256x97,
-where `FNO2d`'s rule uses 17, lower the transfer and the validation near field for every checkpoint.
-The padding does not change training at 128x49, so S2's own trained models are re-evaluated
-here, with no retraining: each checkpoint predicts the test cases at 256x97 with `--rows` rows,
-through the same override the sweep uses (`probe_fno_pad_sweep.rows_at`). Test inputs are read
-through `load_features_only`, as S2 reads them; no test field is read.
+The padding sweep (docs/findings.md, 2026-10-26) found that 16 radial padding rows at 256x97, where
+`FNO2d`'s rule then used 17, lower the transfer and the validation near field for every checkpoint.
+The padding does not change training at 128x49, so S2's own trained models are re-evaluated here,
+with no retraining: each checkpoint predicts the test cases at 256x97 with `--rows` rows, through
+the same override the sweep uses (`probe_fno_pad_sweep.rows_at`). Test inputs are read through
+`load_features_only`, as S2 reads them; no test field is read.
 
-Before it is trusted, each checkpoint also predicts the test cases at its own 17 rows. Those
-predictions are compared with S2's committed prediction file (`runs/predictions/<tag>.h5`), and
-the largest relative difference is recorded. That shows this re-evaluation reproduces S2's
-pipeline, so the only change is the row count.
+Before it is trusted, each checkpoint also predicts the test cases at its own rows, FNO2d's rule.
+Those predictions are compared with S2's prediction file (`runs/predictions/<tag>.h5`), and the
+largest relative difference is recorded. That shows this re-evaluation reproduces S2's pipeline,
+so the only change is the row count. The committed record (results/fno_pad16/) was made when the
+rule gave 17 rows at 256x97. Since 2026-10-26 it gives 16, and S2's files are re-predicted with
+it (`scripts/s2_operator.py repredict`), so the own rows are 16 and the check needs those files.
 
 The new files go to runs/predictions_pad<rows>/<tag>-pad<rows>.h5 (variant `pad<rows>`), never
 runs/predictions/, which S4 reads in full. Score them beside S2's files with the library scorer:

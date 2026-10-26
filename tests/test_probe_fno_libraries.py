@@ -49,11 +49,11 @@ def test_physicsnemo_padding_follows_the_resolution():
     m = probe.build_model("physicsnemo", SMALL).eval()
     for nj in (49, 97):
         m(torch.randn(1, 6, 16, nj))
-        assert m.net.spec_encoder.pad == [0, probe.radial_pad(nj)]
+        assert m.net.spec_encoder.pad == [0, probe.radial_pad_period_matched(nj)]  # 8, 17
 
 
 def test_library_lines_counts_the_model_modules():
-    assert probe.library_lines("apno") == {"apno.models.fno": 67}
+    assert probe.library_lines("apno") == {"apno.models.fno": 81}  # 67 until 2026-10-26
 
 
 def test_standin_dataset_has_the_design_ids_and_finite_fields(tmp_path):

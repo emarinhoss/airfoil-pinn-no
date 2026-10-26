@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "probes
 
 import fno_ablation as ab  # noqa: E402
 import probe_fno_libraries as probe  # noqa: E402
-from apno.models.fno import FNO2d, radial_pad  # noqa: E402
+from apno.models.fno import FNO2d, radial_pad_period_matched  # noqa: E402
 from apno.models.train_fno import FnoConfig  # noqa: E402
 
 SMALL = FnoConfig(width=8, modes_i=4, modes_j=3, layers=3)
@@ -41,8 +41,10 @@ def test_canonical_order_and_names():
 
 @pytest.mark.parametrize("ni, nj", [(128, 49), (256, 97)])
 def test_all_off_is_fno2d(ni, nj):
+    """FNO2d as the ablation ran, with the 17-row rule at 256x97 (spec 6.3 until 2026-10-26)."""
     torch.manual_seed(0)
     f = FNO2d(width=8, modes_i=4, modes_j=3, layers=3)
+    f.pad_rule = radial_pad_period_matched
     a = ab.AblationFno(SMALL, "")
     sd = {"lift.fcs.0.weight": f.lift.weight[..., 0], "lift.fcs.0.bias": f.lift.bias,
           "proj.fcs.0.weight": f.proj[0].weight[..., 0], "proj.fcs.0.bias": f.proj[0].bias,
@@ -101,7 +103,7 @@ def test_p_pads_both_radial_ends_and_off_pads_the_far_end(nj, rows):
     assert on.shape[-1] == nj + sum(rows)
     assert on[..., : rows[0]].abs().sum() == 0 and on[..., -rows[1]:].abs().sum() == 0
     off = ab.AblationFno(SMALL, "").padding.pad(x)
-    assert off.shape[-1] == nj + radial_pad(nj) and off[..., :nj].min() == 1
+    assert off.shape[-1] == nj + radial_pad_period_matched(nj) and off[..., :nj].min() == 1
 
 
 def test_i_sets_the_spectral_scale_and_moves_the_bias():

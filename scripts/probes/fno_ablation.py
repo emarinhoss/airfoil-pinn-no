@@ -12,8 +12,10 @@ The factors, each "on" meaning NeuralOperator's choice:
 - M  channel MLP: after the spectral layer, a two-layer channel MLP (W -> W/2 -> W, GELU) plus a
      soft-gated skip from the block's input, then GELU (not after the last layer). Off: none.
 - P  padding: zero rows on both radial ends, a fixed fraction (4/49 of NJ each side, so 4 + 4 at
-     128x49 and 8 + 8 at 256x97). Off: FNO2d's `radial_pad(NJ)` rows at the far end only, which
-     keeps the radial DFT period at 19/16 in eta at every NJ. Every layer commutes with a circular
+     128x49 and 8 + 8 at 256x97). Off: FNO2d's rule when the ablation ran,
+     `radial_pad_period_matched(NJ)` rows at the far end only, which keeps the radial DFT period
+     at 19/16 in eta at every NJ. (FNO2d's rule became 16 rows at 256x97 on 2026-10-26; "off"
+     stays the rule the ablation's records were made with.) Every layer commutes with a circular
      shift of the padded column, so only the row count matters: P is FNO2d's padding at 128x49
      (8 rows) and one row fewer at 256x97 (16 against 17). It changes evaluation, not training
      (docs/findings.md, 2026-10-25).
@@ -48,7 +50,7 @@ import numpy as np
 import torch.nn.functional as F
 from torch import nn
 
-from apno.models.fno import radial_pad
+from apno.models.fno import radial_pad_period_matched
 
 FACTORS = "MPIL"
 IN_CH, OUT_CH = 6, 4
@@ -70,11 +72,14 @@ def variant_name(factors):
 
 
 class _OneSidedRadialPadding(nn.Module):
-    """FNO2d's padding: radial_pad(NJ) zero rows after the far-field row, none at the wall."""
+    """FNO2d's padding when the ablation ran: radial_pad_period_matched(NJ) zero rows after the
+    far-field row, none at the wall."""
+
+    rule = staticmethod(radial_pad_period_matched)
 
     def pad(self, x):
         self._nj = x.shape[-1]
-        return F.pad(x, (0, radial_pad(self._nj)))
+        return F.pad(x, (0, self.rule(self._nj)))
 
     def unpad(self, x):
         return x[..., : self._nj]

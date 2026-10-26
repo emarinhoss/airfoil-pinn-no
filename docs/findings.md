@@ -1932,13 +1932,76 @@ The add-one effects and their p values are in `results/fno_lib/ablation.md`.
 
 **What this does and does not show.** The smaller transfer of NeuralOperator's FNO comes from its
 radial padding rule, and only through the number of padding rows at the evaluation grid: 16 at
-256x97 where `FNO2d` uses 17. `FNO2d`'s rule was chosen (design §6.3, amended 2026-10-01) to
-keep the radial DFT period the same at both grids, 19/16 in η, on the argument that a learned
-radial mode then means the same physical mode, supported by a one-layer test on a wrap-periodic
-field. On the trained networks the matched period transfers worse than the 0.88 % mismatch of
-16 rows (period 113/96). Why is not shown here. Nor is 16 shown to be the best count: only 16
-and 17 were evaluated. Because P changes only the evaluation, other counts can be measured on
+256x97 where `FNO2d` uses 17. `FNO2d`'s rule was chosen (design §6.3, amended 2026-10-01) to keep
+the radial DFT period the same at both grids, 19/16 in η, on the argument that a learned radial mode
+then means the same physical mode, supported by a one-layer test on a wrap-periodic field. On the
+trained networks the matched period transfers worse than the 0.88 % mismatch of 16 rows (period
+113/96). Why is not shown here. Nor is 16 shown to be the best count: only 16 and 17 were evaluated.
+*(Outcome 2026-10-26, padding-sweep entry below: of 0 to 34 rows, 16 gives the smallest transfer for
+all 18 checkpoints swept.)* Because P changes only the evaluation, other counts can be measured on
 the existing checkpoints without training, and NeuralOperator's model without P (phase 2's
 `abl-MIL`) needs no runs either. The design's padding rule and S4's results are unchanged: S4
 measured `FNO2d` as designed. These findings say that its error at 256x97, and the resolution
 transfer S4 charged to it, depend on a choice of one padding row.
+
+## 2026-10-26 — the FNO padding sweep at 256x97: 16 rows, and two measures that disagree
+
+The ablation found that the transfer depends on the number of radial padding rows at 256x97 and on
+nothing in training. The sweep measures that dependence on existing checkpoints, without training
+(`scripts/probes/probe_fno_pad_sweep.py`; design and tests in
+`docs/notes/2026-10-24-fno-transfer-ablation.md`). By the author, on the Mac's Apple GPU:
+`python scripts/probes/probe_fno_pad_sweep.py` (commit 8e796a6, `results/fno_lib/pad_sweep.md`,
+`.json` and `.png`), 1,168 s in all. Eighteen checkpoints: S2's `fno-n896-s0` to `s2` (`FNO2d`,
+trained on the Mac), and five seeds each of `abl-none` (`FNO2d`), `abl-MPIL` and
+`neuralop-n896-*-nopatience` (NeuralOperator's FNO), trained on the A100. Each is evaluated on the
+126 validation cases at 256x97 with 0 to 34 padding rows. Its 128x49 prediction keeps its own 8
+rows. Two measures: the transfer, as S2 records it; and the error against SU2 at 256x97 (relative
+L2 over the whole field in target space, per case and channel, then averaged), as the probe
+records it. The test set is not read.
+
+| group | checkpoints | 128x49 error | error at 256x97, rows 0 / 15 / 16 / 17 / 18 / 34 | transfer, rows 0 / 15 / 16 / 17 / 18 / 34 |
+|---|---|---|---|---|
+| S2 `fno-n896` (own rows 17) | 3 | 0.0124 | 0.720 / 0.0846 / **0.0411** / 0.0411 / 0.0859 / 0.532 | 0.714 / 0.0731 / **0.0209** / 0.0360 / 0.0896 / 0.527 |
+| `abl-none` (`FNO2d`, own rows 17) | 5 | 0.0126 | 0.720 / 0.0845 / **0.0410** / 0.0421 / 0.0874 / 0.535 | 0.715 / 0.0726 / **0.0215** / 0.0375 / 0.0916 / 0.531 |
+| `abl-MPIL` (own rows 16) | 5 | 0.0117 | 0.920 / 0.0998 / **0.0420** / 0.0476 / 0.1027 / 0.654 | 0.908 / 0.0912 / **0.0281** / 0.0450 / 0.1063 / 0.642 |
+| NeuralOperator (own rows 16) | 5 | 0.0120 | 0.946 / 0.0976 / **0.0412** / 0.0475 / 0.1024 / 0.641 | 0.940 / 0.0887 / **0.0255** / 0.0446 / 0.1065 / 0.631 |
+
+Command (group means):
+`python -c "import json; d=json.load(open('results/fno_lib/pad_sweep.json')); r=d['rows']; [print(g, c['n'], round(c['val_rel_l2_128x49'],4), [round(c['val_rel_l2_256x97'][r.index(k)],4) for k in (0,15,16,17,18,34)], [round(c['transfer'][r.index(k)],4) for k in (0,15,16,17,18,34)]) for g,c in sorted(d['groups'].items())]"`.
+
+- **16 rows gives the smallest transfer for every checkpoint.** All 18 are lowest at 16 among the
+  35 counts. One row more raises the transfer by 1.33 to 1.94 times, one row fewer by 2.99 to
+  3.67 times, two more by 3.31 to 4.55 times. The curve is a sharp, narrow minimum, and with no
+  padding the transfer is 0.71 to 0.94. Commands:
+  `python -c "import json,collections; d=json.load(open('results/fno_lib/pad_sweep.json')); b=lambda x,m: int(min(x['rows'], key=lambda k: x['rows'][k][m])); [print(m, sorted(collections.Counter(b(x,m) for x in d['records']).items()), [x['tag'] for x in d['records'] if b(x,m)!=16]) for m in ('transfer','val_rel_l2_256x97')]"`
+  and
+  `python -c "import json; d=json.load(open('results/fno_lib/pad_sweep.json')); t=lambda x,k: x['rows'][str(k)]['transfer']; v=[(t(x,15)/t(x,16), t(x,17)/t(x,16), t(x,18)/t(x,16)) for x in d['records']]; print([round(min(a),2) for a in zip(*v)], [round(max(a),2) for a in zip(*v)])"`.
+- **16 is the count the design's first rule gave.** (NJ − 1)/6 rows is 8 at 128x49 and 16 at
+  256x97. The 2026-10-01 amendment (design §6.3) replaced it with `radial_pad`, 8 and 17, to keep
+  the radial DFT period the same at both grids. The amendment changed the 256x97 count from 16 to
+  17, and with it `FNO2d`'s transfer from about 0.021 to about 0.036. Command:
+  `python -c "from apno.models.fno import radial_pad; print([(nj, (nj-1)//6, radial_pad(nj)) for nj in (49, 97, 193)])"`.
+- **The error against SU2 at 256x97 agrees for NeuralOperator's models but hardly separates 16
+  from 17 for `FNO2d`.** It is lowest at 16 for 14 of the 18 checkpoints and at 17 for the other
+  four (S2's seed 0, `abl-none`'s seeds 0 and 3, `abl-MPIL`'s seed 0). For NeuralOperator's
+  models, 16 rows give 0.0412 to 0.0420 and 17 rows 0.0475 to 0.0476. For `FNO2d`, 16 and 17
+  rows give 0.0411 and 0.0411 (S2) and 0.0410 and 0.0421 (`abl-none`). Away from 16 and 17 the
+  error rises as steeply as the transfer.
+- **That disagrees with the test cases.** The ablation's `abl-P` is `abl-none`'s models evaluated
+  with 16 rows instead of 17. On the test cases at 256x97, S4's near-field measure took them from
+  5.36 to 2.18 times the floor on in-range subcritical cases (2026-10-25). The validation error
+  above barely moves for the same change. The two measures differ in several ways. The near
+  field is weighted by node area within 2.5 chords of mid-chord, with the free stream subtracted
+  from the state, against the 512x193 truth. The validation error weights every node of the whole
+  field equally, in target space, against SU2 at 256x97, and divides by each case's and channel's
+  norm. Which of these differences decides it is not established. The S2 checkpoints behave like
+  `abl-none`'s throughout.
+
+**What this does and does not show.** Among 0 to 34 rows at 256x97, 16 gives the smallest
+transfer for all 18 checkpoints of both models. 16 is also the count of the rule the design used
+before its 2026-10-01 amendment. Whether 16 also gives a smaller error at 256x97 than `FNO2d`'s 17
+depends on the measure. On the test cases' near field it does, by 2.4 times. On the validation
+cases' whole-field error it does not, within 0.001. Measuring the validation near field the way
+S4 measures the test near field would show which. Only the 256x97 grid was evaluated, at
+one training grid (128x49). The design's padding rule, S2's predictions and S4's results are
+unchanged. Whether to amend the rule is the author's decision.

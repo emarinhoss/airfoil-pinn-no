@@ -2057,3 +2057,77 @@ two for `FNO2d`. Why it does not is not shown here: it weights every node of the
 equally, in target space, per case and channel. The test cases were not reread for this entry.
 The design's rule, S2's predictions and S4's results are unchanged. Whether to amend the rule,
 and to rescore `FNO2d` at 16 rows, is the author's decision.
+
+## 2026-10-26 — S2's `FNO2d` rescored on the test cases with 16 padding rows at 256x97
+
+The sweep found 16 padding rows at 256x97 better than the design's 17 for every checkpoint, on
+the validation cases. This entry scores S2's own models on the test cases with 16 rows. Nothing
+is retrained, since the padding does not change training at 128x49. By the author, on the Mac's
+Apple GPU: `python scripts/probes/probe_fno_pad_predict.py` re-predicted the 77 test cases of S2's
+seven loss-A runs (three seeds at 896 cases; 64, 128, 256 and 512 cases at seed 0) with 16 rows,
+into `runs/predictions_pad16/`. Then
+`python scripts/probes/score_fno_libraries.py --pred-dir runs/predictions_pad16 --out results/fno_pad16 --reference fno-n896-s0 --reference fno-n896-s1 --reference fno-n896-s2 --reference fno-n64-s0 --reference fno-n128-s0 --reference fno-n256-s0 --reference fno-n512-s0`
+scored them beside S2's own 17-row files (variant `s2`) with S4's code (commit fc84fcf,
+`results/fno_pad16/`). 1,650 case scores, all `ok`.
+
+**The re-evaluation reproduces S2's pipeline.** Each checkpoint also predicted at its own 17 rows.
+That matched S2's committed prediction file exactly (largest relative difference 0.0) for all
+seven, on all 77 cases. So the only change below is the row count. Command:
+`python -c "import json; p=json.load(open('results/fno_pad16/predict.json')); [print(r['tag'], r['native_rows'], r['n_cases'], r['reproduces_s2']['max_rel_diff'], r['reproduced']) for r in p['records']]"`.
+
+Near field against the floor at 256x97, 896 cases, seeds 0, 1 and 2:
+
+| split, regime | 17 rows (S2, as in S4) | 16 rows | 128x49, for reference | POD at 256x97 (S4) |
+|---|---|---|---|---|
+| test_in, subcritical | 5.32, 5.28, 5.50 | **2.12, 2.03, 2.27** | 1.28, 1.30, 1.27 | 2.12 |
+| test_in, supercritical | 2.38, 2.52, 2.54 | **1.62, 1.70, 1.69** | 1.55, 1.65, 1.58 | 6.06 |
+| test_ext, supercritical | 3.56, 3.92, 3.73 | **3.44, 3.74, 3.58** | 3.56, 3.81, 3.74 | 7.91 |
+
+Command:
+`python -c "import json,numpy as np; X={(r['variant'],r['n_train'],r['seed'],r['grid'],r['split'],r['regime']):r['x_floor'] for r in json.load(open('results/fno_pad16/scores.json'))['floor_ratios']}; [print(sp, rg, [round(X[('s2',896,s,'256x97',sp,rg)],2) for s in range(3)], [round(X[('pad16',896,s,'256x97',sp,rg)],2) for s in range(3)], [round(X[('s2',896,s,'128x49',sp,rg)],2) for s in range(3)]) for sp,rg in (('test_in','subcritical'),('test_in','supercritical'),('test_ext','supercritical'))]"`.
+
+- **Each of the three models improves in every cell.** On in-range subcritical cases the mean
+  goes from 5.37 to 2.14 times the floor. POD's 2.12 had beaten `FNO2d` there in S4; at 16 rows
+  the two are level. On in-range supercritical cases the mean goes from 2.48 to 1.67, close to the
+  model's own 1.59 at 128x49. In extrapolation it moves least, from 3.74 to 3.59.
+- **Shocks.** At 17 rows the three models miss 5 of their 81 in-range shock instances (3 x 27).
+  At 16 rows they miss none. Neither misses any of the 63 in extrapolation. Command:
+  `python -c "import json; [print(g['variant'], g['seed'], g['split'], g['n_true_shocks'], g['n_missed']) for g in json.load(open('results/fno_pad16/scores.json'))['shock_groups'] if g['grid']=='256x97' and g['n_train']==896]"`.
+- **The forces move both ways.** In range, the mean |CL error| falls from 0.0145–0.0173 to
+  0.0085–0.0108 and the mean |CM error| from 0.0027–0.0035 to 0.0017–0.0020. The mean |CD error|
+  rises from 16.3–17.3 to 19.2–20.6 counts, and its largest from 35.9–40.4 to 46.6–64.6. The
+  mean largest wall |ΔCp| rises from 0.31–0.35 to 0.37–0.41. In extrapolation, lift and moment
+  improve slightly, while the mean |CD error| rises from 79.3–85.4 to 98.5–99.3 counts. Ranges
+  are over the three seeds. Command:
+  `python -c "import json,numpy as np; R=json.load(open('results/fno_pad16/scores.json'))['rows']; m=lambda v,s,sp,k,f: float(f([abs(r['score'][k]) for r in R if r['variant']==v and r['n_train']==896 and r['seed']==s and r['grid']=='256x97' and r['split']==sp])); [print(sp, k, f.__name__, [round(m('s2',s,sp,k,f),4) for s in range(3)], [round(m('pad16',s,sp,k,f),4) for s in range(3)]) for sp in ('test_in','test_ext') for k,f in (('cl_err',np.mean),('cm_err',np.mean),('cd_err_counts',np.mean),('cd_err_counts',np.max),('cp_max',np.mean))]"`.
+
+The data-efficiency curve (S4's: mean near-field relative L2 over the 61 test_in cases at
+256x97, seed 0, floor 0.01432):
+
+| n | 17 rows (S4) | 16 rows | 16 rows / floor | 128x49 (17 rows' model) | POD (S4) |
+|---|---|---|---|---|---|
+| 64 | 0.1088 | **0.0918** | 6.41 | 0.0900 | 0.1379 |
+| 128 | 0.0857 | **0.0634** | 4.43 | 0.0600 | 0.1044 |
+| 256 | 0.0698 | **0.0460** | 3.21 | 0.0418 | 0.0883 |
+| 512 | 0.0561 | **0.0310** | 2.16 | 0.0264 | 0.0753 |
+| 896 | 0.0483 | **0.0256** | 1.79 | 0.0209 | 0.0677 |
+
+Command:
+`python -c "import json,numpy as np; R=json.load(open('results/fno_pad16/scores.json'))['rows']; S=json.load(open('results/s4/scores.json'))['rows']; f=lambda rows,meth,v,n,g: np.mean([r['score']['near_field_rel_l2'] for r in rows if r['method']==meth and r['variant']==v and r['n_train']==n and r['seed']==0 and r['grid']==g and r['split']=='test_in']); fl=np.mean([r['score']['near_field_rel_l2'] for r in R if r['variant']=='floor' and r['split']=='test_in']); print('floor', round(fl,5)); [print(n, round(f(R,'fno','s2',n,'256x97'),4), round(f(R,'fno','pad16',n,'256x97'),4), round(f(R,'fno','s2',n,'128x49'),4), round(f(S,'pod','',n,'256x97'),4), round(f(R,'fno','pad16',n,'256x97')/fl,2)) for n in (64,128,256,512,896)]"`.
+
+- **The gain grows with the training set.** 16 rows lowers the error by 16 % at 64 cases and by
+  47 % at 896, and the curve follows the model's own 128x49 curve more closely as n grows. At
+  896 cases `FNO2d` is 1.79 times the floor at 256x97, where S4 recorded 3.4. It stays below POD
+  at every n, as at 17 rows.
+
+**What this does and does not show.** S2's trained `FNO2d`, evaluated at 256x97 with one padding row
+fewer than the design's rule, has about half the near-field error on in-range test cases. It is
+level with POD on subcritical ones and misses no in-range shock. In extrapolation it barely changes,
+and its drag error rises in and out of range. Nothing was retrained or retuned. The row count was
+identified by the ablation's validation transfer and confirmed on the validation near field, but the
+test cases were not unseen when it was chosen: the ablation had already scored its own `FNO2d`
+models on them at 16 and 17 rows (2026-10-25). The costs, and so the break-even of Prediction 2, do
+not change: one padding row fewer is a slightly cheaper evaluation, not a different model. S4's
+records and the README's summary describe `FNO2d` as designed, with 17 rows. They are unchanged, and
+so is the design's rule. Amending the rule, and with it S4's figures for `FNO2d` at 256x97, is the
+author's decision.

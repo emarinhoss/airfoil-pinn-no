@@ -1990,18 +1990,70 @@ Command (group means):
 - **That disagrees with the test cases.** The ablation's `abl-P` is `abl-none`'s models evaluated
   with 16 rows instead of 17. On the test cases at 256x97, S4's near-field measure took them from
   5.36 to 2.18 times the floor on in-range subcritical cases (2026-10-25). The validation error
-  above barely moves for the same change. The two measures differ in several ways. The near
-  field is weighted by node area within 2.5 chords of mid-chord, with the free stream subtracted
-  from the state, against the 512x193 truth. The validation error weights every node of the whole
-  field equally, in target space, against SU2 at 256x97, and divides by each case's and channel's
-  norm. Which of these differences decides it is not established. The S2 checkpoints behave like
-  `abl-none`'s throughout.
+  above barely moves for the same change. The two measures differ in several ways. The near field is
+  weighted by node area within 2.5 chords of mid-chord, with the free stream subtracted from the
+  state, against the 512x193 truth. The validation error weights every node of the whole field
+  equally, in target space, against SU2 at 256x97, and divides by each case's and channel's norm.
+  Which of these differences decides it is not established. *(Outcome 2026-10-26, validation
+  near-field entry below: S4's near-field measure on the validation cases agrees with the test
+  cases, so it is the whole-field measure that does not separate 16 from 17 rows.)* The S2
+  checkpoints behave like `abl-none`'s throughout.
 
-**What this does and does not show.** Among 0 to 34 rows at 256x97, 16 gives the smallest
-transfer for all 18 checkpoints of both models. 16 is also the count of the rule the design used
-before its 2026-10-01 amendment. Whether 16 also gives a smaller error at 256x97 than `FNO2d`'s 17
-depends on the measure. On the test cases' near field it does, by 2.4 times. On the validation
-cases' whole-field error it does not, within 0.001. Measuring the validation near field the way
-S4 measures the test near field would show which. Only the 256x97 grid was evaluated, at
+**What this does and does not show.** Among 0 to 34 rows at 256x97, 16 gives the smallest transfer
+for all 18 checkpoints of both models. 16 is also the count of the rule the design used before its
+2026-10-01 amendment. Whether 16 also gives a smaller error at 256x97 than `FNO2d`'s 17 depends on
+the measure. On the test cases' near field it does, by 2.4 times. On the validation cases'
+whole-field error it does not, within 0.001. Measuring the validation near field the way S4 measures
+the test near field would show which. *(Made 2026-10-26, next entry: on the validation near field,
+16 rows is better for `FNO2d` too, by 1.65 to 2.26 times.)* Only the 256x97 grid was evaluated, at
 one training grid (128x49). The design's padding rule, S2's predictions and S4's results are
 unchanged. Whether to amend the rule is the author's decision.
+
+## 2026-10-26 — the padding sweep's validation near field: 16 rows for `FNO2d` too
+
+The previous entry left a disagreement open. For `FNO2d`, the whole-field validation error tied 16
+and 17 padding rows at 256x97. Yet S4's near-field measure on the test cases separated them 2.4
+times. The sweep now also records S4's near-field measure on the validation cases
+(`score_case`'s `near_field_rel_l2`, against SU2 at 256x97, the only solution the validation
+cases have), overall and by regime. 76 of the 126 cases are subcritical by SU2's own largest
+surface Mach number. A test checks the measure against `score_case` case by case. By the author,
+on the Mac's Apple GPU: `python scripts/probes/probe_fno_pad_sweep.py` (commit 2b18c0a), the same
+18 checkpoints and 0 to 34 rows. The first sweep's two measures came out the same for every
+checkpoint and row count (largest difference 0.0). Command:
+`git show 8e796a6:results/fno_lib/pad_sweep.json > /tmp/pad_sweep_8e796a6.json && python -c "import json; a={x['tag']:x for x in json.load(open('/tmp/pad_sweep_8e796a6.json'))['records']}; b={x['tag']:x for x in json.load(open('results/fno_lib/pad_sweep.json'))['records']}; print(len(a), max(abs(a[t]['rows'][k][m]-b[t]['rows'][k][m]) for t in a for k in a[t]['rows'] for m in ('val_rel_l2_256x97','transfer')))"`.
+
+| group | near field at 128x49: all / sub / sup | near field at 256x97, 16 rows: all / sub / sup | 17 rows: all / sub / sup |
+|---|---|---|---|
+| S2 `fno-n896` (own rows 17) | 0.0136 / 0.0057 / 0.0257 | **0.0195 / 0.0126 / 0.0299** | 0.0423 / 0.0380 / 0.0489 |
+| `abl-none` (`FNO2d`, own rows 17) | 0.0139 / 0.0056 / 0.0263 | **0.0201 / 0.0129 / 0.0311** | 0.0437 / 0.0379 / 0.0525 |
+| `abl-MPIL` (own rows 16) | 0.0143 / 0.0078 / 0.0242 | **0.0263 / 0.0188 / 0.0377** | 0.0501 / 0.0467 / 0.0553 |
+| NeuralOperator (own rows 16) | 0.0143 / 0.0076 / 0.0245 | **0.0244 / 0.0174 / 0.0352** | 0.0513 / 0.0481 / 0.0563 |
+
+Command (group means, rows 15 to 18):
+`python -c "import json; d=json.load(open('results/fno_lib/pad_sweep.json')); r=d['rows']; [print(g, c['n'], [round(c[m+'_128x49'],4) for m in ('near_field','near_field_subcritical','near_field_supercritical')], [[round(c[m][r.index(k)],4) for k in (15,16,17,18)] for m in ('near_field','near_field_subcritical','near_field_supercritical')]) for g,c in sorted(d['groups'].items())]"`.
+
+- **On the validation near field, 16 rows is best for every checkpoint, `FNO2d` included.** All
+  18 are lowest at 16, overall and in each regime. Going from 16 to 17 rows raises the near-field
+  error 1.65 to 2.26 times over all cases, 2.22 to 3.19 times on subcritical cases and 1.18 to
+  1.93 times on supercritical ones. That matches the test cases, where the same change took
+  `FNO2d` from 2.18 to 5.36 times the floor on in-range subcritical cases (2026-10-25). The
+  disagreement is the whole-field measure's alone. Command:
+  `python -c "import json,collections; d=json.load(open('results/fno_lib/pad_sweep.json')); b=lambda x,m: int(min(x['rows'], key=lambda k: x['rows'][k][m])); [print(m, sorted(collections.Counter(b(x,m) for x in d['records']).items()), round(min(x['rows']['17'][m]/x['rows']['16'][m] for x in d['records']),2), round(max(x['rows']['17'][m]/x['rows']['16'][m] for x in d['records']),2)) for m in ('near_field','near_field_subcritical','near_field_supercritical')]"`.
+- **At 16 rows, `FNO2d` has the smaller near-field error.** At its own 17 rows, `FNO2d` was
+  behind NeuralOperator's model; evaluated with the same 16 it is ahead. Its mean is 0.0201
+  against 0.0244 over all cases (p = 0.016), 0.0129 against 0.0174 on subcritical cases (p =
+  0.008, no overlap), and 0.0311 against 0.0352 on supercritical ones (p = 0.071). This fits
+  the ablation: NeuralOperator's channel MLP, initialisation and lifting cost it a little on the
+  training grid, and its advantage at 256x97 came from the padding alone. Command:
+  `python -c "import sys,json; sys.path.insert(0,'scripts/probes'); from fno_ablation import permutation_p as P; R=json.load(open('results/fno_lib/pad_sweep.json'))['records']; v=lambda g,m: [x['rows']['16'][m] for x in R if x['group']==g]; [print(m, [round(a,4) for a in v('abl-none-n896',m)], [round(a,4) for a in v('neuralop-n896-nopatience',m)], round(P(v('abl-none-n896',m), v('neuralop-n896-nopatience',m)),3)) for m in ('near_field','near_field_subcritical','near_field_supercritical','transfer')]"`.
+- **16 rows reduces the loss between the grids; it does not remove it.** At 16 rows, `FNO2d`'s
+  near-field error at 256x97 is still 2.3 times its error at 128x49 on subcritical cases (0.0129
+  against 0.0056), and 1.2 times on supercritical ones.
+
+**What this does and does not show.** All three measures that look at the near field agree: the
+transfer, the validation near field and the test near field. On each, 16 padding rows at 256x97
+beat the design's 17 for both models. The whole-field validation error does not separate the
+two for `FNO2d`. Why it does not is not shown here: it weights every node of the 100-chord grid
+equally, in target space, per case and channel. The test cases were not reread for this entry.
+The design's rule, S2's predictions and S4's results are unchanged. Whether to amend the rule,
+and to rescore `FNO2d` at 16 rows, is the author's decision.
